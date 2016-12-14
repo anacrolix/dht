@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/anacrolix/torrent/dht/krpc"
+	"github.com/anacrolix/dht/krpc"
 	"github.com/anacrolix/torrent/iplist"
 	"github.com/anacrolix/torrent/metainfo"
 )

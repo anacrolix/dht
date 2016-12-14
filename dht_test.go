@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/anacrolix/torrent/dht/krpc"
+	"github.com/anacrolix/dht/krpc"
 )
 
 func TestSetNilBigInt(t *testing.T) {

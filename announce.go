@@ -9,7 +9,7 @@ import (
 	"github.com/anacrolix/sync"
 	"github.com/willf/bloom"
 
-	"github.com/anacrolix/torrent/dht/krpc"
+	"github.com/anacrolix/dht/krpc"
 	"github.com/anacrolix/torrent/logonce"
 )
 

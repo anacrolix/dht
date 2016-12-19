@@ -7,10 +7,10 @@ import (
 	"time"
 
 	"github.com/anacrolix/sync"
+	"github.com/anacrolix/torrent/logonce"
 	"github.com/willf/bloom"
 
 	"github.com/anacrolix/dht/krpc"
-	"github.com/anacrolix/torrent/logonce"
 )
 
 // Maintains state for an ongoing Announce operation. An Announce is started

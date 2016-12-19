@@ -15,13 +15,13 @@ import (
 	"time"
 
 	"github.com/anacrolix/missinggo"
-	"github.com/tylertreat/BoomFilters"
-
 	"github.com/anacrolix/torrent/bencode"
-	"github.com/anacrolix/dht/krpc"
 	"github.com/anacrolix/torrent/iplist"
 	"github.com/anacrolix/torrent/logonce"
 	"github.com/anacrolix/torrent/metainfo"
+	"github.com/tylertreat/BoomFilters"
+
+	"github.com/anacrolix/dht/krpc"
 )
 
 // A Server defines parameters for a DHT node server that is able to

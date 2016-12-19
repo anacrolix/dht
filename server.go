@@ -222,6 +222,10 @@ func (s *Server) serve() error {
 			logonce.Stderr.Printf("received dht packet exceeds buffer size")
 			continue
 		}
+		if missinggo.AddrPort(addr) == 0 {
+			readZeroPort.Add(1)
+			continue
+		}
 		s.mu.Lock()
 		blocked := s.ipBlocked(missinggo.AddrIP(addr))
 		s.mu.Unlock()

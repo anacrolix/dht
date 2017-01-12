@@ -2,6 +2,7 @@ package dht
 
 import (
 	_ "crypto/sha1"
+	"encoding/hex"
 	"errors"
 	"math/big"
 	"math/rand"
@@ -103,6 +104,14 @@ type nodeID struct {
 	set bool
 }
 
+func (me nodeID) String() string {
+	b := me.i.Bytes()
+	if len(b) < 20 {
+		b = append(make([]byte, 20-len(b)), b...)
+	}
+	return hex.EncodeToString(b)
+}
+
 func (nid *nodeID) IsUnset() bool {
 	return !nid.set
 }
@@ -125,7 +134,7 @@ func (nid0 *nodeID) Distance(nid1 *nodeID) (ret big.Int) {
 	return
 }
 
-func (nid *nodeID) ByteString() string {
+func (nid nodeID) ByteString() string {
 	var buf [20]byte
 	b := nid.i.Bytes()
 	copy(buf[20-len(b):], b)

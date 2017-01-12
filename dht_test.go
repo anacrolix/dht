@@ -10,6 +10,7 @@ import (
 	"time"
 
 	_ "github.com/anacrolix/envpprof"
+	"github.com/anacrolix/missinggo/itertools"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -89,20 +90,19 @@ func TestMaxDistanceString(t *testing.T) {
 }
 
 func TestClosestNodes(t *testing.T) {
-	cn := newKClosestNodesSelector(2, testIDs[3])
+	cn := newKClosestNodeIDs(2, testIDs[3])
 	for _, i := range rand.Perm(len(testIDs)) {
 		cn.Push(testIDs[i])
 	}
-	if len(cn.IDs()) != 2 {
-		t.FailNow()
-	}
+	ids := itertools.IteratorAsSlice(cn.IDs())
+	assert.Len(t, ids, 2)
 	m := map[string]bool{}
-	for _, id := range cn.IDs() {
-		m[id.ByteString()] = true
+	for _, id := range ids {
+		m[id.(nodeID).ByteString()] = true
 	}
-	if !m[testIDs[3].ByteString()] || !m[testIDs[4].ByteString()] {
-		t.FailNow()
-	}
+	log.Printf("%q", m)
+	assert.True(t, m[testIDs[3].ByteString()])
+	assert.True(t, m[testIDs[4].ByteString()])
 }
 
 func TestDHTDefaultConfig(t *testing.T) {

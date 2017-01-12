@@ -753,7 +753,7 @@ func (s *Server) closestGoodNodes(k int, targetID string) []*node {
 }
 
 func (s *Server) closestNodes(k int, target nodeID, filter func(*node) bool) []*node {
-	sel := newKClosestNodesSelector(k, target)
+	sel := newKClosestNodeIDs(k, target)
 	idNodes := make(map[string]*node, len(s.nodes))
 	for _, node := range s.nodes {
 		if !filter(node) {
@@ -762,9 +762,9 @@ func (s *Server) closestNodes(k int, target nodeID, filter func(*node) bool) []*
 		sel.Push(node.id)
 		idNodes[node.idString()] = node
 	}
-	ids := sel.IDs()
-	ret := make([]*node, 0, len(ids))
-	for _, id := range ids {
+	ret := make([]*node, 0, k)
+	for it := sel.IDs(); it.Next(); {
+		id := it.Value().(nodeID)
 		ret = append(ret, idNodes[id.ByteString()])
 	}
 	return ret

@@ -2,50 +2,51 @@ package dht
 
 import (
 	"container/heap"
+	"encoding/hex"
+	"fmt"
+	"math/big"
+
+	"github.com/anacrolix/missinggo/container/xheap"
+	"github.com/anacrolix/missinggo/itertools"
 )
 
-type nodeMaxHeap struct {
-	IDs    []nodeID
-	Target nodeID
+type nodeIDAndDistance struct {
+	nodeID   nodeID
+	distance *big.Int
 }
 
-func (mh nodeMaxHeap) Len() int { return len(mh.IDs) }
-
-func (mh nodeMaxHeap) Less(i, j int) bool {
-	m := mh.IDs[i].Distance(&mh.Target)
-	n := mh.IDs[j].Distance(&mh.Target)
-	return m.Cmp(&n) > 0
+func (me nodeIDAndDistance) String() string {
+	return fmt.Sprintf("%s: %q", hex.EncodeToString(me.distance.Bytes()), me.nodeID)
 }
 
-func (mh *nodeMaxHeap) Pop() (ret interface{}) {
-	ret, mh.IDs = mh.IDs[len(mh.IDs)-1], mh.IDs[:len(mh.IDs)-1]
-	return
-}
-func (mh *nodeMaxHeap) Push(val interface{}) {
-	mh.IDs = append(mh.IDs, val.(nodeID))
-}
-func (mh nodeMaxHeap) Swap(i, j int) {
-	mh.IDs[i], mh.IDs[j] = mh.IDs[j], mh.IDs[i]
+type kClosestNodeIDs struct {
+	sl     []interface{}
+	target nodeID
+	h      heap.Interface
+	k      int
 }
 
-type closestNodesSelector struct {
-	closest nodeMaxHeap
-	k       int
-}
-
-func (cns *closestNodesSelector) Push(id nodeID) {
-	heap.Push(&cns.closest, id)
-	if cns.closest.Len() > cns.k {
-		heap.Pop(&cns.closest)
+func (me *kClosestNodeIDs) Push(id nodeID) {
+	d := me.target.Distance(&id)
+	heap.Push(me.h, nodeIDAndDistance{id, &d})
+	if me.h.Len() > me.k {
+		heap.Pop(me.h)
 	}
 }
 
-func (cns *closestNodesSelector) IDs() []nodeID {
-	return cns.closest.IDs
+func newKClosestNodeIDs(k int, target nodeID) (ret *kClosestNodeIDs) {
+	ret = &kClosestNodeIDs{
+		target: target,
+		k:      k,
+	}
+	ret.h = xheap.Slice(&ret.sl, func(l, r interface{}) bool {
+		return l.(nodeIDAndDistance).distance.Cmp(r.(nodeIDAndDistance).distance) > 0
+	})
+	return
 }
 
-func newKClosestNodesSelector(k int, targetID nodeID) (ret closestNodesSelector) {
-	ret.k = k
-	ret.closest.Target = targetID
-	return
+func (me *kClosestNodeIDs) IDs() itertools.Iterator {
+	return itertools.Map(itertools.SliceIterator(me.sl), func(i interface{}) interface{} {
+		return i.(nodeIDAndDistance).nodeID
+	})
 }

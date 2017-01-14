@@ -10,7 +10,7 @@ import (
 	"time"
 
 	_ "github.com/anacrolix/envpprof"
-	"github.com/anacrolix/missinggo/itertools"
+	"github.com/anacrolix/missinggo/iter"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -94,7 +94,7 @@ func TestClosestNodes(t *testing.T) {
 	for _, i := range rand.Perm(len(testIDs)) {
 		cn.Push(testIDs[i])
 	}
-	ids := itertools.IteratorAsSlice(cn.IDs())
+	ids := iter.ToSlice(cn.IDs())
 	assert.Len(t, ids, 2)
 	m := map[string]bool{}
 	for _, id := range ids {

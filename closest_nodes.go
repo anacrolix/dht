@@ -7,7 +7,7 @@ import (
 	"math/big"
 
 	"github.com/anacrolix/missinggo/container/xheap"
-	"github.com/anacrolix/missinggo/itertools"
+	"github.com/anacrolix/missinggo/iter"
 )
 
 type nodeIDAndDistance struct {
@@ -45,8 +45,8 @@ func newKClosestNodeIDs(k int, target nodeID) (ret *kClosestNodeIDs) {
 	return
 }
 
-func (me *kClosestNodeIDs) IDs() itertools.Iterator {
-	return itertools.Map(itertools.SliceIterator(me.sl), func(i interface{}) interface{} {
+func (me *kClosestNodeIDs) IDs() iter.Iterator {
+	return iter.Map(iter.Slice(me.sl), func(i interface{}) interface{} {
 		return i.(nodeIDAndDistance).nodeID
 	})
 }

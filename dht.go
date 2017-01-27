@@ -65,7 +65,9 @@ type ServerConfig struct {
 	// Initial IP blocklist to use. Applied before serving and bootstrapping
 	// begins.
 	IPBlocklist iplist.Ranger
-	// Used to secure the server's ID. Defaults to the Conn's LocalAddr().
+	// Used to secure the server's ID. Defaults to the Conn's LocalAddr(). Set
+	// to the IP that remote nodes will see, as that IP is what they'll use to
+	// validate our ID.
 	PublicIP net.IP
 
 	// Hook received queries. Return true if you don't want to propagate to

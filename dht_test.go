@@ -60,33 +60,35 @@ func init() {
 		"\x03" + zeroID[1:18] + "\x55\xf0",
 		"\x55" + zeroID[1:17] + "\xff\x55\x0f",
 		"\x54" + zeroID[1:18] + "\x50\x0f",
-		"",
 	} {
 		testIDs = append(testIDs, nodeIDFromString(s))
 	}
+	testIDs = append(testIDs, nodeID{})
 }
 
 func TestDistances(t *testing.T) {
-	expectBitcount := func(i big.Int, count int) {
-		if bitCount(i) != count {
-			t.Fatalf("expected bitcount of %d: got %d", count, bitCount(i))
+	expectBitcount := func(i int160, count int) {
+		if bitCount(i.Bytes()) != count {
+			t.Fatalf("expected bitcount of %d: got %d", count, bitCount(i.Bytes()))
 		}
 	}
 	expectBitcount(testIDs[3].Distance(&testIDs[0]), 4+8+4+4)
 	expectBitcount(testIDs[3].Distance(&testIDs[1]), 4+8+4+4)
 	expectBitcount(testIDs[3].Distance(&testIDs[2]), 4+8+8)
+	var max int160
+	max.SetMax()
 	for i := 0; i < 5; i++ {
 		dist := testIDs[i].Distance(&testIDs[5])
-		if dist.Cmp(&maxDistance) != 0 {
+		if dist.Cmp(max) != 0 {
 			t.Fatal("expected max distance for comparison with unset node id")
 		}
 	}
 }
 
 func TestMaxDistanceString(t *testing.T) {
-	if string(maxDistance.Bytes()) != "\x01"+zeroID {
-		t.FailNow()
-	}
+	var max int160
+	max.SetMax()
+	require.EqualValues(t, "\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff", max.Bytes())
 }
 
 func TestClosestNodes(t *testing.T) {
@@ -134,9 +136,7 @@ func TestPing(t *testing.T) {
 	tn.SetResponseHandler(func(msg krpc.Msg, msgOk bool) {
 		ok <- msg.SenderID() == srv0.ID()
 	})
-	if !<-ok {
-		t.FailNow()
-	}
+	require.True(t, <-ok)
 }
 
 func TestServerCustomNodeId(t *testing.T) {
@@ -144,8 +144,7 @@ func TestServerCustomNodeId(t *testing.T) {
 	id, err := hex.DecodeString(customId)
 	assert.NoError(t, err)
 	// How to test custom *secure* Id when tester computers will have
-	// different Ids? Generate custom ids for local IPs and use
-	// mini-Id?
+	// different Ids? Generate custom ids for local IPs and use mini-Id?
 	s, err := NewServer(&ServerConfig{
 		NodeIdHex:          customId,
 		NoDefaultBootstrap: true,

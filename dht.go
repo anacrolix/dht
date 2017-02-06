@@ -2,9 +2,7 @@ package dht
 
 import (
 	_ "crypto/sha1"
-	"encoding/hex"
 	"errors"
-	"math/big"
 	"math/rand"
 	"net"
 	"strconv"
@@ -23,13 +21,6 @@ const (
 var (
 	queryResendEvery = 5 * time.Second
 )
-
-var maxDistance big.Int
-
-func init() {
-	var zero big.Int
-	maxDistance.SetBit(&zero, 160, 1)
-}
 
 // Uniquely identifies a transaction to us.
 type transactionKey struct {
@@ -101,48 +92,6 @@ func makeSocket(addr string) (socket *net.UDPConn, err error) {
 	return
 }
 
-type nodeID struct {
-	i   big.Int
-	set bool
-}
-
-func (me nodeID) String() string {
-	b := me.i.Bytes()
-	if len(b) < 20 {
-		b = append(make([]byte, 20-len(b)), b...)
-	}
-	return hex.EncodeToString(b)
-}
-
-func (nid *nodeID) IsUnset() bool {
-	return !nid.set
-}
-
-func nodeIDFromString(s string) (ret nodeID) {
-	if s == "" {
-		return
-	}
-	ret.i.SetBytes([]byte(s))
-	ret.set = true
-	return
-}
-
-func (nid0 *nodeID) Distance(nid1 *nodeID) (ret big.Int) {
-	if nid0.IsUnset() != nid1.IsUnset() {
-		ret = maxDistance
-		return
-	}
-	ret.Xor(&nid0.i, &nid1.i)
-	return
-}
-
-func (nid nodeID) ByteString() string {
-	var buf [20]byte
-	b := nid.i.Bytes()
-	copy(buf[20-len(b):], b)
-	return string(buf[:])
-}
-
 type node struct {
 	addr          Addr
 	id            nodeID
@@ -154,7 +103,7 @@ type node struct {
 }
 
 func (n *node) IsSecure() bool {
-	if n.id.IsUnset() {
+	if !n.id.IsSet() {
 		return false
 	}
 	return NodeIdSecure(n.id.ByteString(), n.addr.UDPAddr().IP)
@@ -165,11 +114,7 @@ func (n *node) idString() string {
 }
 
 func (n *node) SetIDFromBytes(b []byte) {
-	if len(b) != 20 {
-		panic(b)
-	}
-	n.id.i.SetBytes(b)
-	n.id.set = true
+	n.id.SetFromBytes(b)
 }
 
 func (n *node) SetIDFromString(s string) {
@@ -177,7 +122,7 @@ func (n *node) SetIDFromString(s string) {
 }
 
 func (n *node) IDNotSet() bool {
-	return n.id.i.Int64() == 0
+	return !n.id.IsSet()
 }
 
 func (n *node) NodeInfo() (ret krpc.NodeInfo) {
@@ -189,7 +134,7 @@ func (n *node) NodeInfo() (ret krpc.NodeInfo) {
 }
 
 func (n *node) DefinitelyGood() bool {
-	if len(n.idString()) != 20 {
+	if !n.id.IsSet() {
 		return false
 	}
 	// No reason to think ill of them if they've never been queried.

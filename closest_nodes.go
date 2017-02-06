@@ -4,7 +4,6 @@ import (
 	"container/heap"
 	"encoding/hex"
 	"fmt"
-	"math/big"
 
 	"github.com/anacrolix/missinggo/container/xheap"
 	"github.com/anacrolix/missinggo/iter"
@@ -12,7 +11,7 @@ import (
 
 type nodeIDAndDistance struct {
 	nodeID   nodeID
-	distance *big.Int
+	distance int160
 }
 
 func (me nodeIDAndDistance) String() string {
@@ -28,7 +27,7 @@ type kClosestNodeIDs struct {
 
 func (me *kClosestNodeIDs) Push(id nodeID) {
 	d := me.target.Distance(&id)
-	heap.Push(me.h, nodeIDAndDistance{id, &d})
+	heap.Push(me.h, nodeIDAndDistance{id, d})
 	if me.h.Len() > me.k {
 		heap.Pop(me.h)
 	}

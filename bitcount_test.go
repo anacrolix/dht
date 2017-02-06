@@ -1,18 +1,14 @@
 package dht
 
-import (
-	"math/big"
-)
-
 // TODO: The bitcounting is a relic of the old and incorrect distance
 // calculation. It is still useful in some tests but should eventually be
 // replaced with actual distances.
 
 // How many bits?
-func bitCount(n big.Int) int {
+func bitCount(b []byte) int {
 	var count int = 0
-	for _, b := range n.Bytes() {
-		count += int(bitCounts[b])
+	for _, c := range b {
+		count += int(bitCounts[c])
 	}
 	return count
 }

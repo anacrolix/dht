@@ -3,6 +3,7 @@ package dht
 // get_peers and announce_peers.
 
 import (
+	"errors"
 	"log"
 	"time"
 
@@ -52,15 +53,15 @@ func (a *Announce) NumContacted() int {
 // graph toward nodes that store peers for the infohash, streaming them to the
 // caller, and announcing the local node to each node if allowed and
 // specified.
-func (s *Server) Announce(infoHash string, port int, impliedPort bool) (*Announce, error) {
-	s.mu.Lock()
+func (s *Server) Announce(infoHash [20]byte, port int, impliedPort bool) (*Announce, error) {
 	startAddrs := func() (ret []Addr) {
-		for _, n := range s.closestGoodNodes(160, infoHash) {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		for _, n := range s.closestGoodNodes(160, string(infoHash[:])) {
 			ret = append(ret, n.addr)
 		}
 		return
 	}()
-	s.mu.Unlock()
 	if len(startAddrs) == 0 && !s.config.NoDefaultBootstrap {
 		addrs, err := bootstrapAddrs(s.bootstrapNodes)
 		if err != nil {
@@ -70,13 +71,16 @@ func (s *Server) Announce(infoHash string, port int, impliedPort bool) (*Announc
 			startAddrs = append(startAddrs, NewAddr(addr))
 		}
 	}
+	if len(startAddrs) == 0 {
+		return nil, errors.New("server has no starting nodes")
+	}
 	disc := &Announce{
 		Peers:               make(chan PeersValues, 100),
 		stop:                make(chan struct{}),
 		values:              make(chan PeersValues),
 		triedAddrs:          bloom.NewWithEstimates(1000, 0.5),
 		server:              s,
-		infoHash:            infoHash,
+		infoHash:            string(infoHash[:]),
 		announcePort:        port,
 		announcePortImplied: impliedPort,
 	}

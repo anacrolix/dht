@@ -162,7 +162,9 @@ func TestAnnounceTimeout(t *testing.T) {
 		BootstrapNodes: []string{"1.2.3.4:5"},
 	})
 	require.NoError(t, err)
-	a, err := s.Announce("12341234123412341234", 0, true)
+	var ih [20]byte
+	copy(ih[:], "12341234123412341234")
+	a, err := s.Announce(ih, 0, true)
 	assert.NoError(t, err)
 	<-a.Peers
 	a.Close()

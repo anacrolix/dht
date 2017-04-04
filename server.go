@@ -257,7 +257,7 @@ func (s *Server) AddNode(ni krpc.NodeInfo) {
 
 func (s *Server) nodeByID(id string) *node {
 	for _, node := range s.nodes {
-		if node.idString() == id {
+		if node.id.IsSet() && node.id.ByteString() == id {
 			return node
 		}
 	}

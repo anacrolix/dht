@@ -24,6 +24,11 @@ import (
 	"github.com/anacrolix/dht/krpc"
 )
 
+const (
+	maxInterval  = time.Minute * 3
+	stepInterval = time.Second * 30
+)
+
 // A Server defines parameters for a DHT node server that is able to
 // send queries, and respond to the ones from the network.
 // Each node has a globally unique identifier known as the "node ID."
@@ -625,6 +630,10 @@ func (s *Server) bootstrap() (err error) {
 	if err != nil {
 		return
 	}
+
+	interval := time.Duration(0)
+	lastNumGoodNodes := s.numGoodNodes()
+
 	for {
 		var outstanding sync.WaitGroup
 		for _, node := range s.nodes {
@@ -654,9 +663,22 @@ func (s *Server) bootstrap() (err error) {
 		}
 		s.mu.Lock()
 		// log.Printf("now have %d nodes", len(s.nodes))
-		if s.numGoodNodes() >= 160 {
+		newNumGoodNodes := s.numGoodNodes()
+		if newNumGoodNodes >= 160 {
 			break
 		}
+		s.mu.Unlock()
+		if lastNumGoodNodes >= newNumGoodNodes {
+			log.Printf("No new good nodes are find, wait a moment before try again: %d, %d\n", lastNumGoodNodes, newNumGoodNodes)
+			if interval < maxInterval {
+				interval += stepInterval
+			}
+			time.Sleep(interval)
+		} else {
+			interval = time.Duration(0)
+		}
+		lastNumGoodNodes = newNumGoodNodes
+		s.mu.Lock()
 	}
 	return
 }

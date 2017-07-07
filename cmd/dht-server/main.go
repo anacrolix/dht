@@ -1,7 +1,6 @@
 package main
 
 import (
-	"flag"
 	"fmt"
 	"io"
 	"log"
@@ -10,20 +9,24 @@ import (
 
 	"github.com/anacrolix/dht"
 	"github.com/anacrolix/dht/krpc"
+	"github.com/anacrolix/tagflag"
 )
 
 var (
-	tableFileName = flag.String("tableFile", "", "name of file for storing node info")
-	serveAddr     = flag.String("serveAddr", ":0", "local UDP address")
-
+	flags = struct {
+		TableFile string `help:"name of file for storing node info"`
+		Addr      string `help:"local UDP address"`
+	}{
+		Addr: ":0",
+	}
 	s *dht.Server
 )
 
 func loadTable() error {
-	if *tableFileName == "" {
+	if flags.TableFile == "" {
 		return nil
 	}
-	f, err := os.Open(*tableFileName)
+	f, err := os.Open(flags.TableFile)
 	if os.IsNotExist(err) {
 		return nil
 	}
@@ -55,10 +58,10 @@ func loadTable() error {
 
 func init() {
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
-	flag.Parse()
+	tagflag.Parse(&flags)
 	var err error
 	s, err = dht.NewServer(&dht.ServerConfig{
-		Addr: *serveAddr,
+		Addr: flags.Addr,
 	})
 	if err != nil {
 		log.Fatal(err)
@@ -72,13 +75,13 @@ func init() {
 
 func saveTable() error {
 	goodNodes := s.Nodes()
-	if *tableFileName == "" {
+	if flags.TableFile == "" {
 		if len(goodNodes) != 0 {
 			log.Printf("discarding %d good nodes!", len(goodNodes))
 		}
 		return nil
 	}
-	f, err := os.OpenFile(*tableFileName, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0666)
+	f, err := os.OpenFile(flags.TableFile, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0666)
 	if err != nil {
 		return fmt.Errorf("error opening table file: %s", err)
 	}
@@ -104,7 +107,7 @@ func setupSignals() {
 	<-ch
 	s.Close()
 
-	if *tableFileName != "" {
+	if flags.TableFile != "" {
 		if err := saveTable(); err != nil {
 			log.Printf("error saving node table: %s", err)
 		}

@@ -29,14 +29,13 @@ const (
 	stepInterval = time.Second * 30
 )
 
-// A Server defines parameters for a DHT node server that is able to
-// send queries, and respond to the ones from the network.
-// Each node has a globally unique identifier known as the "node ID."
-// Node IDs are chosen at random from the same 160-bit space
-// as BitTorrent infohashes and define the behaviour of the node.
-// Zero valued Server does not have a valid ID and thus
-// is unable to function properly. Use `NewServer(nil)`
-// to initialize a default node.
+// A Server defines parameters for a DHT node server that is able to send
+// queries, and respond to the ones from the network. Each node has a globally
+// unique identifier known as the "node ID." Node IDs are chosen at random
+// from the same 160-bit space as BitTorrent infohashes and define the
+// behaviour of the node. Zero valued Server does not have a valid ID and thus
+// is unable to function properly. Use `NewServer(nil)` to initialize a
+// default node.
 type Server struct {
 	id               string
 	socket           net.PacketConn

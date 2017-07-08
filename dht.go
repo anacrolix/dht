@@ -116,6 +116,6 @@ func MakeDeterministicNodeID(public net.Addr) (id [20]byte) {
 	h := crypto.SHA1.New()
 	h.Write([]byte(public.String()))
 	h.Sum(id[:0:20])
-	SecureNodeId(id, missinggo.AddrIP(public))
+	SecureNodeId(&id, missinggo.AddrIP(public))
 	return
 }

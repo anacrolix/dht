@@ -100,7 +100,7 @@ func NewServer(c *ServerConfig) (s *Server, err error) {
 	if missinggo.IsZeroValue(c.NodeId) {
 		c.NodeId = RandomNodeID()
 		if !c.NoSecurity {
-			SecureNodeId(c.NodeId, c.PublicIP)
+			SecureNodeId(&c.NodeId, c.PublicIP)
 		}
 	}
 	// if missinggo.IsEmptyValue(c.NodeId) {

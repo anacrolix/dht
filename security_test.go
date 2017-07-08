@@ -49,7 +49,7 @@ func TestDHTSec(t *testing.T) {
 		assert.Equal(t, case_.valid, secure, "%v", case_)
 		if !secure {
 			// It's not secure, so secure it in place and then check it again.
-			SecureNodeId(id, ip)
+			SecureNodeId(&id, ip)
 			assert.True(t, NodeIdSecure(id, ip), "%v", case_)
 		}
 	}

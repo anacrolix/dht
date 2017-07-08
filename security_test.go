@@ -2,10 +2,10 @@ package dht
 
 import (
 	"encoding/hex"
+	"log"
 	"net"
 	"testing"
 
-	"github.com/anacrolix/missinggo"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -40,25 +40,17 @@ func TestDHTSec(t *testing.T) {
 		{"192.168.53.83", "e56f6cbf5b7c4be0237986d5243b87aa6d51305a", true},
 	} {
 		ip := net.ParseIP(case_.ipStr)
-		id, err := hex.DecodeString(case_.nodeIDHex)
+		_id, err := hex.DecodeString(case_.nodeIDHex)
 		require.NoError(t, err)
-		secure := NodeIdSecure(string(id), ip)
+		var id [20]byte
+		require.Equal(t, 20, copy(id[:], _id))
+		log.Printf("%q %q", id, _id)
+		secure := NodeIdSecure(id, ip)
 		assert.Equal(t, case_.valid, secure, "%v", case_)
 		if !secure {
 			// It's not secure, so secure it in place and then check it again.
 			SecureNodeId(id, ip)
-			assert.True(t, NodeIdSecure(string(id), ip), "%v", case_)
+			assert.True(t, NodeIdSecure(id, ip), "%v", case_)
 		}
-	}
-}
-
-func TestServerDefaultNodeIdSecure(t *testing.T) {
-	s, err := NewServer(&ServerConfig{
-		NoDefaultBootstrap: true,
-	})
-	require.NoError(t, err)
-	defer s.Close()
-	if !NodeIdSecure(s.ID(), missinggo.AddrIP(s.Addr())) {
-		t.Fatal("not secure")
 	}
 }

@@ -56,23 +56,6 @@ func loadTable() error {
 	return nil
 }
 
-func init() {
-	log.SetFlags(log.LstdFlags | log.Lshortfile)
-	tagflag.Parse(&flags)
-	var err error
-	s, err = dht.NewServer(&dht.ServerConfig{
-		Addr: flags.Addr,
-	})
-	if err != nil {
-		log.Fatal(err)
-	}
-	err = loadTable()
-	if err != nil {
-		log.Fatalf("error loading table: %s", err)
-	}
-	log.Printf("dht server on %s, ID is %x", s.Addr(), s.ID())
-}
-
 func saveTable() error {
 	goodNodes := s.Nodes()
 	if flags.TableFile == "" {
@@ -115,5 +98,19 @@ func setupSignals() {
 }
 
 func main() {
+	log.SetFlags(log.LstdFlags | log.Lshortfile)
+	tagflag.Parse(&flags)
+	var err error
+	s, err = dht.NewServer(&dht.ServerConfig{
+		Addr: flags.Addr,
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+	err = loadTable()
+	if err != nil {
+		log.Fatalf("error loading table: %s", err)
+	}
+	log.Printf("dht server on %s, ID is %x", s.Addr(), s.ID())
 	setupSignals()
 }

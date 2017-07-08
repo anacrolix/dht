@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"os"
 	"os/signal"
 
@@ -84,25 +85,23 @@ func saveTable() error {
 	return nil
 }
 
-func setupSignals() {
-	ch := make(chan os.Signal)
-	signal.Notify(ch)
-	<-ch
-	s.Close()
-
-	if flags.TableFile != "" {
-		if err := saveTable(); err != nil {
-			log.Printf("error saving node table: %s", err)
-		}
-	}
-}
-
 func main() {
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
 	tagflag.Parse(&flags)
-	var err error
+	conn, err := net.ListenPacket("udp", flags.Addr)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer conn.Close()
 	s, err = dht.NewServer(&dht.ServerConfig{
-		Addr: flags.Addr,
+		Conn: conn,
+		StartingNodes: func() []dht.Addr {
+			ret, err := dht.GlobalBootstrapAddrs()
+			if err != nil {
+				log.Fatal(err)
+			}
+			return ret
+		}(),
 	})
 	if err != nil {
 		log.Fatal(err)
@@ -112,5 +111,22 @@ func main() {
 		log.Fatalf("error loading table: %s", err)
 	}
 	log.Printf("dht server on %s, ID is %x", s.Addr(), s.ID())
-	setupSignals()
+
+	ch := make(chan os.Signal)
+	signal.Notify(ch)
+	go func() {
+		<-ch
+		s.Close()
+	}()
+	err = s.Bootstrap()
+	if err != nil {
+		log.Printf("error bootstrapping: %s", err)
+	}
+	<-ch
+
+	if flags.TableFile != "" {
+		if err := saveTable(); err != nil {
+			log.Printf("error saving node table: %s", err)
+		}
+	}
 }

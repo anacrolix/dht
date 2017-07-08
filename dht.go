@@ -86,20 +86,16 @@ func (p *Peer) String() string {
 	return net.JoinHostPort(p.IP.String(), strconv.FormatInt(int64(p.Port), 10))
 }
 
-func bootstrapAddrs(nodeAddrs []string) (addrs []*net.UDPAddr, err error) {
-	bootstrapNodes := nodeAddrs
-	if len(bootstrapNodes) == 0 {
-		bootstrapNodes = []string{
-			"router.utorrent.com:6881",
-			"router.bittorrent.com:6881",
-		}
-	}
-	for _, addrStr := range bootstrapNodes {
-		udpAddr, err := net.ResolveUDPAddr("udp4", addrStr)
+func GlobalBootstrapAddrs() (addrs []Addr, err error) {
+	for _, s := range []string{
+		"router.utorrent.com:6881",
+		"router.bittorrent.com:6881",
+	} {
+		ua, err := net.ResolveUDPAddr("udp4", s)
 		if err != nil {
 			continue
 		}
-		addrs = append(addrs, udpAddr)
+		addrs = append(addrs, NewAddr(ua))
 	}
 	if len(addrs) == 0 {
 		err = errors.New("nothing resolved")

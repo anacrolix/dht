@@ -93,20 +93,12 @@ func NewServer(c *ServerConfig) (s *Server, err error) {
 			NoSecurity: true,
 		}
 	}
-	if !c.NoSecurity && c.PublicIP == nil {
-		err = errors.New("public ip must be specified when security is enabled")
-		return
-	}
 	if missinggo.IsZeroValue(c.NodeId) {
 		c.NodeId = RandomNodeID()
-		if !c.NoSecurity {
+		if !c.NoSecurity && c.PublicIP != nil {
 			SecureNodeId(&c.NodeId, c.PublicIP)
 		}
 	}
-	// if missinggo.IsEmptyValue(c.NodeId) {
-	// 	err = errors.New("node id not specified")
-	// 	return
-	// }
 	s = &Server{
 		config:      *c,
 		ipBlockList: c.IPBlocklist,
@@ -246,8 +238,12 @@ func (s *Server) ipBlocked(ip net.IP) (blocked bool) {
 }
 
 // Adds directly to the node table.
-func (s *Server) AddNode(ni krpc.NodeInfo) {
-	// ping node if we don't have it
+func (s *Server) AddNode(ni krpc.NodeInfo) error {
+	if s.getNode(NewAddr(ni.Addr), int160FromByteArray(ni.ID)).DefinitelyGood() {
+		// We've already got it, and there's no point pinging it.
+		return nil
+	}
+	return s.Ping(ni.Addr, nil)
 }
 
 // TODO: Probably should write error messages back to senders if something is
@@ -345,8 +341,10 @@ func (s *Server) reply(addr Addr, t string, r krpc.Return) {
 
 // Returns a node struct, from the routing table if present.
 func (s *Server) getNode(addr Addr, id int160) *node {
-	if n := s.table.getNode(addr, id); n != nil {
-		return n
+	if id != s.id {
+		if n := s.table.getNode(addr, id); n != nil {
+			return n
+		}
 	}
 	return &node{
 		addr: addr,
@@ -421,6 +419,12 @@ func (s *Server) deleteTransaction(t *Transaction) {
 	delete(s.transactions, t.key())
 }
 
+func (s *Server) deleteTransactionUnlocked(t *Transaction) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.deleteTransaction(t)
+}
+
 func (s *Server) addTransaction(t *Transaction) {
 	if _, ok := s.transactions[t.key()]; ok {
 		panic("transaction not unique")
@@ -472,10 +476,10 @@ func (s *Server) query(node Addr, q string, a *krpc.MsgArgs, callback func(krpc.
 		},
 		onResponse: func(m krpc.Msg) {
 			callback(m, nil)
-			s.deleteTransaction(t)
+			s.deleteTransactionUnlocked(t)
 		},
 		onTimeout: func() {
-			s.deleteTransaction(t)
+			s.deleteTransactionUnlocked(t)
 			callback(krpc.Msg{}, errors.New("query timed out"))
 		},
 	}

@@ -475,12 +475,12 @@ func (s *Server) query(node Addr, q string, a *krpc.MsgArgs, callback func(krpc.
 			return s.writeToNode(b, node)
 		},
 		onResponse: func(m krpc.Msg) {
-			callback(m, nil)
-			s.deleteTransactionUnlocked(t)
+			go callback(m, nil)
+			go s.deleteTransactionUnlocked(t)
 		},
 		onTimeout: func() {
-			s.deleteTransactionUnlocked(t)
-			callback(krpc.Msg{}, errors.New("query timed out"))
+			go s.deleteTransactionUnlocked(t)
+			go callback(krpc.Msg{}, errors.New("query timed out"))
 		},
 	}
 	err = t.sendQuery()

@@ -709,6 +709,9 @@ func (s *Server) Nodes() (nis []krpc.NodeInfo) {
 		ni := krpc.NodeInfo{
 			Addr: node.addr.UDPAddr(),
 		}
+		if !node.id.IsSet() {
+			continue
+		}
 		if n := copy(ni.ID[:], node.idString()); n != 20 && n != 0 {
 			panic(n)
 		}

@@ -532,6 +532,8 @@ func (s *Server) announcePeer(node Addr, infoHash int160, port int, token string
 			// logonce.Stderr.Printf("announce_peer response: %s", err)
 			return
 		}
+		s.mu.Lock()
+		defer s.mu.Unlock()
 		s.numConfirmedAnnounces++
 	})
 	return
@@ -626,11 +628,13 @@ func (s *Server) Close() {
 
 func (s *Server) getPeers(addr Addr, infoHash int160, onResponse func(m krpc.Msg)) (err error) {
 	return s.query(addr, "get_peers", &krpc.MsgArgs{InfoHash: infoHash.AsByteArray()}, func(m krpc.Msg, err error) {
+		s.mu.Lock()
+		defer s.mu.Unlock()
 		s.liftNodes(m)
 		if m.R != nil && m.R.Token != "" {
 			s.getNode(addr, int160FromByteArray(*m.SenderID())).announceToken = m.R.Token
 		}
-		onResponse(m)
+		go onResponse(m)
 	})
 }
 

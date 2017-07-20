@@ -24,7 +24,9 @@ type Transaction struct {
 }
 
 func (t *Transaction) handleResponse(m krpc.Msg) {
+	t.mu.Lock()
 	t.gotResponse = true
+	t.mu.Unlock()
 	t.onResponse(m)
 }
 

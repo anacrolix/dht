@@ -34,24 +34,24 @@ const (
 // is unable to function properly. Use `NewServer(nil)` to initialize a
 // default node.
 type Server struct {
-	id               int160
-	socket           net.PacketConn
-	transactions     map[transactionKey]*Transaction
-	transactionIDInt uint64
-	table            table
-	mu               sync.Mutex
-	closed           missinggo.Event
-	ipBlockList      iplist.Ranger
-	badNodes         *boom.BloomFilter
-	tokenServer      tokenServer
+	id     int160
+	socket net.PacketConn
 
+	mu                    sync.Mutex
+	transactions          map[transactionKey]*Transaction
+	nextT                 uint64 // unique "t" field for outbound queries
+	table                 table
+	closed                missinggo.Event
+	ipBlockList           iplist.Ranger
+	badNodes              *boom.BloomFilter
+	tokenServer           tokenServer // Manages tokens we issue to our queriers.
 	numConfirmedAnnounces int
 	config                ServerConfig
 }
 
 func (s *Server) numGoodNodes() (num int) {
 	s.table.forNodes(func(n *node) bool {
-		if n.DefinitelyGood() {
+		if n.IsGood() {
 			num++
 		}
 		return true
@@ -197,6 +197,7 @@ func (s *Server) processPacket(b []byte, addr Addr) {
 	}
 	node := s.getNode(addr, int160FromByteArray(*d.SenderID()))
 	node.lastGotResponse = time.Now()
+	node.consecutiveFailures = 0
 	// TODO: Update node ID as this is an authoritative packet.
 	go t.handleResponse(d)
 	s.deleteTransaction(t)
@@ -240,7 +241,7 @@ func (s *Server) ipBlocked(ip net.IP) (blocked bool) {
 // Adds directly to the node table.
 func (s *Server) AddNode(ni krpc.NodeInfo) error {
 	n := s.getNode(NewAddr(ni.Addr), int160FromByteArray(ni.ID))
-	if n.DefinitelyGood() {
+	if n.IsGood() {
 		// We've already got it, and we've communicated with it.
 		return nil
 	}
@@ -391,7 +392,7 @@ func (s *Server) writeToNode(b []byte, node Addr) (err error) {
 			return
 		}
 	}
-	log.Printf("writing to %s: %q", node.UDPAddr(), b)
+	// log.Printf("writing to %s: %q", node.UDPAddr(), b)
 	n, err := s.socket.WriteTo(b, node.UDPAddr())
 	writes.Add(1)
 	if err != nil {
@@ -414,8 +415,8 @@ func (s *Server) findResponseTransaction(transactionID string, sourceNode Addr) 
 
 func (s *Server) nextTransactionID() string {
 	var b [binary.MaxVarintLen64]byte
-	n := binary.PutUvarint(b[:], s.transactionIDInt)
-	s.transactionIDInt++
+	n := binary.PutUvarint(b[:], s.nextT)
+	s.nextT++
 	return string(b[:n])
 }
 
@@ -450,7 +451,7 @@ func (s *Server) validToken(token string, addr Addr) bool {
 	return s.tokenServer.ValidToken(token, addr)
 }
 
-func (s *Server) query(node Addr, q string, a *krpc.MsgArgs, callback func(krpc.Msg, error)) error {
+func (s *Server) query(addr Addr, q string, a *krpc.MsgArgs, callback func(krpc.Msg, error)) error {
 	tid := s.nextTransactionID()
 	if a == nil {
 		a = &krpc.MsgArgs{}
@@ -473,18 +474,21 @@ func (s *Server) query(node Addr, q string, a *krpc.MsgArgs, callback func(krpc.
 	}
 	var t *Transaction
 	t = &Transaction{
-		remoteAddr: node,
+		remoteAddr: addr,
 		t:          tid,
 		querySender: func() error {
-			return s.writeToNode(b, node)
+			return s.writeToNode(b, addr)
 		},
 		onResponse: func(m krpc.Msg) {
 			go callback(m, nil)
 			go s.deleteTransactionUnlocked(t)
 		},
 		onTimeout: func() {
-			go s.deleteTransactionUnlocked(t)
 			go callback(krpc.Msg{}, errors.New("query timed out"))
+			s.mu.Lock()
+			defer s.mu.Unlock()
+			s.deleteTransaction(t)
+			s.table.addrs[addr].consecutiveFailures++
 		},
 	}
 	err = t.sendQuery()
@@ -629,14 +633,14 @@ func (s *Server) getPeers(addr Addr, infoHash int160, onResponse func(m krpc.Msg
 }
 
 func (s *Server) closestGoodNodeInfos(k int, targetID int160) (ret []krpc.NodeInfo) {
-	for _, n := range s.closestNodes(k, targetID, func(n *node) bool { return n.DefinitelyGood() }) {
+	for _, n := range s.closestNodes(k, targetID, func(n *node) bool { return n.IsGood() }) {
 		ret = append(ret, n.NodeInfo())
 	}
 	return
 }
 
 func (s *Server) closestGoodNodes(k int, targetID int160) []*node {
-	return s.closestNodes(k, targetID, func(n *node) bool { return n.DefinitelyGood() })
+	return s.closestNodes(k, targetID, func(n *node) bool { return n.IsGood() })
 }
 
 func (s *Server) closestNodes(k int, target int160, filter func(*node) bool) []*node {

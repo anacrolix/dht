@@ -14,6 +14,8 @@ type node struct {
 	lastGotQuery    time.Time
 	lastGotResponse time.Time
 	lastSentQuery   time.Time
+
+	consecutiveFailures int
 }
 
 func (n *node) IsSecure() bool {
@@ -32,18 +34,16 @@ func (n *node) NodeInfo() (ret krpc.NodeInfo) {
 	return
 }
 
-// TODO: Match this to the spec.
-func (n *node) DefinitelyGood() bool {
+// Per the spec in BEP 5.
+func (n *node) IsGood() bool {
 	if n.id.IsZero() {
 		return false
 	}
-	// No reason to think ill of them if they've never been queried.
-	if n.lastSentQuery.IsZero() {
+	if time.Since(n.lastGotResponse) < 15*time.Minute {
 		return true
 	}
-	// They answered our last query.
-	if n.lastSentQuery.Before(n.lastGotResponse) {
+	if !n.lastGotResponse.IsZero() && time.Since(n.lastGotQuery) < 15*time.Minute {
 		return true
 	}
-	return true
+	return false
 }

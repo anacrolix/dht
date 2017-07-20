@@ -3,6 +3,7 @@ package dht
 type table struct {
 	rootID  int160
 	buckets [160][]*node
+	addrs   map[Addr]*node
 }
 
 func (tbl *table) numNodes() (num int) {

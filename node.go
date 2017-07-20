@@ -34,6 +34,9 @@ func (n *node) NodeInfo() (ret krpc.NodeInfo) {
 
 // TODO: Match this to the spec.
 func (n *node) DefinitelyGood() bool {
+	if n.id.IsZero() {
+		return false
+	}
 	// No reason to think ill of them if they've never been queried.
 	if n.lastSentQuery.IsZero() {
 		return true

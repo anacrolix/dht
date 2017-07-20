@@ -71,9 +71,12 @@ func init() {
 	default:
 		log.Fatal("require 20 byte infohash")
 	}
-	var err error
+	conn, err := net.ListenPacket("udp", *serveAddr)
+	if err != nil {
+		log.Fatal(err)
+	}
 	s, err = dht.NewServer(&dht.ServerConfig{
-		Addr: *serveAddr,
+		Conn: conn,
 	})
 	if err != nil {
 		log.Fatal(err)

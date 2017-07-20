@@ -5,6 +5,13 @@ type table struct {
 	buckets [160][]*node
 }
 
+func (tbl *table) numNodes() (num int) {
+	for _, b := range tbl.buckets {
+		num += len(b)
+	}
+	return
+}
+
 func (tbl *table) bucketIndex(id int160) int {
 	var a int160
 	a.Xor(&tbl.rootID, &id)
@@ -25,7 +32,7 @@ func (tbl *table) forNodes(f func(*node) bool) bool {
 
 func (tbl *table) getNode(addr Addr, id int160) *node {
 	for _, n := range tbl.buckets[tbl.bucketIndex(id)] {
-		if n.id == id && n.addr == addr {
+		if n.id == id && n.addr.String() == addr.String() {
 			return n
 		}
 	}
@@ -38,4 +45,12 @@ func (tbl *table) closestNodes(k int, target int160, filter func(*node) bool) []
 		nodes = nodes[:k]
 	}
 	return nodes
+}
+
+func (tbl *table) addNode(n *node) {
+	if n.id == tbl.rootID {
+		return
+	}
+	bi := tbl.bucketIndex(n.id)
+	tbl.buckets[bi] = append(tbl.buckets[bi], n)
 }

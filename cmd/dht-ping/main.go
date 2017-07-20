@@ -40,7 +40,8 @@ func receivePongs(pongChan chan pong, timeout <-chan time.Time, maxPongs int) (n
 	for range iter.N(maxPongs) {
 		select {
 		case pong := <-pongChan:
-			if !pong.msgOk {
+			if pong.err != nil {
+				fmt.Fprintf(os.Stderr, "pong error: %s", pong.err)
 				break
 			}
 			numResp++
@@ -64,10 +65,10 @@ func startPings(s *dht.Server, pongChan chan pong, nodes []string) {
 }
 
 type pong struct {
-	addr  string
-	krpc  krpc.Msg
-	msgOk bool
-	rtt   time.Duration
+	addr string
+	krpc krpc.Msg
+	err  error
+	rtt  time.Duration
 }
 
 func ping(netloc string, pongChan chan pong, s *dht.Server) {
@@ -75,19 +76,15 @@ func ping(netloc string, pongChan chan pong, s *dht.Server) {
 	if err != nil {
 		log.Fatal(err)
 	}
-	t, err := s.Ping(addr)
-	if err != nil {
+	start := time.Now()
+	if err := s.Ping(addr, func(resp krpc.Msg, err error) {
+		pongChan <- pong{
+			addr: netloc,
+			krpc: resp,
+			rtt:  time.Now().Sub(start),
+			err:  err,
+		}
+	}); err != nil {
 		log.Fatal(err)
 	}
-	start := time.Now()
-	t.SetResponseHandler(func(addr string) func(krpc.Msg, bool) {
-		return func(resp krpc.Msg, ok bool) {
-			pongChan <- pong{
-				addr:  addr,
-				krpc:  resp,
-				rtt:   time.Now().Sub(start),
-				msgOk: ok,
-			}
-		}
-	}(netloc))
 }

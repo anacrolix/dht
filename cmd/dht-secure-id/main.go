@@ -28,6 +28,8 @@ Usage: dht-secure-id <id> <ip>`, nil, true, "", false)
 		fmt.Fprintf(os.Stderr, "bad ip\n")
 		os.Exit(2)
 	}
-	dht.SecureNodeId(id, ip)
-	fmt.Printf("%x\n", id)
+	var _id [20]byte
+	copy(_id[:], id)
+	dht.SecureNodeId(&_id, ip)
+	fmt.Printf("%x\n", _id)
 }

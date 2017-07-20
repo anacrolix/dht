@@ -239,11 +239,13 @@ func (s *Server) ipBlocked(ip net.IP) (blocked bool) {
 
 // Adds directly to the node table.
 func (s *Server) AddNode(ni krpc.NodeInfo) error {
-	if s.getNode(NewAddr(ni.Addr), int160FromByteArray(ni.ID)).DefinitelyGood() {
-		// We've already got it, and there's no point pinging it.
+	n := s.getNode(NewAddr(ni.Addr), int160FromByteArray(ni.ID))
+	if n.DefinitelyGood() {
+		// We've already got it, and we've communicated with it.
 		return nil
 	}
-	return s.Ping(ni.Addr, nil)
+	s.addNode(n)
+	return nil
 }
 
 // TODO: Probably should write error messages back to senders if something is
@@ -352,18 +354,20 @@ func (s *Server) getNode(addr Addr, id int160) *node {
 	}
 }
 
-func (s *Server) addNode(n *node) {
-	// if len(s.nodes) >= maxNodes {
-	// 	return
-	// }
-	// // Exclude insecure nodes from the node table.
-	// if !s.config.NoSecurity && !n.IsSecure() {
-	// 	return
-	// }
-	// if s.badNodes.Test([]byte(addrStr)) {
-	// 	return
-	// }
-	// s.nodes[addrStr] = n
+func (s *Server) addNode(n *node) error {
+	if !s.config.NoSecurity {
+		if n.id.IsZero() {
+			return s.Ping(n.addr.UDPAddr(), nil)
+		}
+		if !n.IsSecure() {
+			return errors.New("node is not secure")
+		}
+	}
+	if s.badNodes.Test([]byte(n.addr.String())) {
+		return errors.New("node has untrusted addr")
+	}
+	s.table.addNode(n)
+	return nil
 }
 
 func (s *Server) nodeTimedOut(addr Addr) {

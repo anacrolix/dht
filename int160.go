@@ -57,6 +57,15 @@ func (me *int160) Xor(a, b *int160) {
 	}
 }
 
+func (me *int160) IsZero() bool {
+	for _, b := range me.bits {
+		if b != 0 {
+			return false
+		}
+	}
+	return true
+}
+
 func int160FromBytes(b []byte) (ret int160) {
 	ret.SetBytes(b)
 	return

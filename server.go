@@ -456,6 +456,9 @@ func (s *Server) query(addr Addr, q string, a *krpc.MsgArgs, callback func(krpc.
 	if a == nil {
 		a = &krpc.MsgArgs{}
 	}
+	if callback == nil {
+		callback = func(krpc.Msg, error) {}
+	}
 	a.ID = s.ID()
 	m := krpc.Msg{
 		T: tid,

@@ -41,12 +41,21 @@ func (tbl *table) getNode(addr Addr, id int160) *node {
 	return nil
 }
 
-func (tbl *table) closestNodes(k int, target int160, filter func(*node) bool) []*node {
-	nodes := tbl.buckets[tbl.bucketIndex(target)]
-	if len(nodes) > k {
-		nodes = nodes[:k]
+func (tbl *table) closestNodes(k int, target int160, filter func(*node) bool) (ret []*node) {
+	for bi := func() int {
+		if target == tbl.rootID {
+			return len(tbl.buckets) - 1
+		} else {
+			return tbl.bucketIndex(target)
+		}
+	}(); bi >= 0 && len(ret) < k; bi-- {
+		ret = append(ret, tbl.buckets[bi]...)
 	}
-	return nodes
+	// TODO: Keep only the closest.
+	if len(ret) > k {
+		ret = ret[:k]
+	}
+	return
 }
 
 func (tbl *table) addNode(n *node) {

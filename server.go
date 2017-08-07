@@ -359,9 +359,7 @@ func (s *Server) addNode(n *node) error {
 	if s.badNodes.Test([]byte(n.addr.String())) {
 		return errors.New("node has untrusted addr")
 	}
-	log.Println("addNode", n)
 	if n.id.IsZero() {
-		log.Println("ping")
 		return s.Ping(n.addr.UDPAddr(), nil)
 	}
 	if !s.config.NoSecurity && !n.IsSecure() {

@@ -170,17 +170,12 @@ func (a *Announce) closingCh() chan struct{} {
 
 // Announce to a peer, if appropriate.
 func (a *Announce) maybeAnnouncePeer(to Addr, token string, peerId [20]byte) {
+	if !a.server.config.NoSecurity && !NodeIdSecure(peerId, to.UDPAddr().IP) {
+		return
+	}
 	a.server.mu.Lock()
 	defer a.server.mu.Unlock()
-	if !a.server.config.NoSecurity {
-		if len(peerId) != 20 {
-			return
-		}
-		if !NodeIdSecure(peerId, to.UDPAddr().IP) {
-			return
-		}
-	}
-	err := a.server.announcePeer(to, a.infoHash, a.announcePort, token, a.announcePortImplied)
+	err := a.server.announcePeer(to, a.infoHash, a.announcePort, token, a.announcePortImplied, nil)
 	if err != nil {
 		logonce.Stderr.Printf("error announcing peer: %s", err)
 	}

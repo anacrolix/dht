@@ -517,31 +517,27 @@ func (s *Server) ping(node *net.UDPAddr, callback func(krpc.Msg, error)) error {
 	return s.query(NewAddr(node), "ping", nil, callback)
 }
 
-func (s *Server) announcePeer(node Addr, infoHash int160, port int, token string, impliedPort bool) (err error) {
+func (s *Server) announcePeer(node Addr, infoHash int160, port int, token string, impliedPort bool, callback func(krpc.Msg, error)) error {
 	if port == 0 && !impliedPort {
 		return errors.New("nothing to announce")
 	}
-	s.query(node, "announce_peer", &krpc.MsgArgs{
+	return s.query(node, "announce_peer", &krpc.MsgArgs{
 		ImpliedPort: impliedPort,
 		InfoHash:    infoHash.AsByteArray(),
 		Port:        port,
 		Token:       token,
 	}, func(m krpc.Msg, err error) {
-		if err != nil {
-			log.Printf("error announcing peer: %s", err)
-			return
+		if callback != nil {
+			go callback(m, err)
 		}
 		if err := m.Error(); err != nil {
 			announceErrors.Add(1)
-			// log.Print(token)
-			// logonce.Stderr.Printf("announce_peer response: %s", err)
 			return
 		}
 		s.mu.Lock()
 		defer s.mu.Unlock()
 		s.numConfirmedAnnounces++
 	})
-	return
 }
 
 // Add response nodes to node table.

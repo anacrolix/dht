@@ -109,6 +109,9 @@ func NewServer(c *ServerConfig) (s *Server, err error) {
 			secret:           make([]byte, 20),
 		},
 		transactions: make(map[transactionKey]*Transaction),
+		table: table{
+			k: 8,
+		},
 	}
 	rand.Read(s.tokenServer.secret)
 	s.socket = c.Conn
@@ -245,8 +248,7 @@ func (s *Server) AddNode(ni krpc.NodeInfo) error {
 		// We've already got it, and we've communicated with it.
 		return nil
 	}
-	s.addNode(n)
-	return nil
+	return s.addNode(n)
 }
 
 // TODO: Probably should write error messages back to senders if something is
@@ -344,10 +346,8 @@ func (s *Server) reply(addr Addr, t string, r krpc.Return) {
 
 // Returns a node struct, from the routing table if present.
 func (s *Server) getNode(addr Addr, id int160) *node {
-	if id != s.id {
-		if n := s.table.getNode(addr, id); n != nil {
-			return n
-		}
+	if n := s.table.getNode(addr, id); n != nil {
+		return n
 	}
 	return &node{
 		addr: addr,
@@ -356,16 +356,16 @@ func (s *Server) getNode(addr Addr, id int160) *node {
 }
 
 func (s *Server) addNode(n *node) error {
-	if !s.config.NoSecurity {
-		if n.id.IsZero() {
-			return s.Ping(n.addr.UDPAddr(), nil)
-		}
-		if !n.IsSecure() {
-			return errors.New("node is not secure")
-		}
-	}
 	if s.badNodes.Test([]byte(n.addr.String())) {
 		return errors.New("node has untrusted addr")
+	}
+	log.Println("addNode", n)
+	if n.id.IsZero() {
+		log.Println("ping")
+		return s.Ping(n.addr.UDPAddr(), nil)
+	}
+	if !s.config.NoSecurity && !n.IsSecure() {
+		return errors.New("node is not secure")
 	}
 	s.table.addNode(n)
 	return nil
@@ -548,10 +548,6 @@ func (s *Server) liftNodes(d krpc.Msg) {
 		return
 	}
 	for _, cni := range d.R.Nodes {
-		if cni.Addr.Port == 0 {
-			// TODO: Why would people even do this?
-			continue
-		}
 		n := s.getNode(NewAddr(cni.Addr), int160FromByteArray(cni.ID))
 		s.addNode(n)
 	}
@@ -630,7 +626,9 @@ func (s *Server) Close() {
 }
 
 func (s *Server) getPeers(addr Addr, infoHash int160, onResponse func(m krpc.Msg)) (err error) {
-	return s.query(addr, "get_peers", &krpc.MsgArgs{InfoHash: infoHash.AsByteArray()}, func(m krpc.Msg, err error) {
+	return s.query(addr, "get_peers", &krpc.MsgArgs{
+		InfoHash: infoHash.AsByteArray(),
+	}, func(m krpc.Msg, err error) {
 		s.mu.Lock()
 		defer s.mu.Unlock()
 		s.liftNodes(m)

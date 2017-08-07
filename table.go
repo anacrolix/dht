@@ -2,6 +2,7 @@ package dht
 
 type table struct {
 	rootID  int160
+	k       int
 	buckets [160][]*node
 	addrs   map[Addr]*node
 }
@@ -53,5 +54,21 @@ func (tbl *table) addNode(n *node) {
 		return
 	}
 	bi := tbl.bucketIndex(n.id)
-	tbl.buckets[bi] = append(tbl.buckets[bi], n)
+	b := tbl.buckets[bi]
+	for _, n_ := range b {
+		if n.addr.String() == n_.addr.String() && n.id.Cmp(n_.id) == 0 {
+			return
+		}
+	}
+	if len(b) < tbl.k {
+		b = append(b, n)
+	} else {
+		for i, n_ := range b {
+			if !n_.IsGood() {
+				b[i] = n
+				break
+			}
+		}
+	}
+	tbl.buckets[bi] = b
 }

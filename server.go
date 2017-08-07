@@ -360,7 +360,7 @@ func (s *Server) addNode(n *node) error {
 		return errors.New("node has untrusted addr")
 	}
 	if n.id.IsZero() {
-		return s.Ping(n.addr.UDPAddr(), nil)
+		return s.ping(n.addr.UDPAddr(), nil)
 	}
 	if !s.config.NoSecurity && !n.IsSecure() {
 		return errors.New("node is not secure")
@@ -510,6 +510,10 @@ func (s *Server) query(addr Addr, q string, a *krpc.MsgArgs, callback func(krpc.
 func (s *Server) Ping(node *net.UDPAddr, callback func(krpc.Msg, error)) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	return s.ping(node, callback)
+}
+
+func (s *Server) ping(node *net.UDPAddr, callback func(krpc.Msg, error)) error {
 	return s.query(NewAddr(node), "ping", nil, callback)
 }
 

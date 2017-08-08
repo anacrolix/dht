@@ -15,6 +15,9 @@ func (tbl *table) numNodes() (num int) {
 }
 
 func (tbl *table) bucketIndex(id int160) int {
+	if id == tbl.rootID {
+		panic("nobody puts the root ID in a bucket")
+	}
 	var a int160
 	a.Xor(&tbl.rootID, &id)
 	index := 160 - a.BitLen()
@@ -33,6 +36,9 @@ func (tbl *table) forNodes(f func(*node) bool) bool {
 }
 
 func (tbl *table) getNode(addr Addr, id int160) *node {
+	if id == tbl.rootID {
+		return nil
+	}
 	for _, n := range tbl.buckets[tbl.bucketIndex(id)] {
 		if n.id == id && n.addr.String() == addr.String() {
 			return n

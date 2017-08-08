@@ -11,7 +11,7 @@ func TestTable(t *testing.T) {
 	var maxFar int160
 	maxFar.SetMax()
 	assert.Equal(t, 0, tbl.bucketIndex(maxFar))
-	assert.Equal(t, 160, tbl.bucketIndex(tbl.rootID))
+	assert.Panics(t, func() { tbl.bucketIndex(tbl.rootID) })
 	tbl.addNode(&node{})
 	tbl.addNode(&node{id: int160FromByteString("\x2f\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00")})
 	assert.Len(t, tbl.buckets[2], 1)

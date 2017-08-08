@@ -3,7 +3,6 @@ package dht
 // get_peers and announce_peers.
 
 import (
-	"log"
 	"time"
 
 	"github.com/anacrolix/sync"
@@ -143,7 +142,6 @@ func (a *Announce) contact(addr Addr) {
 	a.numContacted++
 	a.triedAddrs.Add([]byte(addr.String()))
 	if err := a.getPeers(addr); err != nil {
-		log.Printf("error sending get_peers request to %s: %#v", addr, err)
 		return
 	}
 	a.pending++

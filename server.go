@@ -178,11 +178,6 @@ func (s *Server) processPacket(b []byte, addr Addr) {
 	if s.closed.IsSet() {
 		return
 	}
-	if sid := d.SenderID(); sid != nil && *sid == s.id.AsByteArray() {
-		// Ignore messages that could be from us. This would trigger very
-		// undesirable circumstances.
-		return
-	}
 	if d.Y == "q" {
 		readQuery.Add(1)
 		s.handleQuery(addr, d)
@@ -190,14 +185,14 @@ func (s *Server) processPacket(b []byte, addr Addr) {
 	}
 	t := s.findResponseTransaction(d.T, addr)
 	if t == nil {
-		//log.Printf("unexpected message: %#v", d)
 		return
 	}
-	node := s.getNode(addr, int160FromByteArray(*d.SenderID()))
-	node.lastGotResponse = time.Now()
-	node.consecutiveFailures = 0
-	// TODO: Update node ID as this is an authoritative packet.
 	go t.handleResponse(d)
+	if sid := d.SenderID(); sid != nil {
+		n := s.getNode(addr, int160FromByteArray(*sid))
+		n.lastGotResponse = time.Now()
+		n.consecutiveFailures = 0
+	}
 	s.deleteTransaction(t)
 }
 

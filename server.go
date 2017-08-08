@@ -522,8 +522,8 @@ func (s *Server) announcePeer(node Addr, infoHash int160, port int, token string
 }
 
 // Add response nodes to node table.
-func (s *Server) liftNodes(d krpc.Msg) {
-	if d.Y != "r" {
+func (s *Server) addResponseNodes(d krpc.Msg) {
+	if d.R == nil {
 		return
 	}
 	for _, cni := range d.R.Nodes {
@@ -533,12 +533,16 @@ func (s *Server) liftNodes(d krpc.Msg) {
 }
 
 // Sends a find_node query to addr. targetID is the node we're looking for.
-func (s *Server) findNode(addr Addr, targetID int160, onResponse func(krpc.CompactIPv4NodeInfo, error)) (err error) {
-	return s.query(addr, "find_node", &krpc.MsgArgs{Target: targetID.AsByteArray()}, func(d krpc.Msg, err error) {
+func (s *Server) findNode(addr Addr, targetID int160, callback func(krpc.Msg, error)) (err error) {
+	return s.query(addr, "find_node", &krpc.MsgArgs{
+		Target: targetID.AsByteArray(),
+	}, func(m krpc.Msg, err error) {
 		// Scrape peers from the response to put in the server's table before
 		// handing the response back to the caller.
-		s.liftNodes(d)
-		onResponse(d.R.Nodes, err)
+		s.mu.Lock()
+		s.addResponseNodes(m)
+		s.mu.Unlock()
+		callback(m, err)
 	})
 }
 
@@ -558,7 +562,7 @@ func (s *Server) Bootstrap() (err error) {
 			return
 		}
 		outstanding.Add(1)
-		s.findNode(addr, s.id, func(addrs krpc.CompactIPv4NodeInfo, err error) {
+		s.findNode(addr, s.id, func(m krpc.Msg, err error) {
 			defer outstanding.Done()
 			s.mu.Lock()
 			defer s.mu.Unlock()
@@ -566,8 +570,10 @@ func (s *Server) Bootstrap() (err error) {
 				log.Printf("error in find node to %q: %s", addr, err)
 				return
 			}
-			for _, addr := range addrs {
-				onAddr(NewAddr(addr.Addr))
+			if r := m.R; r != nil {
+				for _, addr := range r.Nodes {
+					onAddr(NewAddr(addr.Addr))
+				}
 			}
 		})
 	}
@@ -612,7 +618,7 @@ func (s *Server) getPeers(addr Addr, infoHash int160, onResponse func(m krpc.Msg
 	}, func(m krpc.Msg, err error) {
 		s.mu.Lock()
 		defer s.mu.Unlock()
-		s.liftNodes(m)
+		s.addResponseNodes(m)
 		if m.R != nil && m.R.Token != "" {
 			s.getNode(addr, int160FromByteArray(*m.SenderID())).announceToken = m.R.Token
 		}

@@ -13,7 +13,6 @@ type node struct {
 
 	lastGotQuery    time.Time
 	lastGotResponse time.Time
-	lastSentQuery   time.Time
 
 	consecutiveFailures int
 }

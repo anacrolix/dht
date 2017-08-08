@@ -162,10 +162,6 @@ func (a *Announce) responseNode(node krpc.NodeInfo) {
 	a.gotNodeAddr(NewAddr(node.Addr))
 }
 
-func (a *Announce) closingCh() chan struct{} {
-	return a.stop
-}
-
 // Announce to a peer, if appropriate.
 func (a *Announce) maybeAnnouncePeer(to Addr, token string, peerId [20]byte) {
 	if !a.server.config.NoSecurity && !NodeIdSecure(peerId, to.UDPAddr().IP) {

@@ -21,11 +21,6 @@ import (
 	"github.com/anacrolix/dht/krpc"
 )
 
-const (
-	maxInterval  = time.Minute * 3
-	stepInterval = time.Second * 30
-)
-
 // A Server defines parameters for a DHT node server that is able to send
 // queries, and respond to the ones from the network. Each node has a globally
 // unique identifier known as the "node ID." Node IDs are chosen at random
@@ -369,20 +364,6 @@ func (s *Server) addNode(n *node) error {
 	return nil
 }
 
-func (s *Server) nodeTimedOut(addr Addr) {
-	// node, ok := s.nodes[addr.String()]
-	// if !ok {
-	// 	return
-	// }
-	// if node.DefinitelyGood() {
-	// 	return
-	// }
-	// if len(s.nodes) < maxNodes {
-	// 	return
-	// }
-	// delete(s.nodes, addr.String())
-}
-
 func (s *Server) writeToNode(b []byte, node Addr) (err error) {
 	if list := s.ipBlockList; list != nil {
 		if r, ok := list.Lookup(missinggo.AddrIP(node.UDPAddr())); ok {
@@ -579,6 +560,8 @@ func (s *Server) Bootstrap() (err error) {
 		outstanding.Add(1)
 		s.findNode(addr, s.id, func(addrs krpc.CompactIPv4NodeInfo, err error) {
 			defer outstanding.Done()
+			s.mu.Lock()
+			defer s.mu.Unlock()
 			if err != nil {
 				log.Printf("error in find node to %q: %s", addr, err)
 				return
@@ -642,10 +625,6 @@ func (s *Server) closestGoodNodeInfos(k int, targetID int160) (ret []krpc.NodeIn
 		ret = append(ret, n.NodeInfo())
 	}
 	return
-}
-
-func (s *Server) closestGoodNodes(k int, targetID int160) []*node {
-	return s.closestNodes(k, targetID, func(n *node) bool { return n.IsGood() })
 }
 
 func (s *Server) closestNodes(k int, target int160, filter func(*node) bool) []*node {

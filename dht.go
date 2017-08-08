@@ -16,10 +16,6 @@ import (
 	"github.com/anacrolix/dht/krpc"
 )
 
-const (
-	maxNodes = 320
-)
-
 var (
 	queryResendEvery = 5 * time.Second
 )

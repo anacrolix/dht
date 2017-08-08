@@ -36,16 +36,6 @@ func TestMarshalCompactNodeInfo(t *testing.T) {
 	assert.EqualValues(t, bb, b)
 }
 
-func recoverPanicOrDie(t *testing.T, f func()) {
-	defer func() {
-		r := recover()
-		if r == nil {
-			t.Fatal("expected panic")
-		}
-	}()
-	f()
-}
-
 const zeroID = "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
 
 var testIDs []int160

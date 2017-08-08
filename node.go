@@ -17,6 +17,10 @@ type node struct {
 	consecutiveFailures int
 }
 
+func (n *node) hasAddrAndID(addr Addr, id int160) bool {
+	return id == n.id && n.addr.String() == addr.String()
+}
+
 func (n *node) IsSecure() bool {
 	return NodeIdSecure(n.id.AsByteArray(), n.addr.UDPAddr().IP)
 }

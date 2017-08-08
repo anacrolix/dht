@@ -3,13 +3,13 @@ package dht
 type table struct {
 	rootID  int160
 	k       int
-	buckets [160][]*node
+	buckets [160]bucket
 	addrs   map[Addr]*node
 }
 
 func (tbl *table) numNodes() (num int) {
 	for _, b := range tbl.buckets {
-		num += len(b)
+		num += b.Len()
 	}
 	return
 }
@@ -26,10 +26,8 @@ func (tbl *table) bucketIndex(id int160) int {
 
 func (tbl *table) forNodes(f func(*node) bool) bool {
 	for _, b := range tbl.buckets {
-		for _, n := range b {
-			if !f(n) {
-				return false
-			}
+		if !b.EachNode(f) {
+			return false
 		}
 	}
 	return true
@@ -39,12 +37,7 @@ func (tbl *table) getNode(addr Addr, id int160) *node {
 	if id == tbl.rootID {
 		return nil
 	}
-	for _, n := range tbl.buckets[tbl.bucketIndex(id)] {
-		if n.id == id && n.addr.String() == addr.String() {
-			return n
-		}
-	}
-	return nil
+	return tbl.buckets[tbl.bucketIndex(id)].GetNode(addr, id)
 }
 
 func (tbl *table) closestNodes(k int, target int160, filter func(*node) bool) (ret []*node) {
@@ -55,7 +48,9 @@ func (tbl *table) closestNodes(k int, target int160, filter func(*node) bool) (r
 			return tbl.bucketIndex(target)
 		}
 	}(); bi >= 0 && len(ret) < k; bi-- {
-		ret = append(ret, tbl.buckets[bi]...)
+		for n := range tbl.buckets[bi].nodes {
+			ret = append(ret, n)
+		}
 	}
 	// TODO: Keep only the closest.
 	if len(ret) > k {
@@ -68,22 +63,11 @@ func (tbl *table) addNode(n *node) {
 	if n.id == tbl.rootID {
 		return
 	}
-	bi := tbl.bucketIndex(n.id)
-	b := tbl.buckets[bi]
-	for _, n_ := range b {
-		if n.addr.String() == n_.addr.String() && n.id.Cmp(n_.id) == 0 {
-			return
-		}
+	b := &tbl.buckets[tbl.bucketIndex(n.id)]
+	if _, ok := b.nodes[n]; ok {
+		return
 	}
-	if len(b) < tbl.k {
-		b = append(b, n)
-	} else {
-		for i, n_ := range b {
-			if !n_.IsGood() {
-				b[i] = n
-				break
-			}
-		}
+	if b.Len() < tbl.k {
+		b.AddNode(n, tbl.k)
 	}
-	tbl.buckets[bi] = b
 }

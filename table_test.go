@@ -14,7 +14,7 @@ func TestTable(t *testing.T) {
 	assert.Panics(t, func() { tbl.bucketIndex(tbl.rootID) })
 	tbl.addNode(&node{})
 	tbl.addNode(&node{id: int160FromByteString("\x2f\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00")})
-	assert.Len(t, tbl.buckets[2], 1)
-	assert.Len(t, tbl.buckets[0], 0)
+	assert.Equal(t, 1, tbl.buckets[2].Len())
+	assert.Equal(t, 0, tbl.buckets[0].Len())
 	assert.Equal(t, 1, tbl.numNodes())
 }

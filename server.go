@@ -562,7 +562,6 @@ func (s *Server) Bootstrap() (err error) {
 			s.mu.Lock()
 			defer s.mu.Unlock()
 			if err != nil {
-				log.Printf("error in find node to %q: %s", addr, err)
 				return
 			}
 			if r := m.R; r != nil {

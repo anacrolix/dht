@@ -16,7 +16,6 @@ import (
 	"github.com/anacrolix/torrent/iplist"
 	"github.com/anacrolix/torrent/logonce"
 	"github.com/anacrolix/torrent/metainfo"
-	"github.com/tylertreat/BoomFilters"
 
 	"github.com/anacrolix/dht/krpc"
 )
@@ -38,7 +37,6 @@ type Server struct {
 	table                 table
 	closed                missinggo.Event
 	ipBlockList           iplist.Ranger
-	badNodes              *boom.BloomFilter
 	tokenServer           tokenServer // Manages tokens we issue to our queriers.
 	numConfirmedAnnounces int
 	config                ServerConfig
@@ -70,7 +68,6 @@ func (s *Server) Stats() (ss ServerStats) {
 	ss.Nodes = s.numNodes()
 	ss.OutstandingTransactions = len(s.transactions)
 	ss.ConfirmedAnnounces = s.numConfirmedAnnounces
-	ss.BadNodes = s.badNodes.Count()
 	return
 }
 
@@ -97,7 +94,6 @@ func NewServer(c *ServerConfig) (s *Server, err error) {
 	s = &Server{
 		config:      *c,
 		ipBlockList: c.IPBlocklist,
-		badNodes:    boom.NewBloomFilter(1000, 0.1),
 		tokenServer: tokenServer{
 			maxIntervalDelta: 2,
 			interval:         5 * time.Minute,

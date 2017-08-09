@@ -128,12 +128,6 @@ func (a *Announce) gotNodeAddr(addr Addr) {
 	if a.server.ipBlocked(addr.UDPAddr().IP) {
 		return
 	}
-	a.server.mu.Lock()
-	if a.server.badNodes.Test([]byte(addr.String())) {
-		a.server.mu.Unlock()
-		return
-	}
-	a.server.mu.Unlock()
 	a.contact(addr)
 }
 

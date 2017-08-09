@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"log"
@@ -118,17 +119,22 @@ func main() {
 	}
 	log.Printf("dht server on %s, ID is %x", s.Addr(), s.ID())
 
-	ch := make(chan os.Signal)
-	signal.Notify(ch)
+	ctx, cancel := context.WithCancel(context.Background())
 	go func() {
+		ch := make(chan os.Signal)
+		signal.Notify(ch)
 		<-ch
-		s.Close()
+		cancel()
 	}()
-	err = s.Bootstrap()
-	if err != nil {
-		log.Printf("error bootstrapping: %s", err)
-	}
-	<-ch
+	go func() {
+		if tried, err := s.Bootstrap(); err != nil {
+			log.Printf("error bootstrapping: %s", err)
+		} else {
+			log.Printf("finished bootstrapping: crawled %d addrs", tried)
+		}
+	}()
+	<-ctx.Done()
+	s.Close()
 
 	if flags.TableFile != "" {
 		if err := saveTable(); err != nil {

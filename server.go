@@ -612,10 +612,10 @@ func (s *Server) findNode(addr Addr, targetID int160, callback func(krpc.Msg, er
 }
 
 // Populates the node table.
-func (s *Server) Bootstrap() (err error) {
+func (s *Server) Bootstrap() (tried int, err error) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	initialAddrs, err := s.traversalStartingAddrs()
+	s.mu.Unlock()
 	if err != nil {
 		return
 	}
@@ -626,7 +626,9 @@ func (s *Server) Bootstrap() (err error) {
 		if triedAddrs.Test([]byte(addr.String())) {
 			return
 		}
+		tried++
 		outstanding.Add(1)
+		triedAddrs.AddString(addr.String())
 		s.findNode(addr, s.id, func(m krpc.Msg, err error) {
 			defer outstanding.Done()
 			s.mu.Lock()
@@ -641,9 +643,12 @@ func (s *Server) Bootstrap() (err error) {
 			}
 		})
 	}
+	s.mu.Lock()
 	for _, addr := range initialAddrs {
 		onAddr(addr)
 	}
+	s.mu.Unlock()
+	outstanding.Wait()
 	return
 }
 

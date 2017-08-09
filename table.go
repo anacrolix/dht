@@ -1,10 +1,28 @@
 package dht
 
+import "errors"
+
 type table struct {
 	rootID  int160
 	k       int
 	buckets [160]bucket
 	addrs   map[Addr]*node
+}
+
+func (tbl *table) dropNode(n *node) {
+	if _, ok := tbl.addrs[n.addr]; !ok {
+		panic("missing addr for node in table")
+	}
+	delete(tbl.addrs, n.addr)
+	b := tbl.bucketForID(n.id)
+	if _, ok := b.nodes[n]; !ok {
+		panic("expected node in bucket")
+	}
+	delete(b.nodes, n)
+}
+
+func (tbl *table) bucketForID(id int160) *bucket {
+	return &tbl.buckets[tbl.bucketIndex(id)]
 }
 
 func (tbl *table) numNodes() (num int) {
@@ -59,15 +77,17 @@ func (tbl *table) closestNodes(k int, target int160, filter func(*node) bool) (r
 	return
 }
 
-func (tbl *table) addNode(n *node) {
+func (tbl *table) addNode(n *node) error {
 	if n.id == tbl.rootID {
-		return
+		return errors.New("is root id")
 	}
 	b := &tbl.buckets[tbl.bucketIndex(n.id)]
 	if _, ok := b.nodes[n]; ok {
-		return
+		return errors.New("already present")
 	}
-	if b.Len() < tbl.k {
-		b.AddNode(n, tbl.k)
+	if b.Len() >= tbl.k {
+		return errors.New("bucket is full")
 	}
+	b.AddNode(n, tbl.k)
+	return nil
 }

@@ -220,9 +220,10 @@ func (s *Server) processPacket(b []byte, addr Addr) {
 	}
 	go t.handleResponse(d)
 	if sid := d.SenderID(); sid != nil {
-		n := s.getNode(addr, int160FromByteArray(*sid))
-		n.lastGotResponse = time.Now()
-		n.consecutiveFailures = 0
+		if n, _ := s.getNode(addr, int160FromByteArray(*sid)); n != nil {
+			n.lastGotResponse = time.Now()
+			n.consecutiveFailures = 0
+		}
 	}
 	s.deleteTransaction(t)
 }
@@ -264,19 +265,20 @@ func (s *Server) ipBlocked(ip net.IP) (blocked bool) {
 
 // Adds directly to the node table.
 func (s *Server) AddNode(ni krpc.NodeInfo) error {
-	n := s.getNode(NewAddr(ni.Addr), int160FromByteArray(ni.ID))
-	if n.IsGood() {
-		// We've already got it, and we've communicated with it.
-		return nil
+	id := int160FromByteArray(ni.ID)
+	if id.IsZero() {
+		return s.Ping(ni.Addr, nil)
 	}
-	return s.addNode(n)
+	_, err := s.getNode(NewAddr(ni.Addr), int160FromByteArray(ni.ID))
+	return err
 }
 
 // TODO: Probably should write error messages back to senders if something is
 // wrong.
 func (s *Server) handleQuery(source Addr, m krpc.Msg) {
-	node := s.getNode(source, int160FromByteArray(*m.SenderID()))
-	node.lastGotQuery = time.Now()
+	if n, _ := s.getNode(source, int160FromByteArray(*m.SenderID())); n != nil {
+		n.lastGotQuery = time.Now()
+	}
 	if s.config.OnQuery != nil {
 		propagate := s.config.OnQuery(&m, source.UDPAddr())
 		if !propagate {
@@ -287,6 +289,7 @@ func (s *Server) handleQuery(source Addr, m krpc.Msg) {
 	if s.config.Passive {
 		return
 	}
+	// TODO: Should we disallow replying to ourself?
 	args := m.A
 	switch m.Q {
 	case "ping":
@@ -365,28 +368,56 @@ func (s *Server) reply(addr Addr, t string, r krpc.Return) {
 	}
 }
 
-// Returns a node struct, from the routing table if present.
-func (s *Server) getNode(addr Addr, id int160) *node {
+// Returns the node if it's in the routing table, adding it if appropriate.
+func (s *Server) getNode(addr Addr, id int160) (*node, error) {
 	if n := s.table.getNode(addr, id); n != nil {
-		return n
+		return n, nil
 	}
-	return &node{
-		addr: addr,
+	n := &node{
 		id:   id,
+		addr: addr,
 	}
+	if err := s.nodeErr(n); err != nil {
+		return nil, err
+	}
+	b := s.table.bucketForID(id)
+	if b.Len() >= s.table.k {
+		if b.EachNode(func(n *node) bool {
+			if s.nodeIsBad(n) {
+				s.table.dropNode(n)
+			}
+			return b.Len() >= s.table.k
+		}) {
+			// No room.
+			return nil, errors.New("no room in bucket")
+		}
+	}
+	if err := s.table.addNode(n); err != nil {
+		panic(fmt.Sprintf("expected to add node: %s", err))
+	}
+	return n, nil
 }
 
-func (s *Server) addNode(n *node) error {
-	if s.badNodes.Test([]byte(n.addr.String())) {
-		return errors.New("node has untrusted addr")
+func (s *Server) nodeIsBad(n *node) bool {
+	return s.nodeErr(n) != nil
+}
+
+func (s *Server) nodeErr(n *node) error {
+	if n.id == s.id {
+		return errors.New("is self")
 	}
 	if n.id.IsZero() {
-		return s.ping(n.addr.UDPAddr(), nil)
+		return errors.New("has zero id")
 	}
 	if !s.config.NoSecurity && !n.IsSecure() {
-		return errors.New("node is not secure")
+		return errors.New("not secure")
 	}
-	s.table.addNode(n)
+	if n.IsGood() {
+		return nil
+	}
+	if n.consecutiveFailures >= 3 {
+		return fmt.Errorf("has %d consecutive failures", n.consecutiveFailures)
+	}
 	return nil
 }
 
@@ -553,8 +584,7 @@ func (s *Server) addResponseNodes(d krpc.Msg) {
 		return
 	}
 	for _, cni := range d.R.Nodes {
-		n := s.getNode(NewAddr(cni.Addr), int160FromByteArray(cni.ID))
-		s.addNode(n)
+		s.getNode(NewAddr(cni.Addr), int160FromByteArray(cni.ID))
 	}
 }
 
@@ -645,7 +675,9 @@ func (s *Server) getPeers(addr Addr, infoHash int160, onResponse func(m krpc.Msg
 		defer s.mu.Unlock()
 		s.addResponseNodes(m)
 		if m.R != nil && m.R.Token != "" {
-			s.getNode(addr, int160FromByteArray(*m.SenderID())).announceToken = m.R.Token
+			if n, _ := s.getNode(addr, int160FromByteArray(*m.SenderID())); n != nil {
+				n.announceToken = m.R.Token
+			}
 		}
 		go onResponse(m)
 	})

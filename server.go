@@ -9,6 +9,7 @@ import (
 	"log"
 	"net"
 	"sync"
+	"text/tabwriter"
 	"time"
 
 	"github.com/anacrolix/missinggo"
@@ -50,6 +51,40 @@ func (s *Server) numGoodNodes() (num int) {
 		return true
 	})
 	return
+}
+
+func prettySince(t time.Time) string {
+	if t.IsZero() {
+		return "never"
+	}
+	return time.Since(t).String()
+}
+
+func (s *Server) WriteStatus(w io.Writer) {
+	fmt.Fprintf(w, "Listening on %s\n", s.Addr())
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	fmt.Fprintf(w, "Nodes in table: %d good, %d total\n", s.numGoodNodes(), s.numNodes())
+	fmt.Fprintf(w, "Ongoing transactions: %d\n", len(s.transactions))
+	fmt.Fprintf(w, "Server node ID: %x\n", s.id)
+	fmt.Fprintln(w)
+	tw := tabwriter.NewWriter(w, 0, 0, 1, ' ', 0)
+	fmt.Fprintf(tw, "bucket\tnode id\taddr\tannounce token\tlast query\tlast response\n")
+	for i, b := range s.table.buckets {
+		b.EachNode(func(n *node) bool {
+			fmt.Fprintf(tw, "%d\t%x\t%s\t%q\t%s\t%s\t%d\n",
+				i,
+				n.id,
+				n.addr,
+				n.announceToken,
+				prettySince(n.lastGotQuery),
+				prettySince(n.lastGotResponse),
+				n.consecutiveFailures,
+			)
+			return true
+		})
+	}
+	tw.Flush()
 }
 
 func (s *Server) numNodes() (num int) {

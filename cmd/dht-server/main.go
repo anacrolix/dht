@@ -5,8 +5,11 @@ import (
 	"io"
 	"log"
 	"net"
+	"net/http"
 	"os"
 	"os/signal"
+
+	_ "github.com/anacrolix/envpprof"
 
 	"github.com/anacrolix/dht"
 	"github.com/anacrolix/dht/krpc"
@@ -106,6 +109,9 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	http.HandleFunc("/debug/dht", func(w http.ResponseWriter, r *http.Request) {
+		s.WriteStatus(w)
+	})
 	err = loadTable()
 	if err != nil {
 		log.Fatalf("error loading table: %s", err)

@@ -531,6 +531,15 @@ func (s *Server) query(addr Addr, q string, a *krpc.MsgArgs, callback func(krpc.
 				n.consecutiveFailures++
 			}
 		},
+		onSendError: func(err error) {
+			go callback(krpc.Msg{}, fmt.Errorf("error resending query: %s", err))
+			s.mu.Lock()
+			defer s.mu.Unlock()
+			s.deleteTransaction(t)
+			if n := s.table.addrs[addr]; n != nil {
+				n.consecutiveFailures++
+			}
+		},
 	}
 	err = t.sendQuery()
 	if err != nil {

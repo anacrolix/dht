@@ -14,6 +14,7 @@ type Transaction struct {
 	t           string
 	onResponse  func(krpc.Msg)
 	onTimeout   func()
+	onSendError func(error)
 	gotResponse bool
 	querySender func() error
 
@@ -52,7 +53,10 @@ func (t *Transaction) resendCallback() {
 		return
 	}
 	t.retries++
-	t.sendQuery()
+	if err := t.sendQuery(); err != nil {
+		go t.onSendError(err)
+		return
+	}
 	if t.timer.Reset(jitterDuration(queryResendEvery, time.Second)) {
 		panic("timer should have fired to get here")
 	}

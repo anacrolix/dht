@@ -611,8 +611,13 @@ func (s *Server) findNode(addr Addr, targetID int160, callback func(krpc.Msg, er
 	})
 }
 
+type TraversalStats struct {
+	NumAddrsTried int
+	NumResponses  int
+}
+
 // Populates the node table.
-func (s *Server) Bootstrap() (tried int, err error) {
+func (s *Server) Bootstrap() (ts TraversalStats, err error) {
 	s.mu.Lock()
 	initialAddrs, err := s.traversalStartingAddrs()
 	s.mu.Unlock()
@@ -626,7 +631,7 @@ func (s *Server) Bootstrap() (tried int, err error) {
 		if triedAddrs.Test([]byte(addr.String())) {
 			return
 		}
-		tried++
+		ts.NumAddrsTried++
 		outstanding.Add(1)
 		triedAddrs.AddString(addr.String())
 		s.findNode(addr, s.id, func(m krpc.Msg, err error) {
@@ -636,6 +641,7 @@ func (s *Server) Bootstrap() (tried int, err error) {
 			if err != nil {
 				return
 			}
+			ts.NumResponses++
 			if r := m.R; r != nil {
 				for _, addr := range r.Nodes {
 					onAddr(NewAddr(addr.Addr))

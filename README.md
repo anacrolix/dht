@@ -1,7 +1,7 @@
 # dht
 
-[![CircleCI](https://circleci.com/gh/anacrolix/dht.svg?style=shield)](https://circleci.com/gh/anacrolix/torrent)
-[![GoDoc](https://godoc.org/github.com/anacrolix/dht?status.svg)](https://godoc.org/github.com/anacrolix/torrent)
+[![CircleCI](https://circleci.com/gh/anacrolix/dht.svg?style=shield)](https://circleci.com/gh/anacrolix/dht)
+[![GoDoc](https://godoc.org/github.com/anacrolix/dht?status.svg)](https://godoc.org/github.com/anacrolix/dht)
 [![Join the chat at https://gitter.im/anacrolix/torrent](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/anacrolix/torrent?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 
 ## Installation

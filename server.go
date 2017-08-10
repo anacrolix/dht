@@ -69,7 +69,7 @@ func (s *Server) WriteStatus(w io.Writer) {
 	fmt.Fprintf(w, "Server node ID: %x\n", s.id)
 	fmt.Fprintln(w)
 	tw := tabwriter.NewWriter(w, 0, 0, 1, ' ', 0)
-	fmt.Fprintf(tw, "bucket\tnode id\taddr\tannounce token\tlast query\tlast response\n")
+	fmt.Fprintf(tw, "b#\tnode id\taddr\tanntok\tlast query\tlast response\tcf\n")
 	for i, b := range s.table.buckets {
 		b.EachNode(func(n *node) bool {
 			fmt.Fprintf(tw, "%d\t%x\t%s\t%q\t%s\t%s\t%d\n",

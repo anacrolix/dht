@@ -18,3 +18,8 @@ func TestAnnounceNoStartingNodes(t *testing.T) {
 	_, err = s.Announce(ih, 0, true)
 	require.EqualError(t, err, "no initial nodes")
 }
+
+func TestDefaultTraversalBloomFilterCharacteristics(t *testing.T) {
+	bf := newBloomFilterForTraversal()
+	t.Logf("%d bits with %d hashes per item", bf.Cap(), bf.K())
+}

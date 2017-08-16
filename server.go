@@ -57,7 +57,10 @@ func prettySince(t time.Time) string {
 	if t.IsZero() {
 		return "never"
 	}
-	return time.Since(t).String()
+	d := time.Since(t)
+	d /= time.Second
+	d *= time.Second
+	return d.String()
 }
 
 func (s *Server) WriteStatus(w io.Writer) {
@@ -66,17 +69,17 @@ func (s *Server) WriteStatus(w io.Writer) {
 	defer s.mu.Unlock()
 	fmt.Fprintf(w, "Nodes in table: %d good, %d total\n", s.numGoodNodes(), s.numNodes())
 	fmt.Fprintf(w, "Ongoing transactions: %d\n", len(s.transactions))
-	fmt.Fprintf(w, "Server node ID: %x\n", s.id)
+	fmt.Fprintf(w, "Server node ID: %x\n", s.id.Bytes())
 	fmt.Fprintln(w)
 	tw := tabwriter.NewWriter(w, 0, 0, 1, ' ', 0)
 	fmt.Fprintf(tw, "b#\tnode id\taddr\tanntok\tlast query\tlast response\tcf\n")
 	for i, b := range s.table.buckets {
 		b.EachNode(func(n *node) bool {
-			fmt.Fprintf(tw, "%d\t%x\t%s\t%q\t%s\t%s\t%d\n",
+			fmt.Fprintf(tw, "%d\t%x\t%s\t%v\t%s\t%s\t%d\n",
 				i,
-				n.id,
+				n.id.Bytes(),
 				n.addr,
-				n.announceToken,
+				len(n.announceToken),
 				prettySince(n.lastGotQuery),
 				prettySince(n.lastGotResponse),
 				n.consecutiveFailures,

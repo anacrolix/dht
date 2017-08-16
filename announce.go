@@ -172,7 +172,7 @@ func (a *Announce) maybeAnnouncePeer(to Addr, token string, peerId [20]byte) {
 func (a *Announce) getPeers(addr Addr) error {
 	a.server.mu.Lock()
 	defer a.server.mu.Unlock()
-	return a.server.getPeers(addr, a.infoHash, func(m krpc.Msg) {
+	return a.server.getPeers(addr, a.infoHash, func(m krpc.Msg, err error) {
 		// Register suggested nodes closer to the target info-hash.
 		if m.R != nil {
 			a.mu.Lock()

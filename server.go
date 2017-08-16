@@ -690,10 +690,11 @@ func (s *Server) Close() {
 	s.socket.Close()
 }
 
-func (s *Server) getPeers(addr Addr, infoHash int160, onResponse func(m krpc.Msg)) (err error) {
+func (s *Server) getPeers(addr Addr, infoHash int160, callback func(krpc.Msg, error)) (err error) {
 	return s.query(addr, "get_peers", &krpc.MsgArgs{
 		InfoHash: infoHash.AsByteArray(),
 	}, func(m krpc.Msg, err error) {
+		go callback(m, err)
 		s.mu.Lock()
 		defer s.mu.Unlock()
 		s.addResponseNodes(m)
@@ -702,7 +703,6 @@ func (s *Server) getPeers(addr Addr, infoHash int160, onResponse func(m krpc.Msg
 				n.announceToken = m.R.Token
 			}
 		}
-		go onResponse(m)
 	})
 }
 

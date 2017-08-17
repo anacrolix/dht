@@ -1,6 +1,7 @@
 package dht
 
 import (
+	"net"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -13,7 +14,10 @@ func TestTable(t *testing.T) {
 	assert.Equal(t, 0, tbl.bucketIndex(maxFar))
 	assert.Panics(t, func() { tbl.bucketIndex(tbl.rootID) })
 	tbl.addNode(&node{})
-	tbl.addNode(&node{id: int160FromByteString("\x2f\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00")})
+	tbl.addNode(&node{
+		id:   int160FromByteString("\x2f\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"),
+		addr: NewAddr(&net.UDPAddr{}),
+	})
 	assert.Equal(t, 1, tbl.buckets[2].Len())
 	assert.Equal(t, 0, tbl.buckets[0].Len())
 	assert.Equal(t, 1, tbl.numNodes())

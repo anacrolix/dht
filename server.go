@@ -530,7 +530,7 @@ func (s *Server) query(addr Addr, q string, a *krpc.MsgArgs, callback func(krpc.
 			s.mu.Lock()
 			defer s.mu.Unlock()
 			s.deleteTransaction(t)
-			if n := s.table.addrs[addr]; n != nil {
+			if n := s.table.nodeByAddr(addr); n != nil {
 				n.consecutiveFailures++
 			}
 		},
@@ -539,7 +539,7 @@ func (s *Server) query(addr Addr, q string, a *krpc.MsgArgs, callback func(krpc.
 			s.mu.Lock()
 			defer s.mu.Unlock()
 			s.deleteTransaction(t)
-			if n := s.table.addrs[addr]; n != nil {
+			if n := s.table.nodeByAddr(addr); n != nil {
 				n.consecutiveFailures++
 			}
 		},

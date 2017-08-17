@@ -6,14 +6,18 @@ type table struct {
 	rootID  int160
 	k       int
 	buckets [160]bucket
-	addrs   map[Addr]*node
+	addrs   map[string]*node
+}
+
+func (tbl *table) nodeByAddr(addr Addr) *node {
+	return tbl.addrs[addr.String()]
 }
 
 func (tbl *table) dropNode(n *node) {
-	if _, ok := tbl.addrs[n.addr]; !ok {
+	if _, ok := tbl.addrs[n.addr.String()]; !ok {
 		panic("missing addr for node in table")
 	}
-	delete(tbl.addrs, n.addr)
+	delete(tbl.addrs, n.addr.String())
 	b := tbl.bucketForID(n.id)
 	if _, ok := b.nodes[n]; !ok {
 		panic("expected node in bucket")
@@ -89,5 +93,9 @@ func (tbl *table) addNode(n *node) error {
 		return errors.New("bucket is full")
 	}
 	b.AddNode(n, tbl.k)
+	if tbl.addrs == nil {
+		tbl.addrs = make(map[string]*node, 160*tbl.k)
+	}
+	tbl.addrs[n.addr.String()] = n
 	return nil
 }

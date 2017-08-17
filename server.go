@@ -60,7 +60,7 @@ func prettySince(t time.Time) string {
 	d := time.Since(t)
 	d /= time.Second
 	d *= time.Second
-	return d.String()
+	return fmt.Sprintf("%s ago", d)
 }
 
 func (s *Server) WriteStatus(w io.Writer) {

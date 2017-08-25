@@ -103,7 +103,7 @@ func TestPing(t *testing.T) {
 	defer srv.Close()
 	srv0, err := NewServer(&ServerConfig{
 		Conn:          mustListen("127.0.0.1:5681"),
-		StartingNodes: []Addr{mustResolveAddr("127.0.0.1:5680")},
+		StartingNodes: addrResolver("127.0.0.1:5680"),
 	})
 	require.NoError(t, err)
 	defer srv0.Close()
@@ -143,7 +143,7 @@ func TestAnnounceTimeout(t *testing.T) {
 		t.SkipNow()
 	}
 	s, err := NewServer(&ServerConfig{
-		StartingNodes: []Addr{mustResolveAddr("1.2.3.4:5")},
+		StartingNodes: addrResolver("1.2.3.4:5"),
 		Conn:          mustListen(":0"),
 	})
 	require.NoError(t, err)
@@ -173,7 +173,7 @@ func TestHook(t *testing.T) {
 	srv0, err := NewServer(&ServerConfig{
 		Conn:          mustListen("127.0.0.1:5679"),
 		PublicIP:      net.IPv4(127, 0, 0, 1),
-		StartingNodes: []Addr{mustResolveAddr("127.0.0.1:5678")},
+		StartingNodes: addrResolver("127.0.0.1:5678"),
 		OnQuery: func(m *krpc.Msg, addr net.Addr) bool {
 			if m.Q == "ping" {
 				hookCalled <- true

@@ -725,7 +725,12 @@ func (s *Server) traversalStartingAddrs() (addrs []Addr, err error) {
 	if len(addrs) > 0 {
 		return
 	}
-	addrs = s.config.StartingNodes
+	if s.config.StartingNodes != nil {
+		addrs, err = s.config.StartingNodes()
+		if err != nil {
+			return
+		}
+	}
 	if len(addrs) == 0 {
 		err = errors.New("no initial nodes")
 	}

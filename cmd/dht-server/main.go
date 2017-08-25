@@ -98,14 +98,8 @@ func main() {
 	}
 	defer conn.Close()
 	s, err = dht.NewServer(&dht.ServerConfig{
-		Conn: conn,
-		StartingNodes: func() []dht.Addr {
-			ret, err := dht.GlobalBootstrapAddrs()
-			if err != nil {
-				log.Fatal(err)
-			}
-			return ret
-		}(),
+		Conn:          conn,
+		StartingNodes: dht.GlobalBootstrapAddrs,
 	})
 	if err != nil {
 		log.Fatal(err)

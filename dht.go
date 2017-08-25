@@ -35,7 +35,7 @@ type ServerConfig struct {
 	Conn   net.PacketConn
 	// Don't respond to queries from other nodes.
 	Passive       bool
-	StartingNodes []Addr
+	StartingNodes func() ([]Addr, error)
 	// Disable the DHT security extension:
 	// http://www.libtorrent.org/dht_sec.html.
 	NoSecurity bool

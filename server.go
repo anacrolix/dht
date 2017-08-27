@@ -212,6 +212,13 @@ func (s *Server) processPacket(b []byte, addr Addr) {
 	if s.closed.IsSet() {
 		return
 	}
+	var n *node
+	if sid := d.SenderID(); sid != nil {
+		n, _ = s.getNode(addr, int160FromByteArray(*sid), !d.ReadOnly)
+		if n != nil && d.ReadOnly {
+			n.readOnly = true
+		}
+	}
 	if d.Y == "q" {
 		readQuery.Add(1)
 		s.handleQuery(addr, d)
@@ -222,11 +229,9 @@ func (s *Server) processPacket(b []byte, addr Addr) {
 		return
 	}
 	go t.handleResponse(d)
-	if sid := d.SenderID(); sid != nil {
-		if n, _ := s.getNode(addr, int160FromByteArray(*sid)); n != nil {
-			n.lastGotResponse = time.Now()
-			n.consecutiveFailures = 0
-		}
+	if n != nil {
+		n.lastGotResponse = time.Now()
+		n.consecutiveFailures = 0
 	}
 	s.deleteTransaction(t)
 }
@@ -272,14 +277,14 @@ func (s *Server) AddNode(ni krpc.NodeInfo) error {
 	if id.IsZero() {
 		return s.Ping(ni.Addr, nil)
 	}
-	_, err := s.getNode(NewAddr(ni.Addr), int160FromByteArray(ni.ID))
+	_, err := s.getNode(NewAddr(ni.Addr), int160FromByteArray(ni.ID), true)
 	return err
 }
 
 // TODO: Probably should write error messages back to senders if something is
 // wrong.
 func (s *Server) handleQuery(source Addr, m krpc.Msg) {
-	if n, _ := s.getNode(source, int160FromByteArray(*m.SenderID())); n != nil {
+	if n, _ := s.getNode(source, int160FromByteArray(*m.SenderID()), !m.ReadOnly); n != nil {
 		n.lastGotQuery = time.Now()
 	}
 	if s.config.OnQuery != nil {
@@ -372,7 +377,7 @@ func (s *Server) reply(addr Addr, t string, r krpc.Return) {
 }
 
 // Returns the node if it's in the routing table, adding it if appropriate.
-func (s *Server) getNode(addr Addr, id int160) (*node, error) {
+func (s *Server) getNode(addr Addr, id int160, tryAdd bool) (*node, error) {
 	if n := s.table.getNode(addr, id); n != nil {
 		return n, nil
 	}
@@ -380,8 +385,14 @@ func (s *Server) getNode(addr Addr, id int160) (*node, error) {
 		id:   id,
 		addr: addr,
 	}
+	// Check that the node would be good to begin with. (It might have a bad
+	// ID or banned address, or we fucked up the initial node field
+	// invariant.)
 	if err := s.nodeErr(n); err != nil {
 		return nil, err
+	}
+	if !tryAdd {
+		return nil, errors.New("node not present and add flag false")
 	}
 	b := s.table.bucketForID(id)
 	if b.Len() >= s.table.k {
@@ -596,7 +607,7 @@ func (s *Server) addResponseNodes(d krpc.Msg) {
 		return
 	}
 	for _, cni := range d.R.Nodes {
-		s.getNode(NewAddr(cni.Addr), int160FromByteArray(cni.ID))
+		s.getNode(NewAddr(cni.Addr), int160FromByteArray(cni.ID), true)
 	}
 }
 
@@ -699,7 +710,7 @@ func (s *Server) getPeers(addr Addr, infoHash int160, callback func(krpc.Msg, er
 		defer s.mu.Unlock()
 		s.addResponseNodes(m)
 		if m.R != nil && m.R.Token != "" {
-			if n, _ := s.getNode(addr, int160FromByteArray(*m.SenderID())); n != nil {
+			if n, _ := s.getNode(addr, int160FromByteArray(*m.SenderID()), false); n != nil {
 				n.announceToken = m.R.Token
 			}
 		}

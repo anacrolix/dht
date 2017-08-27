@@ -10,6 +10,7 @@ type node struct {
 	addr          Addr
 	id            int160
 	announceToken string
+	readOnly      bool
 
 	lastGotQuery    time.Time
 	lastGotResponse time.Time

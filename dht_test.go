@@ -139,12 +139,12 @@ func TestServerCustomNodeId(t *testing.T) {
 }
 
 func TestAnnounceTimeout(t *testing.T) {
-	if testing.Short() {
-		t.SkipNow()
-	}
 	s, err := NewServer(&ServerConfig{
 		StartingNodes: addrResolver("1.2.3.4:5"),
 		Conn:          mustListen(":0"),
+		QueryResendDelay: func() time.Duration {
+			return 0
+		},
 	})
 	require.NoError(t, err)
 	var ih [20]byte

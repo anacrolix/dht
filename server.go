@@ -554,6 +554,12 @@ func (s *Server) query(addr Addr, q string, a *krpc.MsgArgs, callback func(krpc.
 				n.consecutiveFailures++
 			}
 		},
+		queryResendDelay: func() time.Duration {
+			if s.config.QueryResendDelay != nil {
+				return s.config.QueryResendDelay()
+			}
+			return defaultQueryResendDelay()
+		},
 	}
 	err = t.sendQuery()
 	if err != nil {

@@ -10,18 +10,19 @@ import (
 // Transaction keeps track of a message exchange between nodes, such as a
 // query message and a response message.
 type Transaction struct {
-	remoteAddr  Addr
-	t           string
-	onResponse  func(krpc.Msg)
-	onTimeout   func()
-	onSendError func(error)
-	gotResponse bool
-	querySender func() error
+	remoteAddr       Addr
+	t                string
+	onResponse       func(krpc.Msg)
+	onTimeout        func()
+	onSendError      func(error)
+	querySender      func() error
+	queryResendDelay func() time.Duration
 
-	mu       sync.Mutex
-	timer    *time.Timer
-	retries  int
-	lastSend time.Time
+	mu          sync.Mutex
+	gotResponse bool
+	timer       *time.Timer
+	retries     int
+	lastSend    time.Time
 }
 
 func (t *Transaction) handleResponse(m krpc.Msg) {
@@ -39,7 +40,7 @@ func (t *Transaction) key() transactionKey {
 }
 
 func (t *Transaction) startResendTimer() {
-	t.timer = time.AfterFunc(jitterDuration(queryResendEvery, time.Second), t.resendCallback)
+	t.timer = time.AfterFunc(t.queryResendDelay(), t.resendCallback)
 }
 
 func (t *Transaction) resendCallback() {
@@ -57,7 +58,7 @@ func (t *Transaction) resendCallback() {
 		go t.onSendError(err)
 		return
 	}
-	if t.timer.Reset(jitterDuration(queryResendEvery, time.Second)) {
+	if t.timer.Reset(t.queryResendDelay()) {
 		panic("timer should have fired to get here")
 	}
 }

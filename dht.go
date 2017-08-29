@@ -16,9 +16,9 @@ import (
 	"github.com/anacrolix/dht/krpc"
 )
 
-var (
-	queryResendEvery = 5 * time.Second
-)
+func defaultQueryResendDelay() time.Duration {
+	return jitterDuration(5*time.Second, time.Second)
+}
 
 // Uniquely identifies a transaction to us.
 type transactionKey struct {
@@ -52,6 +52,9 @@ type ServerConfig struct {
 	OnQuery func(query *krpc.Msg, source net.Addr) (propagate bool)
 	// Called when a peer successfully announces to us.
 	OnAnnouncePeer func(infoHash metainfo.Hash, peer Peer)
+	// How long to wait before resending queries that haven't received a
+	// response. Defaults to a random value between 4.5 and 5.5s.
+	QueryResendDelay func() time.Duration
 }
 
 // ServerStats instance is returned by Server.Stats() and stores Server metrics

@@ -381,10 +381,10 @@ func (s *Server) getNode(addr Addr, id int160, tryAdd bool) (*node, error) {
 	if n := s.table.getNode(addr, id); n != nil {
 		return n, nil
 	}
-	n := &node{
+	n := &node{nodeKey: nodeKey{
 		id:   id,
 		addr: addr,
-	}
+	}}
 	// Check that the node would be good to begin with. (It might have a bad
 	// ID or banned address, or we fucked up the initial node field
 	// invariant.)

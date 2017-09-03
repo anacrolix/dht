@@ -6,9 +6,13 @@ import (
 	"github.com/anacrolix/dht/krpc"
 )
 
+type nodeKey struct {
+	addr Addr
+	id   int160
+}
+
 type node struct {
-	addr          Addr
-	id            int160
+	nodeKey
 	announceToken string
 	readOnly      bool
 

@@ -2,22 +2,32 @@ package dht
 
 import "errors"
 
+// Node table, with indexes on distance from root ID to bucket, and node addr.
 type table struct {
 	rootID  int160
 	k       int
 	buckets [160]bucket
-	addrs   map[string]*node
+	addrs   map[string]map[int160]struct{}
 }
 
-func (tbl *table) nodeByAddr(addr Addr) *node {
-	return tbl.addrs[addr.String()]
+func (tbl *table) addrNodes(addr Addr) []*node {
+	a := tbl.addrs[addr.String()]
+	ret := make([]*node, 0, len(a))
+	for id := range a {
+		ret = append(ret, tbl.getNode(addr, id))
+	}
+	return ret
 }
 
 func (tbl *table) dropNode(n *node) {
-	if _, ok := tbl.addrs[n.addr.String()]; !ok {
-		panic("missing addr for node in table")
+	as := n.addr.String()
+	if _, ok := tbl.addrs[as][n.id]; !ok {
+		panic("missing id for addr")
 	}
-	delete(tbl.addrs, n.addr.String())
+	delete(tbl.addrs[as], n.id)
+	if len(tbl.addrs[as]) == 0 {
+		delete(tbl.addrs, as)
+	}
 	b := tbl.bucketForID(n.id)
 	if _, ok := b.nodes[n]; !ok {
 		panic("expected node in bucket")
@@ -86,7 +96,7 @@ func (tbl *table) addNode(n *node) error {
 		return errors.New("is root id")
 	}
 	b := &tbl.buckets[tbl.bucketIndex(n.id)]
-	if _, ok := b.nodes[n]; ok {
+	if b.GetNode(n.addr, n.id) != nil {
 		return errors.New("already present")
 	}
 	if b.Len() >= tbl.k {
@@ -94,8 +104,12 @@ func (tbl *table) addNode(n *node) error {
 	}
 	b.AddNode(n, tbl.k)
 	if tbl.addrs == nil {
-		tbl.addrs = make(map[string]*node, 160*tbl.k)
+		tbl.addrs = make(map[string]map[int160]struct{}, 160*tbl.k)
 	}
-	tbl.addrs[n.addr.String()] = n
+	as := n.addr.String()
+	if tbl.addrs[as] == nil {
+		tbl.addrs[as] = make(map[int160]struct{}, 1)
+	}
+	tbl.addrs[as][n.id] = struct{}{}
 	return nil
 }

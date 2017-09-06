@@ -89,6 +89,8 @@ func GlobalBootstrapAddrs() (addrs []Addr, err error) {
 	for _, s := range []string{
 		"router.utorrent.com:6881",
 		"router.bittorrent.com:6881",
+		"dht.transmissionbt.com:6881",
+		"dht.aelitis.com:6881", // Vuze
 	} {
 		ua, err := net.ResolveUDPAddr("udp4", s)
 		if err != nil {

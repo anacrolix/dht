@@ -51,12 +51,20 @@ func (m Msg) String() string {
 	return fmt.Sprintf("%#v", m)
 }
 
-// The node ID of the source of this Msg.
+// The node ID of the source of this Msg. Returns nil if it isn't present.
+// TODO: Can we verify Msgs more aggressively so this is guaranteed to return
+// a valid ID for a checked Msg?
 func (m Msg) SenderID() *ID {
 	switch m.Y {
 	case "q":
+		if m.A == nil {
+			return nil
+		}
 		return &m.A.ID
 	case "r":
+		if m.R == nil {
+			return nil
+		}
 		return &m.R.ID
 	}
 	return nil

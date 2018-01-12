@@ -284,8 +284,10 @@ func (s *Server) AddNode(ni krpc.NodeInfo) error {
 // TODO: Probably should write error messages back to senders if something is
 // wrong.
 func (s *Server) handleQuery(source Addr, m krpc.Msg) {
-	if n, _ := s.getNode(source, int160FromByteArray(*m.SenderID()), !m.ReadOnly); n != nil {
-		n.lastGotQuery = time.Now()
+	if m.SenderID() != nil {
+		if n, _ := s.getNode(source, int160FromByteArray(*m.SenderID()), !m.ReadOnly); n != nil {
+			n.lastGotQuery = time.Now()
+		}
 	}
 	if s.config.OnQuery != nil {
 		propagate := s.config.OnQuery(&m, source.UDPAddr())

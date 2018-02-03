@@ -1,10 +1,10 @@
 package krpc
 
 import (
+	"testing"
+
 	"github.com/anacrolix/torrent/bencode"
 	"github.com/stretchr/testify/require"
-
-	"testing"
 )
 
 // https://github.com/anacrolix/torrent/issues/166

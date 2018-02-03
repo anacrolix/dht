@@ -11,10 +11,10 @@ import (
 	"os/signal"
 
 	_ "github.com/anacrolix/envpprof"
+	"github.com/anacrolix/tagflag"
 
 	"github.com/anacrolix/dht"
 	"github.com/anacrolix/dht/krpc"
-	"github.com/anacrolix/tagflag"
 )
 
 var (

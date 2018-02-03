@@ -9,9 +9,10 @@ import (
 	"os"
 	"os/signal"
 
+	_ "github.com/anacrolix/envpprof"
+
 	"github.com/anacrolix/dht"
 	"github.com/anacrolix/dht/krpc"
-	_ "github.com/anacrolix/envpprof"
 )
 
 var (

@@ -6,8 +6,9 @@ import (
 	"net"
 	"os"
 
-	"github.com/anacrolix/dht"
 	"github.com/docopt/docopt-go"
+
+	"github.com/anacrolix/dht"
 )
 
 func main() {

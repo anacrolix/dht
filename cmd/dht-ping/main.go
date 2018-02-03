@@ -8,9 +8,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/anacrolix/tagflag"
+
 	"github.com/anacrolix/dht"
 	"github.com/anacrolix/dht/krpc"
-	"github.com/anacrolix/tagflag"
 )
 
 func main() {

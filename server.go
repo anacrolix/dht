@@ -275,10 +275,47 @@ func (s *Server) ipBlocked(ip net.IP) (blocked bool) {
 func (s *Server) AddNode(ni krpc.NodeInfo) error {
 	id := int160FromByteArray(ni.ID)
 	if id.IsZero() {
-		return s.Ping(ni.Addr, nil)
+		return s.Ping(ni.Addr.UDP(), nil)
 	}
-	_, err := s.getNode(NewAddr(ni.Addr), int160FromByteArray(ni.ID), true)
+	_, err := s.getNode(NewAddr(ni.Addr.UDP()), int160FromByteArray(ni.ID), true)
 	return err
+}
+
+func wantsContain(ws []krpc.Want, w krpc.Want) bool {
+	for _, _w := range ws {
+		if _w == w {
+			return true
+		}
+	}
+	return false
+}
+
+func shouldReturnNodes(queryWants []krpc.Want, querySource net.IP) bool {
+	if len(queryWants) != 0 {
+		return wantsContain(queryWants, krpc.WantNodes)
+	}
+	return querySource.To4() != nil
+}
+
+func shouldReturnNodes6(queryWants []krpc.Want, querySource net.IP) bool {
+	if len(queryWants) != 0 {
+		return wantsContain(queryWants, krpc.WantNodes6)
+	}
+	return querySource.To4() == nil
+}
+
+func (s *Server) makeReturnNodes(target int160, filter func(krpc.NodeAddr) bool) []krpc.NodeInfo {
+	return s.closestGoodNodeInfos(8, target, filter)
+}
+
+func (s *Server) setReturnNodes(r *krpc.Return, queryMsg krpc.Msg, querySource Addr) {
+	target := int160FromByteArray(queryMsg.A.InfoHash)
+	if shouldReturnNodes(queryMsg.A.Want, querySource.UDPAddr().IP) {
+		r.Nodes = s.makeReturnNodes(target, func(na krpc.NodeAddr) bool { return na.IP.To4() != nil })
+	}
+	if shouldReturnNodes6(queryMsg.A.Want, querySource.UDPAddr().IP) {
+		r.Nodes6 = s.makeReturnNodes(target, func(krpc.NodeAddr) bool { return true })
+	}
 }
 
 // TODO: Probably should write error messages back to senders if something is
@@ -305,29 +342,19 @@ func (s *Server) handleQuery(source Addr, m krpc.Msg) {
 	case "ping":
 		s.reply(source, m.T, krpc.Return{})
 	case "get_peers":
-		if len(args.InfoHash) != 20 {
-			break
-		}
-		s.reply(source, m.T, krpc.Return{
-			Nodes: s.closestGoodNodeInfos(8, int160FromByteArray(args.InfoHash)),
-			Token: s.createToken(source),
-		})
-	case "find_node": // TODO: Extract common behaviour with get_peers.
-		if len(args.Target) != 20 {
-			log.Printf("bad DHT query: %v", m)
-			return
-		}
-		s.reply(source, m.T, krpc.Return{
-			Nodes: s.closestGoodNodeInfos(8, int160FromByteArray(args.Target)),
-		})
+		var r krpc.Return
+		// TODO: Return nodes.
+		s.setReturnNodes(&r, m, source)
+		r.Token = s.createToken(source)
+		s.reply(source, m.T, r)
+	case "find_node":
+		var r krpc.Return
+		s.setReturnNodes(&r, m, source)
+		s.reply(source, m.T, r)
 	case "announce_peer":
 		readAnnouncePeer.Add(1)
 		if !s.validToken(args.Token, source) {
-			readInvalidToken.Add(1)
-			return
-		}
-		if len(args.InfoHash) != 20 {
-			readQueryBad.Add(1)
+			expvars.Add("received announce_peer with invalid token", 1)
 			return
 		}
 		if h := s.config.OnAnnouncePeer; h != nil {
@@ -340,6 +367,7 @@ func (s *Server) handleQuery(source Addr, m krpc.Msg) {
 			}
 			go h(metainfo.Hash(args.InfoHash), p)
 		}
+		s.reply(source, m.T, krpc.Return{})
 	default:
 		s.sendError(source, m.T, krpc.ErrorMethodUnknown)
 	}
@@ -362,6 +390,7 @@ func (s *Server) sendError(addr Addr, t string, e krpc.Error) {
 }
 
 func (s *Server) reply(addr Addr, t string, r krpc.Return) {
+	expvars.Add("replies", 1)
 	r.ID = s.id.AsByteArray()
 	m := krpc.Msg{
 		T: t,
@@ -615,7 +644,7 @@ func (s *Server) addResponseNodes(d krpc.Msg) {
 		return
 	}
 	for _, cni := range d.R.Nodes {
-		s.getNode(NewAddr(cni.Addr), int160FromByteArray(cni.ID), true)
+		s.getNode(NewAddr(cni.Addr.UDP()), int160FromByteArray(cni.ID), true)
 	}
 }
 
@@ -666,7 +695,7 @@ func (s *Server) Bootstrap() (ts TraversalStats, err error) {
 			ts.NumResponses++
 			if r := m.R; r != nil {
 				for _, addr := range r.Nodes {
-					onAddr(NewAddr(addr.Addr))
+					onAddr(NewAddr(addr.Addr.UDP()))
 				}
 			}
 		})
@@ -693,7 +722,7 @@ func (s *Server) Nodes() (nis []krpc.NodeInfo) {
 	defer s.mu.Unlock()
 	s.table.forNodes(func(n *node) bool {
 		nis = append(nis, krpc.NodeInfo{
-			Addr: n.addr.UDPAddr(),
+			Addr: n.addr.KRPC(),
 			ID:   n.id.AsByteArray(),
 		})
 		return true
@@ -725,8 +754,16 @@ func (s *Server) getPeers(addr Addr, infoHash int160, callback func(krpc.Msg, er
 	})
 }
 
-func (s *Server) closestGoodNodeInfos(k int, targetID int160) (ret []krpc.NodeInfo) {
-	for _, n := range s.closestNodes(k, targetID, func(n *node) bool { return n.IsGood() }) {
+func (s *Server) closestGoodNodeInfos(
+	k int,
+	targetID int160,
+	filter func(krpc.NodeAddr) bool,
+) (
+	ret []krpc.NodeInfo,
+) {
+	for _, n := range s.closestNodes(k, targetID, func(n *node) bool {
+		return n.IsGood() && filter(n.NodeInfo().Addr)
+	}) {
 		ret = append(ret, n.NodeInfo())
 	}
 	return
@@ -752,6 +789,19 @@ func (s *Server) traversalStartingAddrs() (addrs []Addr, err error) {
 	}
 	if len(addrs) == 0 {
 		err = errors.New("no initial nodes")
+	}
+	return
+}
+
+func (s *Server) AddNodesFromFile(fileName string) (added int, err error) {
+	ns, err := ReadNodesFromFile(fileName)
+	if err != nil {
+		return
+	}
+	for _, n := range ns {
+		if s.AddNode(n) == nil {
+			added++
+		}
 	}
 	return
 }

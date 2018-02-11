@@ -47,7 +47,7 @@ type ServerConfig struct {
 	// validate our ID.
 	PublicIP net.IP
 
-	// Hook received queries. Return true if you don't want to propagate to
+	// Hook received queries. Return false if you don't want to propagate to
 	// the default handlers.
 	OnQuery func(query *krpc.Msg, source net.Addr) (propagate bool)
 	// Called when a peer successfully announces to us.
@@ -55,6 +55,7 @@ type ServerConfig struct {
 	// How long to wait before resending queries that haven't received a
 	// response. Defaults to a random value between 4.5 and 5.5s.
 	QueryResendDelay func() time.Duration
+	// TODO: Expose Peers, to return NodeInfo for received get_peers queries.
 }
 
 // ServerStats instance is returned by Server.Stats() and stores Server metrics

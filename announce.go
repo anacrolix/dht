@@ -155,7 +155,7 @@ func (a *Announce) transactionClosed() {
 }
 
 func (a *Announce) responseNode(node krpc.NodeInfo) {
-	a.gotNodeAddr(NewAddr(node.Addr))
+	a.gotNodeAddr(NewAddr(node.Addr.UDP()))
 }
 
 // Announce to a peer, if appropriate.
@@ -181,11 +181,14 @@ func (a *Announce) getPeers(addr Addr) error {
 			for _, n := range m.R.Nodes {
 				a.responseNode(n)
 			}
+			for _, n := range m.R.Nodes6 {
+				a.responseNode(n)
+			}
 			a.mu.Unlock()
 
 			if vs := m.R.Values; len(vs) != 0 {
 				nodeInfo := krpc.NodeInfo{
-					Addr: addr.UDPAddr(),
+					Addr: addr.KRPC(),
 					ID:   *m.SenderID(),
 				}
 				select {

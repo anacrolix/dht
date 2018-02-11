@@ -2,8 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
-	"io"
 	"log"
 	"net"
 	"net/http"
@@ -14,7 +12,6 @@ import (
 	"github.com/anacrolix/tagflag"
 
 	"github.com/anacrolix/dht"
-	"github.com/anacrolix/dht/krpc"
 )
 
 var (
@@ -27,66 +24,14 @@ var (
 	s *dht.Server
 )
 
-func loadTable() error {
-	if flags.TableFile == "" {
-		return nil
-	}
-	f, err := os.Open(flags.TableFile)
-	if os.IsNotExist(err) {
-		return nil
-	}
-	if err != nil {
-		return fmt.Errorf("error opening table file: %s", err)
-	}
-	defer f.Close()
-	added := 0
-	for {
-		b := make([]byte, krpc.CompactIPv4NodeInfoLen)
-		_, err := io.ReadFull(f, b)
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			return fmt.Errorf("error reading table file: %s", err)
-		}
-		var ni krpc.NodeInfo
-		err = ni.UnmarshalCompactIPv4(b)
-		if err != nil {
-			return fmt.Errorf("error unmarshaling compact node info: %s", err)
-		}
-		s.AddNode(ni)
-		added++
-	}
+func loadTable() (err error) {
+	added, err := s.AddNodesFromFile(flags.TableFile)
 	log.Printf("loaded %d nodes from table file", added)
-	return nil
+	return
 }
 
 func saveTable() error {
-	goodNodes := s.Nodes()
-	if flags.TableFile == "" {
-		if len(goodNodes) != 0 {
-			log.Printf("discarding %d good nodes!", len(goodNodes))
-		}
-		return nil
-	}
-	f, err := os.OpenFile(flags.TableFile, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0666)
-	if err != nil {
-		return fmt.Errorf("error opening table file: %s", err)
-	}
-	defer f.Close()
-	for _, nodeInfo := range goodNodes {
-		var b [krpc.CompactIPv4NodeInfoLen]byte
-		err := nodeInfo.PutCompact(b[:])
-		if err != nil {
-			return fmt.Errorf("error compacting node info: %s", err)
-		}
-		_, err = f.Write(b[:])
-		if err != nil {
-			return fmt.Errorf("error writing compact node info: %s", err)
-		}
-	}
-	log.Printf("saved %d nodes to table file", len(goodNodes))
-	return nil
+	return dht.WriteNodesToFile(s.Nodes(), flags.TableFile)
 }
 
 func main() {

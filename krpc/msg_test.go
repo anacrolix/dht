@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/anacrolix/torrent/bencode"
-	"github.com/anacrolix/torrent/util"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -39,25 +38,27 @@ func TestMarshalUnmarshalMsg(t *testing.T) {
 		T: "\x8c%",
 		R: &Return{},
 	}, "d1:rd2:id20:\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00e1:t2:\x8c%1:y1:re")
-	testMarshalUnmarshalMsg(t, Msg{
-		Y: "r",
-		T: "\x8c%",
-		R: &Return{
-			Nodes: CompactIPv4NodeInfo{
-				NodeInfo{
-					Addr: &net.UDPAddr{
-						IP:   net.IPv4(1, 2, 3, 4).To4(),
-						Port: 0x1234,
+	testMarshalUnmarshalMsg(t,
+		Msg{
+			Y: "r",
+			T: "\x8c%",
+			R: &Return{
+				Nodes: CompactIPv4NodeInfo{
+					NodeInfo{
+						Addr: NodeAddr{
+							IP:   net.IPv4(1, 2, 3, 4).To4(),
+							Port: 0x1234,
+						},
 					},
 				},
 			},
 		},
-	}, "d1:rd2:id20:\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x005:nodes26:\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x01\x02\x03\x04\x124e1:t2:\x8c%1:y1:re")
+		"d1:rd2:id20:\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x005:nodes26:\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x01\x02\x03\x04\x124e1:t2:\x8c%1:y1:re")
 	testMarshalUnmarshalMsg(t, Msg{
 		Y: "r",
 		T: "\x8c%",
 		R: &Return{
-			Values: []util.CompactPeer{
+			Values: []NodeAddr{
 				{
 					IP:   net.IPv4(1, 2, 3, 4).To4(),
 					Port: 0x5678,
@@ -71,7 +72,7 @@ func TestMarshalUnmarshalMsg(t *testing.T) {
 		R: &Return{
 			ID: IdFromString("\xeb\xff6isQ\xffJ\xec)ͺ\xab\xf2\xfb\xe3F|\xc2g"),
 		},
-		IP: util.CompactPeer{
+		IP: NodeAddr{
 			IP:   net.IPv4(124, 168, 180, 8).To4(),
 			Port: 62844,
 		},

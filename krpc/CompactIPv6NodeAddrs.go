@@ -2,7 +2,7 @@ package krpc
 
 type CompactIPv6NodeAddrs []NodeAddr
 
-func (CompactIPv6NodeAddrs) ElemSize() int { return 6 }
+func (CompactIPv6NodeAddrs) ElemSize() int { return 18 }
 
 func (me CompactIPv6NodeAddrs) MarshalBinary() ([]byte, error) {
 	return marshalBinarySlice(me)

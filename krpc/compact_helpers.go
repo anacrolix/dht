@@ -10,12 +10,12 @@ import (
 )
 
 func unmarshalBencodedBinary(u encoding.BinaryUnmarshaler, b []byte) (err error) {
-	var _b []byte
-	err = bencode.Unmarshal(b, &_b)
+	var ub string
+	err = bencode.Unmarshal(b, &ub)
 	if err != nil {
 		return
 	}
-	return u.UnmarshalBinary(_b)
+	return u.UnmarshalBinary([]byte(ub))
 }
 
 type elemSizer interface {

@@ -1,6 +1,7 @@
 package dht
 
 import (
+	"crypto/rand"
 	"encoding/hex"
 	"log"
 	"net"
@@ -53,4 +54,33 @@ func TestDHTSec(t *testing.T) {
 			assert.True(t, NodeIdSecure(id, ip), "%v", case_)
 		}
 	}
+}
+
+func getInsecureIp(nodeId [20]byte, ip net.IP) {
+	for {
+		rand.Read(ip)
+		if !NodeIdSecure(nodeId, ip) {
+			break
+		}
+	}
+}
+
+// Show that we can't secure a node ID against more than one IP.
+func TestSecureNodeIdMultipleIps(t *testing.T) {
+	id := RandomNodeID()
+	t.Logf("random node id: %x", id)
+	ip4 := make(net.IP, 4)
+	getInsecureIp(id, ip4)
+	ip6 := make(net.IP, 16)
+	getInsecureIp(id, ip6)
+	t.Logf("random ip4 address: %s", ip4)
+	t.Logf("random ip6 address: %s", ip6)
+	require.False(t, NodeIdSecure(id, ip4))
+	require.False(t, NodeIdSecure(id, ip6))
+	SecureNodeId(&id, ip4)
+	assert.True(t, NodeIdSecure(id, ip4))
+	assert.False(t, NodeIdSecure(id, ip6))
+	SecureNodeId(&id, ip6)
+	assert.True(t, NodeIdSecure(id, ip6))
+	assert.False(t, NodeIdSecure(id, ip4))
 }

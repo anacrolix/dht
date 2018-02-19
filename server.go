@@ -357,6 +357,7 @@ func (s *Server) handleQuery(source Addr, m krpc.Msg) {
 			expvars.Add("received announce_peer with invalid token", 1)
 			return
 		}
+		expvars.Add("received announce_peer with valid token", 1)
 		if h := s.config.OnAnnouncePeer; h != nil {
 			p := Peer{
 				IP:   source.UDPAddr().IP,
@@ -390,7 +391,7 @@ func (s *Server) sendError(addr Addr, t string, e krpc.Error) {
 }
 
 func (s *Server) reply(addr Addr, t string, r krpc.Return) {
-	expvars.Add("replies", 1)
+	expvars.Add("replied to peer", 1)
 	r.ID = s.id.AsByteArray()
 	m := krpc.Msg{
 		T:  t,

@@ -4,9 +4,9 @@ import (
 	"crypto"
 	_ "crypto/sha1"
 	"errors"
+	"log"
 	"math/rand"
 	"net"
-	"strconv"
 	"time"
 
 	"github.com/anacrolix/missinggo"
@@ -77,14 +77,7 @@ func jitterDuration(average time.Duration, plusMinus time.Duration) time.Duratio
 	return average - plusMinus/2 + time.Duration(rand.Int63n(int64(plusMinus)))
 }
 
-type Peer struct {
-	IP   net.IP
-	Port int
-}
-
-func (p *Peer) String() string {
-	return net.JoinHostPort(p.IP.String(), strconv.FormatInt(int64(p.Port), 10))
-}
+type Peer = krpc.NodeAddr
 
 func GlobalBootstrapAddrs() (addrs []Addr, err error) {
 	for _, s := range []string{

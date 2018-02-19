@@ -185,29 +185,18 @@ func (a *Announce) getPeers(addr Addr) error {
 				a.responseNode(n)
 			}
 			a.mu.Unlock()
-
-			if vs := m.R.Values; len(vs) != 0 {
-				nodeInfo := krpc.NodeInfo{
+			select {
+			case a.values <- PeersValues{
+				Peers: m.R.Values,
+				NodeInfo: krpc.NodeInfo{
 					Addr: addr.KRPC(),
 					ID:   *m.SenderID(),
-				}
-				select {
-				case a.values <- PeersValues{
-					Peers: func() (ret []Peer) {
-						for _, cp := range vs {
-							ret = append(ret, Peer(cp))
-						}
-						return
-					}(),
-					NodeInfo: nodeInfo,
-				}:
-				case <-a.stop:
-				}
+				},
+			}:
+			case <-a.stop:
 			}
-
 			a.maybeAnnouncePeer(addr, m.R.Token, m.SenderID())
 		}
-
 		a.mu.Lock()
 		a.transactionClosed()
 		a.mu.Unlock()

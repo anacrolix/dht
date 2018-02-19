@@ -653,6 +653,7 @@ func (s *Server) addResponseNodes(d krpc.Msg) {
 func (s *Server) findNode(addr Addr, targetID int160, callback func(krpc.Msg, error)) (err error) {
 	return s.query(addr, "find_node", &krpc.MsgArgs{
 		Target: targetID.AsByteArray(),
+		Want:   []krpc.Want{krpc.WantNodes, krpc.WantNodes6},
 	}, func(m krpc.Msg, err error) {
 		// Scrape peers from the response to put in the server's table before
 		// handing the response back to the caller.
@@ -742,6 +743,7 @@ func (s *Server) Close() {
 func (s *Server) getPeers(addr Addr, infoHash int160, callback func(krpc.Msg, error)) (err error) {
 	return s.query(addr, "get_peers", &krpc.MsgArgs{
 		InfoHash: infoHash.AsByteArray(),
+		Want:     []krpc.Want{krpc.WantNodes, krpc.WantNodes6},
 	}, func(m krpc.Msg, err error) {
 		go callback(m, err)
 		s.mu.Lock()

@@ -27,6 +27,10 @@ func unmarshalBinarySlice(slice elemSizer, b []byte) (err error) {
 	elemType := sliceValue.Type().Elem()
 	bytesPerElem := slice.ElemSize()
 	for len(b) != 0 {
+		if len(b) < bytesPerElem {
+			err = fmt.Errorf("%d trailing bytes < %d required for element", len(b), bytesPerElem)
+			break
+		}
 		elem := reflect.New(elemType)
 		err = elem.Interface().(encoding.BinaryUnmarshaler).UnmarshalBinary(b[:bytesPerElem])
 		if err != nil {

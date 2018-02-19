@@ -19,3 +19,7 @@ func (me *CompactIPv4NodeAddrs) UnmarshalBinary(b []byte) error {
 func (me *CompactIPv4NodeAddrs) UnmarshalBencode(b []byte) error {
 	return unmarshalBencodedBinary(me, b)
 }
+
+func (me CompactIPv4NodeAddrs) NodeAddrs() []NodeAddr {
+	return me
+}

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"net"
+	"strconv"
 
 	"github.com/anacrolix/torrent/bencode"
 )
@@ -11,6 +12,13 @@ import (
 type NodeAddr struct {
 	IP   net.IP
 	Port int
+}
+
+func (me NodeAddr) String() string {
+	if me.Port == 0 {
+		return me.IP.String()
+	}
+	return net.JoinHostPort(me.IP.String(), strconv.FormatInt(int64(me.Port), 10))
 }
 
 func (me *NodeAddr) UnmarshalBinary(b []byte) error {

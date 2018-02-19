@@ -393,9 +393,10 @@ func (s *Server) reply(addr Addr, t string, r krpc.Return) {
 	expvars.Add("replies", 1)
 	r.ID = s.id.AsByteArray()
 	m := krpc.Msg{
-		T: t,
-		Y: "r",
-		R: &r,
+		T:  t,
+		Y:  "r",
+		R:  &r,
+		IP: addr.KRPC(),
 	}
 	b, err := bencode.Marshal(m)
 	if err != nil {

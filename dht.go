@@ -2,6 +2,7 @@ package dht
 
 import (
 	"crypto"
+	crand "crypto/rand"
 	_ "crypto/sha1"
 	"errors"
 	"log"
@@ -111,7 +112,7 @@ func GlobalBootstrapAddrs() (addrs []Addr, err error) {
 }
 
 func RandomNodeID() (id [20]byte) {
-	rand.Read(id[:])
+	crand.Read(id[:])
 	return
 }
 

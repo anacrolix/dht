@@ -93,11 +93,23 @@ func GlobalBootstrapAddrs() (addrs []Addr, err error) {
 		"dht.transmissionbt.com:6881",
 		"dht.aelitis.com:6881", // Vuze
 	} {
-		ua, err := net.ResolveUDPAddr("udp4", s)
+		host, port, err := net.SplitHostPort(s)
 		if err != nil {
+			panic(err)
+		}
+		hostAddrs, err := net.LookupHost(host)
+		if err != nil {
+			log.Printf("error looking up %q: %v", s, err)
 			continue
 		}
-		addrs = append(addrs, NewAddr(ua))
+		for _, a := range hostAddrs {
+			ua, err := net.ResolveUDPAddr("udp", net.JoinHostPort(a, port))
+			if err != nil {
+				log.Printf("error resolving %q: %v", a, err)
+				continue
+			}
+			addrs = append(addrs, NewAddr(ua))
+		}
 	}
 	if len(addrs) == 0 {
 		err = errors.New("nothing resolved")

@@ -215,3 +215,13 @@ func TestResolveBadAddr(t *testing.T) {
 	require.NoError(t, err)
 	assert.False(t, validNodeAddr(NewAddr(ua)))
 }
+
+func TestGlobalBootstrapAddrs(t *testing.T) {
+	addrs, err := GlobalBootstrapAddrs()
+	if err != nil {
+		t.Skip(err)
+	}
+	for _, a := range addrs {
+		t.Log(a)
+	}
+}

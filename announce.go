@@ -177,6 +177,8 @@ func (a *Announce) getPeers(addr Addr) error {
 	return a.server.getPeers(addr, a.infoHash, func(m krpc.Msg, err error) {
 		// Register suggested nodes closer to the target info-hash.
 		if m.R != nil {
+			expvars.Add("announce get_peers response nodes values", int64(len(m.R.Nodes)))
+			expvars.Add("announce get_peers response nodes6 values", int64(len(m.R.Nodes6)))
 			a.mu.Lock()
 			for _, n := range m.R.Nodes {
 				a.responseNode(n)

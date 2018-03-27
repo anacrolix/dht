@@ -14,6 +14,7 @@ type NodeAddr struct {
 	Port int
 }
 
+// A zero Port is taken to mean no port provided, per BEP 7.
 func (me NodeAddr) String() string {
 	if me.Port == 0 {
 		return me.IP.String()

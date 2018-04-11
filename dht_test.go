@@ -9,6 +9,7 @@ import (
 	"time"
 
 	_ "github.com/anacrolix/envpprof"
+	"github.com/anacrolix/torrent/bencode"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -224,4 +225,37 @@ func TestGlobalBootstrapAddrs(t *testing.T) {
 	for _, a := range addrs {
 		t.Log(a)
 	}
+}
+
+// https://github.com/anacrolix/dht/pull/19
+func TestBadGetPeersResponse(t *testing.T) {
+	pc, err := net.ListenPacket("udp", "localhost:0")
+	require.NoError(t, err)
+	defer pc.Close()
+	s, err := NewServer(&ServerConfig{
+		StartingNodes: func() ([]Addr, error) {
+			return []Addr{NewAddr(pc.LocalAddr().(*net.UDPAddr))}, nil
+		},
+		Conn: mustListen("localhost:0"),
+	})
+	require.NoError(t, err)
+	defer s.Close()
+	go func() {
+		b := make([]byte, 1024)
+		n, addr, err := pc.ReadFrom(b)
+		require.NoError(t, err)
+		var rm krpc.Msg
+		bencode.Unmarshal(b[:n], &rm)
+		m := krpc.Msg{
+			R: &krpc.Return{},
+			T: rm.T,
+		}
+		b, err = bencode.Marshal(m)
+		require.NoError(t, err)
+		pc.WriteTo(b, addr)
+	}()
+	a, err := s.Announce([20]byte{}, 0, true)
+	require.NoError(t, err)
+	_, ok := <-a.Peers
+	require.False(t, ok)
 }

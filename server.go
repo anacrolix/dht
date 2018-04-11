@@ -119,8 +119,9 @@ func (s *Server) Addr() net.Addr {
 func NewServer(c *ServerConfig) (s *Server, err error) {
 	if c == nil {
 		c = &ServerConfig{
-			Conn:       mustListen(":0"),
-			NoSecurity: true,
+			Conn:          mustListen(":0"),
+			NoSecurity:    true,
+			StartingNodes: GlobalBootstrapAddrs,
 		}
 	}
 	if missinggo.IsZeroValue(c.NodeId) {

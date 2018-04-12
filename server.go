@@ -32,15 +32,15 @@ type Server struct {
 	id     int160
 	socket net.PacketConn
 
-	mu                    sync.Mutex
-	transactions          map[transactionKey]*Transaction
-	nextT                 uint64 // unique "t" field for outbound queries
-	table                 table
-	closed                missinggo.Event
-	ipBlockList           iplist.Ranger
-	tokenServer           tokenServer // Manages tokens we issue to our queriers.
-	numConfirmedAnnounces int
-	config                ServerConfig
+	mu           sync.Mutex
+	transactions map[transactionKey]*Transaction
+	nextT        uint64 // unique "t" field for outbound queries
+	table        table
+	closed       missinggo.Event
+	ipBlockList  iplist.Ranger
+	tokenServer  tokenServer // Manages tokens we issue to our queriers.
+	config       ServerConfig
+	stats        ServerStats
 }
 
 func (s *Server) numGoodNodes() (num int) {
@@ -99,14 +99,14 @@ func (s *Server) numNodes() (num int) {
 }
 
 // Stats returns statistics for the server.
-func (s *Server) Stats() (ss ServerStats) {
+func (s *Server) Stats() ServerStats {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	ss := s.stats
 	ss.GoodNodes = s.numGoodNodes()
 	ss.Nodes = s.numNodes()
 	ss.OutstandingTransactions = len(s.transactions)
-	ss.ConfirmedAnnounces = s.numConfirmedAnnounces
-	return
+	return ss
 }
 
 // Addr returns the listen address for the server. Packets arriving to this address
@@ -595,6 +595,7 @@ func (s *Server) query(addr Addr, q string, a *krpc.MsgArgs, callback func(krpc.
 			return defaultQueryResendDelay()
 		},
 	}
+	s.stats.OutboundQueriesAttempted++
 	err = t.sendQuery()
 	if err != nil {
 		return err
@@ -637,7 +638,7 @@ func (s *Server) announcePeer(node Addr, infoHash int160, port int, token string
 		}
 		s.mu.Lock()
 		defer s.mu.Unlock()
-		s.numConfirmedAnnounces++
+		s.stats.SuccessfulOutboundAnnouncePeerQueries++
 	})
 }
 

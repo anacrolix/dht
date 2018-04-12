@@ -71,9 +71,10 @@ type ServerStats struct {
 	// Transactions awaiting a response.
 	OutstandingTransactions int
 	// Individual announce_peer requests that got a success response.
-	ConfirmedAnnounces int
+	SuccessfulOutboundAnnouncePeerQueries int64
 	// Nodes that have been blocked.
-	BadNodes uint
+	BadNodes                 uint
+	OutboundQueriesAttempted int64
 }
 
 func jitterDuration(average time.Duration, plusMinus time.Duration) time.Duration {

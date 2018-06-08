@@ -752,7 +752,7 @@ func (s *Server) getPeers(addr Addr, infoHash int160, callback func(krpc.Msg, er
 		s.mu.Lock()
 		defer s.mu.Unlock()
 		s.addResponseNodes(m)
-		if m.R != nil && m.R.Token != "" {
+		if m.R != nil && m.R.Token != "" && m.SenderID() != nil {
 			if n, _ := s.getNode(addr, int160FromByteArray(*m.SenderID()), false); n != nil {
 				n.announceToken = m.R.Token
 			}

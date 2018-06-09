@@ -116,7 +116,7 @@ func (s *Server) Addr() net.Addr {
 }
 
 // NewServer initializes a new DHT node server.
-func NewServer(c *ServerConfig) (s *Server, err error) {
+func NewServer(c *ServerConfig) (s *Server) {
 	if c == nil {
 		c = &ServerConfig{
 			Conn:          mustListen(":0"),

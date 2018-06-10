@@ -137,10 +137,16 @@ func (a *Announce) gotNodeAddr(addr Addr) {
 func (a *Announce) contact(addr Addr) {
 	a.numContacted++
 	a.triedAddrs.Add([]byte(addr.String()))
-	if err := a.getPeers(addr); err != nil {
-		return
-	}
 	a.pending++
+	go func() {
+		err := a.getPeers(addr)
+		if err == nil {
+			return
+		}
+		a.mu.Lock()
+		a.transactionClosed()
+		a.mu.Unlock()
+	}()
 }
 
 func (a *Announce) maybeClose() {

@@ -34,7 +34,20 @@ func loadTable() error {
 	return nil
 }
 
-func init() {
+func saveTable() error {
+	return dht.WriteNodesToFile(s.Nodes(), *tableFileName)
+}
+
+func setupSignals() {
+	ch := make(chan os.Signal)
+	signal.Notify(ch, os.Interrupt)
+	go func() {
+		<-ch
+		close(quitting)
+	}()
+}
+
+func main() {
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
 	flag.Parse()
 	switch len(*infoHash) {
@@ -63,22 +76,7 @@ func init() {
 	}
 	log.Printf("dht server on %s, ID is %x", s.Addr(), s.ID())
 	setupSignals()
-}
 
-func saveTable() error {
-	return dht.WriteNodesToFile(s.Nodes(), *tableFileName)
-}
-
-func setupSignals() {
-	ch := make(chan os.Signal)
-	signal.Notify(ch, os.Interrupt)
-	go func() {
-		<-ch
-		close(quitting)
-	}()
-}
-
-func main() {
 	seen := make(map[string]struct{})
 getPeers:
 	for {

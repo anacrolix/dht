@@ -56,8 +56,6 @@ func newBloomFilterForTraversal() *bloom.BloomFilter {
 // caller, and announcing the local node to each node if allowed and
 // specified.
 func (s *Server) Announce(infoHash [20]byte, port int, impliedPort bool) (*Announce, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
 	startAddrs, err := s.traversalStartingAddrs()
 	if err != nil {
 		return nil, err

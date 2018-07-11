@@ -32,7 +32,7 @@ type Server struct {
 	id     int160
 	socket net.PacketConn
 
-	mu           sync.Mutex
+	mu           sync.RWMutex
 	transactions map[transactionKey]*Transaction
 	nextT        uint64 // unique "t" field for outbound queries
 	table        table
@@ -674,9 +674,7 @@ type TraversalStats struct {
 
 // Populates the node table.
 func (s *Server) Bootstrap() (ts TraversalStats, err error) {
-	s.mu.Lock()
 	initialAddrs, err := s.traversalStartingAddrs()
-	s.mu.Unlock()
 	if err != nil {
 		return
 	}
@@ -780,10 +778,12 @@ func (s *Server) closestNodes(k int, target int160, filter func(*node) bool) []*
 }
 
 func (s *Server) traversalStartingAddrs() (addrs []Addr, err error) {
+	s.mu.RLock()
 	s.table.forNodes(func(n *node) bool {
 		addrs = append(addrs, n.addr)
 		return true
 	})
+	s.mu.RUnlock()
 	if len(addrs) > 0 {
 		return
 	}

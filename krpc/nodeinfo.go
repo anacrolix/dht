@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding"
 	"encoding/binary"
+	"fmt"
 	"math"
 	"math/rand"
 	"net"
@@ -12,6 +13,10 @@ import (
 type NodeInfo struct {
 	ID   [20]byte
 	Addr NodeAddr
+}
+
+func (me NodeInfo) String() string {
+	return fmt.Sprintf("{%x at %s}", me.ID, me.Addr)
 }
 
 func RandomNodeInfo(ipLen int) (ni NodeInfo) {

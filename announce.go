@@ -48,7 +48,7 @@ func (a *Announce) NumContacted() int {
 }
 
 func newBloomFilterForTraversal() *bloom.BloomFilter {
-	return bloom.NewWithEstimates(1000, 0.5)
+	return bloom.NewWithEstimates(10000, 0.5)
 }
 
 // This is kind of the main thing you want to do with DHT. It traverses the

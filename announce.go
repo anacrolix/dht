@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/anacrolix/sync"
-	"github.com/anacrolix/torrent/logonce"
 	"github.com/willf/bloom"
 
 	"github.com/anacrolix/dht/krpc"
@@ -169,10 +168,7 @@ func (a *Announce) maybeAnnouncePeer(to Addr, token string, peerId *krpc.ID) {
 	}
 	a.server.mu.Lock()
 	defer a.server.mu.Unlock()
-	err := a.server.announcePeer(to, a.infoHash, a.announcePort, token, a.announcePortImplied, nil)
-	if err != nil {
-		logonce.Stderr.Printf("error announcing peer: %s", err)
-	}
+	a.server.announcePeer(to, a.infoHash, a.announcePort, token, a.announcePortImplied, nil)
 }
 
 func (a *Announce) getPeers(addr Addr) error {

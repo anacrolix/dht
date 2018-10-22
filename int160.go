@@ -81,7 +81,7 @@ func int160FromByteString(s string) (ret int160) {
 	return
 }
 
-func distance(a, b *int160) (ret int160) {
-	ret.Xor(a, b)
+func distance(a, b int160) (ret int160) {
+	ret.Xor(&a, &b)
 	return
 }

@@ -61,9 +61,9 @@ func TestDistances(t *testing.T) {
 			t.Fatalf("expected bitcount of %d: got %d", count, bitCount(i.Bytes()))
 		}
 	}
-	expectBitcount(distance(&testIDs[3], &testIDs[0]), 4+8+4+4)
-	expectBitcount(distance(&testIDs[3], &testIDs[1]), 4+8+4+4)
-	expectBitcount(distance(&testIDs[3], &testIDs[2]), 4+8+8)
+	expectBitcount(distance(testIDs[3], testIDs[0]), 4+8+4+4)
+	expectBitcount(distance(testIDs[3], testIDs[1]), 4+8+4+4)
+	expectBitcount(distance(testIDs[3], testIDs[2]), 4+8+8)
 }
 
 func TestMaxDistanceString(t *testing.T) {

@@ -3,10 +3,12 @@ package dht
 // get_peers and announce_peers.
 
 import (
-	"time"
+	"container/heap"
+	"context"
 
 	"github.com/anacrolix/sync"
 	"github.com/willf/bloom"
+	"golang.org/x/time/rate"
 
 	"github.com/anacrolix/dht/krpc"
 )
@@ -37,6 +39,10 @@ type Announce struct {
 	// The torrent port should be determined by the receiver in case we're
 	// being NATed.
 	announcePortImplied bool
+
+	nodesPendingContact nodesByDistance
+	nodeContactorCond   sync.Cond
+	contactRateLimiter  *rate.Limiter
 }
 
 // Returns the number of distinct remote addresses the announce has queried.
@@ -68,7 +74,10 @@ func (s *Server) Announce(infoHash [20]byte, port int, impliedPort bool) (*Annou
 		infoHash:            int160FromByteArray(infoHash),
 		announcePort:        port,
 		announcePortImplied: impliedPort,
+		contactRateLimiter:  s.announceContactRateLimiter,
 	}
+	disc.nodesPendingContact.target = int160FromByteArray(infoHash)
+	disc.nodeContactorCond.L = &disc.mu
 	// Function ferries from values to Values until discovery is halted.
 	go func() {
 		defer close(disc.Peers)
@@ -88,12 +97,13 @@ func (s *Server) Announce(infoHash [20]byte, port int, impliedPort bool) (*Annou
 	go func() {
 		disc.mu.Lock()
 		defer disc.mu.Unlock()
-		for i, addr := range startAddrs {
-			if i != 0 {
-				disc.mu.Unlock()
-				time.Sleep(time.Millisecond)
-				disc.mu.Lock()
+		for _, addr := range startAddrs {
+			if !disc.reserveContact(addr) {
+				continue
 			}
+			disc.mu.Unlock()
+			disc.contactRateLimiter.Wait(context.TODO())
+			disc.mu.Lock()
 			disc.contact(addr)
 		}
 		disc.contactedStartAddrs = true
@@ -102,6 +112,7 @@ func (s *Server) Announce(infoHash [20]byte, port int, impliedPort bool) (*Annou
 		// responses.
 		disc.maybeClose()
 	}()
+	go disc.nodeContactor()
 	return disc, nil
 }
 
@@ -111,38 +122,40 @@ func validNodeAddr(addr Addr) bool {
 		return false
 	}
 	if ip4 := ua.IP.To4(); ip4 != nil && ip4[0] == 0 {
+		// Why?
 		return false
 	}
 	return true
 }
 
-// TODO: Merge this with maybeGetPeersFromAddr.
-func (a *Announce) gotNodeAddr(addr Addr) {
+func (a *Announce) reserveContact(addr Addr) bool {
 	if !validNodeAddr(addr) {
-		return
+		return false
 	}
 	if a.triedAddrs.Test([]byte(addr.String())) {
-		return
+		return false
 	}
 	if a.server.ipBlocked(addr.UDPAddr().IP) {
-		return
+		return false
 	}
-	a.contact(addr)
+	a.pending++
+	a.triedAddrs.Add([]byte(addr.String()))
+	return true
 }
 
-// TODO: Merge this with maybeGetPeersFromAddr.
+func (a *Announce) completeContact() {
+	a.pending--
+	a.maybeClose()
+}
+
 func (a *Announce) contact(addr Addr) {
 	a.numContacted++
-	a.triedAddrs.Add([]byte(addr.String()))
-	a.pending++
 	go func() {
-		err := a.getPeers(addr)
-		if err == nil {
-			return
+		if a.getPeers(addr) != nil {
+			a.mu.Lock()
+			a.completeContact()
+			a.mu.Unlock()
 		}
-		a.mu.Lock()
-		a.transactionClosed()
-		a.mu.Unlock()
 	}()
 }
 
@@ -152,13 +165,8 @@ func (a *Announce) maybeClose() {
 	}
 }
 
-func (a *Announce) transactionClosed() {
-	a.pending--
-	a.maybeClose()
-}
-
 func (a *Announce) responseNode(node krpc.NodeInfo) {
-	a.gotNodeAddr(NewAddr(node.Addr.UDP()))
+	a.pendContact(node)
 }
 
 // Announce to a peer, if appropriate.
@@ -200,7 +208,7 @@ func (a *Announce) getPeers(addr Addr) error {
 			a.maybeAnnouncePeer(addr, m.R.Token, m.SenderID())
 		}
 		a.mu.Lock()
-		a.transactionClosed()
+		a.completeContact()
 		a.mu.Unlock()
 	})
 }
@@ -225,5 +233,37 @@ func (a *Announce) close() {
 	case <-a.stop:
 	default:
 		close(a.stop)
+		a.nodeContactorCond.Broadcast()
+	}
+}
+
+func (a *Announce) pendContact(node krpc.NodeInfo) {
+	if !a.reserveContact(NewAddr(node.Addr.UDP())) {
+		return
+	}
+	heap.Push(&a.nodesPendingContact, node)
+	a.nodeContactorCond.Signal()
+}
+
+func (a *Announce) nodeContactor() {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	for {
+		for {
+			select {
+			case <-a.stop:
+				return
+			default:
+			}
+			if a.nodesPendingContact.Len() > 0 {
+				break
+			}
+			a.nodeContactorCond.Wait()
+		}
+		a.mu.Unlock()
+		a.contactRateLimiter.Wait(context.TODO())
+		a.mu.Lock()
+		ni := heap.Pop(&a.nodesPendingContact).(krpc.NodeInfo)
+		a.contact(NewAddr(ni.Addr.UDP()))
 	}
 }

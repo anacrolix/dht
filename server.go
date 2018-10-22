@@ -17,6 +17,7 @@ import (
 	"github.com/anacrolix/torrent/iplist"
 	"github.com/anacrolix/torrent/logonce"
 	"github.com/anacrolix/torrent/metainfo"
+	"golang.org/x/time/rate"
 
 	"github.com/anacrolix/dht/krpc"
 )
@@ -41,6 +42,8 @@ type Server struct {
 	tokenServer  tokenServer // Manages tokens we issue to our queriers.
 	config       ServerConfig
 	stats        ServerStats
+
+	announceContactRateLimiter *rate.Limiter
 }
 
 func (s *Server) numGoodNodes() (num int) {
@@ -142,6 +145,7 @@ func NewServer(c *ServerConfig) (s *Server, err error) {
 		table: table{
 			k: 8,
 		},
+		announceContactRateLimiter: rate.NewLimiter(10, 10),
 	}
 	rand.Read(s.tokenServer.secret)
 	s.socket = c.Conn

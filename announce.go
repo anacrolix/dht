@@ -65,7 +65,7 @@ func (s *Server) Announce(infoHash [20]byte, port int, impliedPort bool) (*Annou
 	if err != nil {
 		return nil, err
 	}
-	disc := &Announce{
+	a := &Announce{
 		Peers:               make(chan PeersValues, 100),
 		stop:                make(chan struct{}),
 		values:              make(chan PeersValues),
@@ -76,44 +76,44 @@ func (s *Server) Announce(infoHash [20]byte, port int, impliedPort bool) (*Annou
 		announcePortImplied: impliedPort,
 		contactRateLimiter:  s.announceContactRateLimiter,
 	}
-	disc.nodesPendingContact.target = int160FromByteArray(infoHash)
-	disc.nodeContactorCond.L = &disc.mu
+	a.nodesPendingContact.target = int160FromByteArray(infoHash)
+	a.nodeContactorCond.L = &a.mu
 	// Function ferries from values to Values until discovery is halted.
 	go func() {
-		defer close(disc.Peers)
+		defer close(a.Peers)
 		for {
 			select {
-			case psv := <-disc.values:
+			case psv := <-a.values:
 				select {
-				case disc.Peers <- psv:
-				case <-disc.stop:
+				case a.Peers <- psv:
+				case <-a.stop:
 					return
 				}
-			case <-disc.stop:
+			case <-a.stop:
 				return
 			}
 		}
 	}()
 	go func() {
-		disc.mu.Lock()
-		defer disc.mu.Unlock()
+		a.mu.Lock()
+		defer a.mu.Unlock()
 		for _, addr := range startAddrs {
-			if !disc.reserveContact(addr) {
+			if !a.reserveContact(addr) {
 				continue
 			}
-			disc.mu.Unlock()
-			disc.contactRateLimiter.Wait(context.TODO())
-			disc.mu.Lock()
-			disc.contact(addr)
+			a.mu.Unlock()
+			a.contactRateLimiter.Wait(context.TODO())
+			a.mu.Lock()
+			a.contact(addr)
 		}
-		disc.contactedStartAddrs = true
+		a.contactedStartAddrs = true
 		// If we failed to contact any of the starting addrs, no transactions
 		// will complete triggering a check that there are no pending
 		// responses.
-		disc.maybeClose()
+		a.maybeClose()
 	}()
-	go disc.nodeContactor()
-	return disc, nil
+	go a.nodeContactor()
+	return a, nil
 }
 
 func validNodeAddr(addr Addr) bool {

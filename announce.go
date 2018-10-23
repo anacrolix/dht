@@ -6,11 +6,10 @@ import (
 	"container/heap"
 	"context"
 
+	"github.com/anacrolix/dht/krpc"
 	"github.com/anacrolix/sync"
 	"github.com/willf/bloom"
 	"golang.org/x/time/rate"
-
-	"github.com/anacrolix/dht/krpc"
 )
 
 // Maintains state for an ongoing Announce operation. An Announce is started

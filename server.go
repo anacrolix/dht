@@ -12,14 +12,13 @@ import (
 	"text/tabwriter"
 	"time"
 
+	"github.com/anacrolix/dht/krpc"
 	"github.com/anacrolix/missinggo"
 	"github.com/anacrolix/torrent/bencode"
 	"github.com/anacrolix/torrent/iplist"
 	"github.com/anacrolix/torrent/logonce"
 	"github.com/anacrolix/torrent/metainfo"
 	"golang.org/x/time/rate"
-
-	"github.com/anacrolix/dht/krpc"
 )
 
 // A Server defines parameters for a DHT node server that is able to send

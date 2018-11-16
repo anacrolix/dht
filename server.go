@@ -700,9 +700,9 @@ func (s *Server) Bootstrap() (ts TraversalStats, err error) {
 			}
 			ts.NumResponses++
 			if r := m.R; r != nil {
-				for _, addr := range r.Nodes {
-					onAddr(NewAddr(addr.Addr.UDP()))
-				}
+				r.ForAllNodes(func(ni krpc.NodeInfo) {
+					onAddr(NewAddr(ni.Addr.UDP()))
+				})
 			}
 		})
 	}

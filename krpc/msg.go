@@ -52,6 +52,15 @@ type Return struct {
 	Values []NodeAddr          `bencode:"values,omitempty"` // Torrent peers
 }
 
+func (r Return) ForAllNodes(f func(NodeInfo)) {
+	for _, n := range r.Nodes {
+		f(n)
+	}
+	for _, n := range r.Nodes6 {
+		f(n)
+	}
+}
+
 var _ fmt.Stringer = Msg{}
 
 func (m Msg) String() string {

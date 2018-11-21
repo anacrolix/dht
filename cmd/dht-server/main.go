@@ -8,10 +8,9 @@ import (
 	"os"
 	"os/signal"
 
+	"github.com/anacrolix/dht"
 	_ "github.com/anacrolix/envpprof"
 	"github.com/anacrolix/tagflag"
-
-	"github.com/anacrolix/dht"
 )
 
 var (
@@ -69,7 +68,7 @@ func main() {
 		if tried, err := s.Bootstrap(); err != nil {
 			log.Printf("error bootstrapping: %s", err)
 		} else {
-			log.Printf("finished bootstrapping: crawled %d addrs", tried)
+			log.Printf("finished bootstrapping: crawled %#v addrs", tried)
 		}
 	}()
 	<-ctx.Done()

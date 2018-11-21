@@ -51,9 +51,11 @@ func main() {
 	http.HandleFunc("/debug/dht", func(w http.ResponseWriter, r *http.Request) {
 		s.WriteStatus(w)
 	})
-	err = loadTable()
-	if err != nil {
-		log.Fatalf("error loading table: %s", err)
+	if flags.TableFile != "" {
+		err = loadTable()
+		if err != nil {
+			log.Fatalf("error loading table: %s", err)
+		}
 	}
 	log.Printf("dht server on %s, ID is %x", s.Addr(), s.ID())
 

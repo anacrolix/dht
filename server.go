@@ -90,6 +90,7 @@ func (s *Server) WriteStatus(w io.Writer) {
 		})
 	}
 	tw.Flush()
+	fmt.Fprintln(w)
 }
 
 func (s *Server) numNodes() (num int) {

@@ -40,7 +40,7 @@ func (t *Transaction) key() transactionKey {
 }
 
 func (t *Transaction) startResendTimer() {
-	t.timer = time.AfterFunc(t.queryResendDelay(), t.resendCallback)
+	t.timer = time.AfterFunc(0, t.resendCallback)
 }
 
 func (t *Transaction) resendCallback() {
@@ -49,7 +49,7 @@ func (t *Transaction) resendCallback() {
 	if t.gotResponse {
 		return
 	}
-	if t.retries == 2 {
+	if t.retries == 3 {
 		go t.onTimeout()
 		return
 	}

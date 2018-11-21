@@ -12,6 +12,7 @@ import (
 
 	"github.com/anacrolix/dht/krpc"
 	"github.com/anacrolix/missinggo"
+	"github.com/anacrolix/missinggo/conntrack"
 	"github.com/anacrolix/torrent/iplist"
 	"github.com/anacrolix/torrent/metainfo"
 )
@@ -58,6 +59,8 @@ type ServerConfig struct {
 	// response. Defaults to a random value between 4.5 and 5.5s.
 	QueryResendDelay func() time.Duration
 	// TODO: Expose Peers, to return NodeInfo for received get_peers queries.
+
+	ConnectionTracking *conntrack.Instance
 }
 
 // ServerStats instance is returned by Server.Stats() and stores Server metrics

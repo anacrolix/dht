@@ -14,10 +14,12 @@ import (
 
 	"github.com/anacrolix/dht/krpc"
 	"github.com/anacrolix/missinggo"
+	"github.com/anacrolix/missinggo/conntrack"
 	"github.com/anacrolix/torrent/bencode"
 	"github.com/anacrolix/torrent/iplist"
 	"github.com/anacrolix/torrent/logonce"
 	"github.com/anacrolix/torrent/metainfo"
+	"github.com/willf/bloom"
 	"golang.org/x/time/rate"
 )
 
@@ -122,9 +124,10 @@ func (s *Server) Addr() net.Addr {
 func NewServer(c *ServerConfig) (s *Server, err error) {
 	if c == nil {
 		c = &ServerConfig{
-			Conn:          mustListen(":0"),
-			NoSecurity:    true,
-			StartingNodes: GlobalBootstrapAddrs,
+			Conn:               mustListen(":0"),
+			NoSecurity:         true,
+			StartingNodes:      GlobalBootstrapAddrs,
+			ConnectionTracking: conntrack.NewInstance(),
 		}
 	}
 	if missinggo.IsZeroValue(c.NodeId) {
@@ -146,6 +149,9 @@ func NewServer(c *ServerConfig) (s *Server, err error) {
 			k: 8,
 		},
 		announceContactRateLimiter: rate.NewLimiter(10, 10),
+	}
+	if s.config.ConnectionTracking == nil {
+		s.config.ConnectionTracking = conntrack.NewInstance()
 	}
 	rand.Read(s.tokenServer.secret)
 	s.socket = c.Conn
@@ -539,6 +545,14 @@ func (s *Server) validToken(token string, addr Addr) bool {
 	return s.tokenServer.ValidToken(token, addr)
 }
 
+func (s *Server) connTrackEntryForAddr(a Addr) conntrack.Entry {
+	return conntrack.Entry{
+		s.socket.LocalAddr().Network(),
+		s.socket.LocalAddr().String(),
+		a.String(),
+	}
+}
+
 func (s *Server) query(addr Addr, q string, a *krpc.MsgArgs, callback func(krpc.Msg, error)) error {
 	tid := s.nextTransactionID()
 	if a == nil {
@@ -568,6 +582,8 @@ func (s *Server) query(addr Addr, q string, a *krpc.MsgArgs, callback func(krpc.
 		remoteAddr: addr,
 		t:          tid,
 		querySender: func() error {
+			cteh := s.config.ConnectionTracking.Wait(s.connTrackEntryForAddr(addr), "send dht query")
+			defer cteh.Done()
 			return s.writeToNode(b, addr)
 		},
 		onResponse: func(m krpc.Msg) {
@@ -600,11 +616,6 @@ func (s *Server) query(addr Addr, q string, a *krpc.MsgArgs, callback func(krpc.
 		},
 	}
 	s.stats.OutboundQueriesAttempted++
-	err = t.sendQuery()
-	if err != nil {
-		return err
-	}
-	// s.getNode(node, "").lastSentQuery = time.Now()
 	t.mu.Lock()
 	t.startResendTimer()
 	t.mu.Unlock()

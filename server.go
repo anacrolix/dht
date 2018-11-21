@@ -19,7 +19,6 @@ import (
 	"github.com/anacrolix/torrent/iplist"
 	"github.com/anacrolix/torrent/logonce"
 	"github.com/anacrolix/torrent/metainfo"
-	"github.com/willf/bloom"
 	"golang.org/x/time/rate"
 )
 

@@ -187,12 +187,7 @@ func (a *Announce) getPeers(addr Addr) error {
 			expvars.Add("announce get_peers response nodes values", int64(len(m.R.Nodes)))
 			expvars.Add("announce get_peers response nodes6 values", int64(len(m.R.Nodes6)))
 			a.mu.Lock()
-			for _, n := range m.R.Nodes {
-				a.responseNode(n)
-			}
-			for _, n := range m.R.Nodes6 {
-				a.responseNode(n)
-			}
+			m.R.ForAllNodes(a.responseNode)
 			a.mu.Unlock()
 			select {
 			case a.values <- PeersValues{

@@ -651,9 +651,9 @@ func (s *Server) addResponseNodes(d krpc.Msg) {
 	if d.R == nil {
 		return
 	}
-	for _, cni := range d.R.Nodes {
-		s.getNode(NewAddr(cni.Addr.UDP()), int160FromByteArray(cni.ID), true)
-	}
+	d.R.ForAllNodes(func(ni krpc.NodeInfo) {
+		s.getNode(NewAddr(ni.Addr.UDP()), int160FromByteArray(ni.ID), true)
+	})
 }
 
 // Sends a find_node query to addr. targetID is the node we're looking for.

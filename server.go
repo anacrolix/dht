@@ -445,7 +445,6 @@ func (s *Server) getNode(addr Addr, id int160, tryAdd bool) (*node, error) {
 			}
 			return b.Len() >= s.table.k
 		}) {
-			// No room.
 			return nil, errors.New("no room in bucket")
 		}
 	}

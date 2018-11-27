@@ -580,7 +580,7 @@ func (s *Server) query(addr Addr, q string, a *krpc.MsgArgs, callback func(krpc.
 		remoteAddr: addr,
 		t:          tid,
 		querySender: func() error {
-			cteh := s.config.ConnectionTracking.Wait(s.connTrackEntryForAddr(addr), "send dht query")
+			cteh := s.config.ConnectionTracking.Wait(s.connTrackEntryForAddr(addr), "send dht query", -1)
 			defer cteh.Done()
 			return s.writeToNode(b, addr)
 		},

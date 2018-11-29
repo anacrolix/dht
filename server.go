@@ -394,7 +394,7 @@ func (s *Server) sendError(addr Addr, t string, e krpc.Error) {
 	if err != nil {
 		panic(err)
 	}
-	err = s.writeToNode(b, addr)
+	_, err = s.writeToNode(b, addr)
 	if err != nil {
 		log.Printf("error replying to %s: %s", addr, err)
 	}
@@ -413,7 +413,7 @@ func (s *Server) reply(addr Addr, t string, r krpc.Return) {
 	if err != nil {
 		panic(err)
 	}
-	err = s.writeToNode(b, addr)
+	_, err = s.writeToNode(b, addr)
 	if err != nil {
 		log.Printf("error replying to %s: %s", addr, err)
 	}
@@ -477,7 +477,7 @@ func (s *Server) nodeErr(n *node) error {
 	return nil
 }
 
-func (s *Server) writeToNode(b []byte, node Addr) (err error) {
+func (s *Server) writeToNode(b []byte, node Addr) (wrote bool, err error) {
 	if list := s.ipBlockList; list != nil {
 		if r, ok := list.Lookup(missinggo.AddrIP(node.UDPAddr())); ok {
 			err = fmt.Errorf("write to %s blocked: %s", node, r.Description)
@@ -492,6 +492,7 @@ func (s *Server) writeToNode(b []byte, node Addr) (err error) {
 		err = fmt.Errorf("error writing %d bytes to %s: %s", len(b), node, err)
 		return
 	}
+	wrote = true
 	if n != len(b) {
 		err = io.ErrShortWrite
 		return
@@ -581,8 +582,13 @@ func (s *Server) query(addr Addr, q string, a *krpc.MsgArgs, callback func(krpc.
 		t:          tid,
 		querySender: func() error {
 			cteh := s.config.ConnectionTracking.Wait(s.connTrackEntryForAddr(addr), "send dht query", -1)
-			defer cteh.Done()
-			return s.writeToNode(b, addr)
+			wrote, err := s.writeToNode(b, addr)
+			if wrote {
+				cteh.Done()
+			} else {
+				cteh.Forget()
+			}
+			return err
 		},
 		onResponse: func(m krpc.Msg) {
 			go callback(m, nil)

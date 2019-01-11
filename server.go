@@ -316,7 +316,15 @@ func (s *Server) makeReturnNodes(target int160, filter func(krpc.NodeAddr) bool)
 	return s.closestGoodNodeInfos(8, target, filter)
 }
 
-func (s *Server) setReturnNodes(r *krpc.Return, queryMsg krpc.Msg, querySource Addr) {
+var krpcErrMissingArguments = krpc.Error{
+	Code: krpc.ErrorCodeProtocolError,
+	Msg:  "missing arguments dict",
+}
+
+func (s *Server) setReturnNodes(r *krpc.Return, queryMsg krpc.Msg, querySource Addr) *krpc.Error {
+	if queryMsg.A == nil {
+		return &krpcErrMissingArguments
+	}
 	target := int160FromByteArray(queryMsg.A.InfoHash)
 	if shouldReturnNodes(queryMsg.A.Want, querySource.UDPAddr().IP) {
 		r.Nodes = s.makeReturnNodes(target, func(na krpc.NodeAddr) bool { return na.IP.To4() != nil })
@@ -324,6 +332,7 @@ func (s *Server) setReturnNodes(r *krpc.Return, queryMsg krpc.Msg, querySource A
 	if shouldReturnNodes6(queryMsg.A.Want, querySource.UDPAddr().IP) {
 		r.Nodes6 = s.makeReturnNodes(target, func(krpc.NodeAddr) bool { return true })
 	}
+	return nil
 }
 
 // TODO: Probably should write error messages back to senders if something is
@@ -351,13 +360,19 @@ func (s *Server) handleQuery(source Addr, m krpc.Msg) {
 		s.reply(source, m.T, krpc.Return{})
 	case "get_peers":
 		var r krpc.Return
-		// TODO: Return nodes.
-		s.setReturnNodes(&r, m, source)
+		// TODO: Return values.
+		if err := s.setReturnNodes(&r, m, source); err != nil {
+			s.sendError(source, m.T, *err)
+			break
+		}
 		r.Token = s.createToken(source)
 		s.reply(source, m.T, r)
 	case "find_node":
 		var r krpc.Return
-		s.setReturnNodes(&r, m, source)
+		if err := s.setReturnNodes(&r, m, source); err != nil {
+			s.sendError(source, m.T, *err)
+			break
+		}
 		s.reply(source, m.T, r)
 	case "announce_peer":
 		readAnnouncePeer.Add(1)

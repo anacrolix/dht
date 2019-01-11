@@ -15,8 +15,9 @@ import (
 
 var (
 	flags = struct {
-		TableFile string `help:"name of file for storing node info"`
-		Addr      string `help:"local UDP address"`
+		TableFile   string `help:"name of file for storing node info"`
+		Addr        string `help:"local UDP address"`
+		NoBootstrap bool
 	}{
 		Addr: ":0",
 	}
@@ -66,13 +67,15 @@ func main() {
 		<-ch
 		cancel()
 	}()
-	go func() {
-		if tried, err := s.Bootstrap(); err != nil {
-			log.Printf("error bootstrapping: %s", err)
-		} else {
-			log.Printf("finished bootstrapping: crawled %#v addrs", tried)
-		}
-	}()
+	if !flags.NoBootstrap {
+		go func() {
+			if tried, err := s.Bootstrap(); err != nil {
+				log.Printf("error bootstrapping: %s", err)
+			} else {
+				log.Printf("finished bootstrapping: crawled %#v addrs", tried)
+			}
+		}()
+	}
 	<-ctx.Done()
 	s.Close()
 

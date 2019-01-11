@@ -6,8 +6,16 @@ import (
 	"github.com/anacrolix/torrent/bencode"
 )
 
+// These are documented in BEP 5.
+const (
+	ErrorCodeGenericError  = 201
+	ErrorCodeServerError   = 202
+	ErrorCodeProtocolError = 203
+	ErrorCodeMethodUnknown = 204
+)
+
 var ErrorMethodUnknown = Error{
-	Code: 204,
+	Code: ErrorCodeMethodUnknown,
 	Msg:  "Method Unknown",
 }
 

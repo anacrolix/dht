@@ -183,14 +183,16 @@ func (s *Server) IPBlocklist() iplist.Ranger {
 }
 
 func (s *Server) processPacket(b []byte, addr Addr) {
-	if len(b) < 2 || b[0] != 'd' || b[len(b)-1] != 'e' {
+	if len(b) < 2 || b[0] != 'd' {
 		// KRPC messages are bencoded dicts.
 		readNotKRPCDict.Add(1)
 		return
 	}
 	var d krpc.Msg
 	err := bencode.Unmarshal(b, &d)
-	if err != nil {
+	if _err, ok := err.(bencode.ErrUnusedTrailingBytes); ok {
+		log.Printf("%s: received message packet with %d trailing bytes", s, _err.NumUnusedBytes)
+	} else if err != nil {
 		readUnmarshalError.Add(1)
 		func() {
 			if se, ok := err.(*bencode.SyntaxError); ok {

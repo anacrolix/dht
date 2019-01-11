@@ -4,12 +4,10 @@ package dht
 
 import (
 	"container/heap"
-	"context"
 
 	"github.com/anacrolix/dht/krpc"
 	"github.com/anacrolix/sync"
 	"github.com/willf/bloom"
-	"golang.org/x/time/rate"
 )
 
 // Maintains state for an ongoing Announce operation. An Announce is started
@@ -41,7 +39,6 @@ type Announce struct {
 
 	nodesPendingContact nodesByDistance
 	nodeContactorCond   sync.Cond
-	contactRateLimiter  *rate.Limiter
 }
 
 // Returns the number of distinct remote addresses the announce has queried.
@@ -73,7 +70,6 @@ func (s *Server) Announce(infoHash [20]byte, port int, impliedPort bool) (*Annou
 		infoHash:            int160FromByteArray(infoHash),
 		announcePort:        port,
 		announcePortImplied: impliedPort,
-		contactRateLimiter:  s.announceContactRateLimiter,
 	}
 	a.nodesPendingContact.target = int160FromByteArray(infoHash)
 	a.nodeContactorCond.L = &a.mu
@@ -100,9 +96,6 @@ func (s *Server) Announce(infoHash [20]byte, port int, impliedPort bool) (*Annou
 			if !a.reserveContact(addr) {
 				continue
 			}
-			a.mu.Unlock()
-			a.contactRateLimiter.Wait(context.TODO())
-			a.mu.Lock()
 			a.contact(addr)
 		}
 		a.contactedStartAddrs = true
@@ -254,9 +247,6 @@ func (a *Announce) nodeContactor() {
 			}
 			a.nodeContactorCond.Wait()
 		}
-		a.mu.Unlock()
-		a.contactRateLimiter.Wait(context.TODO())
-		a.mu.Lock()
 		ni := heap.Pop(&a.nodesPendingContact).(krpc.NodeInfo)
 		a.contact(NewAddr(ni.Addr.UDP()))
 	}

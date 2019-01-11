@@ -19,7 +19,6 @@ import (
 	"github.com/anacrolix/torrent/iplist"
 	"github.com/anacrolix/torrent/logonce"
 	"github.com/anacrolix/torrent/metainfo"
-	"golang.org/x/time/rate"
 )
 
 // A Server defines parameters for a DHT node server that is able to send
@@ -42,8 +41,6 @@ type Server struct {
 	tokenServer  tokenServer // Manages tokens we issue to our queriers.
 	config       ServerConfig
 	stats        ServerStats
-
-	announceContactRateLimiter *rate.Limiter
 }
 
 func (s *Server) numGoodNodes() (num int) {
@@ -147,7 +144,6 @@ func NewServer(c *ServerConfig) (s *Server, err error) {
 		table: table{
 			k: 8,
 		},
-		announceContactRateLimiter: rate.NewLimiter(10, 10),
 	}
 	if s.config.ConnectionTracking == nil {
 		s.config.ConnectionTracking = conntrack.NewInstance()

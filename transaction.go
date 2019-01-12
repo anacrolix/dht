@@ -43,13 +43,15 @@ func (t *Transaction) startResendTimer() {
 	t.timer = time.AfterFunc(0, t.resendCallback)
 }
 
+const maxTransactionSends = 3
+
 func (t *Transaction) resendCallback() {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	if t.gotResponse {
 		return
 	}
-	if t.retries == 3 {
+	if t.retries == maxTransactionSends {
 		go t.onTimeout()
 		return
 	}

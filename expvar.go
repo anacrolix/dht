@@ -5,7 +5,6 @@ import (
 )
 
 var (
-	read               = expvar.NewInt("dhtRead")
 	readZeroPort       = expvar.NewInt("dhtReadZeroPort")
 	readBlocked        = expvar.NewInt("dhtReadBlocked")
 	readNotKRPCDict    = expvar.NewInt("dhtReadNotKRPCDict")

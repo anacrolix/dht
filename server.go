@@ -257,7 +257,7 @@ func (s *Server) serve() error {
 		if err != nil {
 			return err
 		}
-		read.Add(1)
+		expvars.Add("packets read", 1)
 		if n == len(b) {
 			logonce.Stderr.Printf("received dht packet exceeds buffer size")
 			continue

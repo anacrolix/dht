@@ -2,6 +2,7 @@ package dht
 
 import (
 	"encoding/hex"
+	"errors"
 	"log"
 	"math/big"
 	"net"
@@ -9,6 +10,8 @@ import (
 	"time"
 
 	_ "github.com/anacrolix/envpprof"
+	"github.com/anacrolix/missinggo/inproc"
+	"github.com/anacrolix/sync"
 	"github.com/anacrolix/torrent/bencode"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -258,4 +261,85 @@ func TestBadGetPeersResponse(t *testing.T) {
 	require.NoError(t, err)
 	_, ok := <-a.Peers
 	require.False(t, ok)
+}
+
+func TestBootstrapRace(t *testing.T) {
+	remotePc, err := inproc.ListenPacket("", "localhost:0")
+	require.NoError(t, err)
+	serverPc, err := inproc.ListenPacket("", "localhost:0")
+	require.NoError(t, err)
+	t.Logf("remote addr: %s", remotePc.LocalAddr())
+	s, err := NewServer(&ServerConfig{
+		Conn:             serverPc,
+		StartingNodes:    addrResolver(remotePc.LocalAddr().String()),
+		QueryResendDelay: func() time.Duration { return 0 },
+	})
+	require.NoError(t, err)
+	defer s.Close()
+	go func() {
+		for i := 0; i < maxTransactionSends-1; i++ {
+			remotePc.ReadFrom(nil)
+		}
+		var b [1024]byte
+		_, addr, err := remotePc.ReadFrom(b[:])
+		var m krpc.Msg
+		bencode.Unmarshal(b[:], &m)
+		m.Y = "r"
+		rb, err := bencode.Marshal(m)
+		if err != nil {
+			panic(err)
+		}
+		remotePc.WriteTo(rb, addr)
+	}()
+	ts, err := s.Bootstrap()
+	t.Logf("%#v", ts)
+	require.NoError(t, err)
+	time.Sleep(time.Second)
+}
+
+type emptyNetAddr struct{}
+
+func (emptyNetAddr) Network() string { return "" }
+func (emptyNetAddr) String() string  { return "" }
+
+type writeErrorPacketConn struct {
+	mu     sync.Mutex
+	writes int
+}
+
+func (me writeErrorPacketConn) Close() error                            { return nil }
+func (me writeErrorPacketConn) LocalAddr() net.Addr                     { return emptyNetAddr{} }
+func (me *writeErrorPacketConn) ReadFrom([]byte) (int, net.Addr, error) { select {} }
+func (me writeErrorPacketConn) SetDeadline(time.Time) error             { return nil }
+func (me writeErrorPacketConn) SetReadDeadline(time.Time) error         { return nil }
+func (me writeErrorPacketConn) SetWriteDeadline(time.Time) error        { return nil }
+
+func (me *writeErrorPacketConn) WriteTo(b []byte, _ net.Addr) (int, error) {
+	me.mu.Lock()
+	defer me.mu.Unlock()
+	me.writes++
+	log.Printf("wrote %d times", me.writes)
+	if me.writes == maxTransactionSends {
+		return 0, errors.New("write error")
+	}
+	return len(b), nil
+}
+
+func TestBootstrapRaceWriteError(t *testing.T) {
+	remotePc, err := inproc.ListenPacket("", "localhost:0")
+	require.NoError(t, err)
+	defer remotePc.Close()
+	serverPc := writeErrorPacketConn{}
+	t.Logf("remote addr: %s", remotePc.LocalAddr())
+	s, err := NewServer(&ServerConfig{
+		Conn:             &serverPc,
+		StartingNodes:    addrResolver(remotePc.LocalAddr().String()),
+		QueryResendDelay: func() time.Duration { return 0 },
+	})
+	require.NoError(t, err)
+	defer s.Close()
+	ts, err := s.Bootstrap()
+	t.Logf("%#v", ts)
+	require.NoError(t, err)
+	time.Sleep(time.Second)
 }

@@ -3,6 +3,7 @@ package dht
 import (
 	"encoding/hex"
 	"errors"
+	"io"
 	"log"
 	"math/big"
 	"net"
@@ -266,11 +267,13 @@ func TestBadGetPeersResponse(t *testing.T) {
 func TestBootstrapRace(t *testing.T) {
 	remotePc, err := inproc.ListenPacket("", "localhost:0")
 	require.NoError(t, err)
-	serverPc, err := inproc.ListenPacket("", "localhost:0")
-	require.NoError(t, err)
+	defer remotePc.Close()
+	serverPc := bootstrapRacePacketConn{
+		read: make(chan read),
+	}
 	t.Logf("remote addr: %s", remotePc.LocalAddr())
 	s, err := NewServer(&ServerConfig{
-		Conn:             serverPc,
+		Conn:             &serverPc,
 		StartingNodes:    addrResolver(remotePc.LocalAddr().String()),
 		QueryResendDelay: func() time.Duration { return 0 },
 	})
@@ -302,44 +305,50 @@ type emptyNetAddr struct{}
 func (emptyNetAddr) Network() string { return "" }
 func (emptyNetAddr) String() string  { return "" }
 
-type writeErrorPacketConn struct {
-	mu     sync.Mutex
-	writes int
+type read struct {
+	b    []byte
+	addr net.Addr
 }
 
-func (me writeErrorPacketConn) Close() error                            { return nil }
-func (me writeErrorPacketConn) LocalAddr() net.Addr                     { return emptyNetAddr{} }
-func (me *writeErrorPacketConn) ReadFrom([]byte) (int, net.Addr, error) { select {} }
-func (me writeErrorPacketConn) SetDeadline(time.Time) error             { return nil }
-func (me writeErrorPacketConn) SetReadDeadline(time.Time) error         { return nil }
-func (me writeErrorPacketConn) SetWriteDeadline(time.Time) error        { return nil }
+type bootstrapRacePacketConn struct {
+	mu     sync.Mutex
+	writes int
+	read   chan read
+}
 
-func (me *writeErrorPacketConn) WriteTo(b []byte, _ net.Addr) (int, error) {
+func (me *bootstrapRacePacketConn) Close() error {
+	close(me.read)
+	return nil
+}
+func (me bootstrapRacePacketConn) LocalAddr() net.Addr { return emptyNetAddr{} }
+func (me *bootstrapRacePacketConn) ReadFrom(b []byte) (int, net.Addr, error) {
+	r, ok := <-me.read
+	if !ok {
+		return 0, nil, io.EOF
+	}
+	copy(b, r.b)
+	log.Printf("reading %q from %s", r.b, r.addr)
+	return len(r.b), r.addr, nil
+}
+func (me bootstrapRacePacketConn) SetDeadline(time.Time) error      { return nil }
+func (me bootstrapRacePacketConn) SetReadDeadline(time.Time) error  { return nil }
+func (me bootstrapRacePacketConn) SetWriteDeadline(time.Time) error { return nil }
+
+func (me *bootstrapRacePacketConn) WriteTo(b []byte, addr net.Addr) (int, error) {
 	me.mu.Lock()
 	defer me.mu.Unlock()
 	me.writes++
 	log.Printf("wrote %d times", me.writes)
 	if me.writes == maxTransactionSends {
+		var m krpc.Msg
+		bencode.Unmarshal(b[:], &m)
+		m.Y = "r"
+		rb, err := bencode.Marshal(m)
+		if err != nil {
+			panic(err)
+		}
+		me.read <- read{rb, addr}
 		return 0, errors.New("write error")
 	}
 	return len(b), nil
-}
-
-func TestBootstrapRaceWriteError(t *testing.T) {
-	remotePc, err := inproc.ListenPacket("", "localhost:0")
-	require.NoError(t, err)
-	defer remotePc.Close()
-	serverPc := writeErrorPacketConn{}
-	t.Logf("remote addr: %s", remotePc.LocalAddr())
-	s, err := NewServer(&ServerConfig{
-		Conn:             &serverPc,
-		StartingNodes:    addrResolver(remotePc.LocalAddr().String()),
-		QueryResendDelay: func() time.Duration { return 0 },
-	})
-	require.NoError(t, err)
-	defer s.Close()
-	ts, err := s.Bootstrap()
-	t.Logf("%#v", ts)
-	require.NoError(t, err)
-	time.Sleep(time.Second)
 }

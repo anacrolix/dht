@@ -25,7 +25,7 @@ func (me tokenServer) CreateToken(addr Addr) string {
 
 func (me tokenServer) createToken(addr Addr, t time.Time) string {
 	h := sha1.New()
-	ip := addr.UDPAddr().IP.To16()
+	ip := addr.IP().To16()
 	if len(ip) != 16 {
 		panic(ip)
 	}

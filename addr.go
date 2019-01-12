@@ -4,6 +4,7 @@ import (
 	"net"
 
 	"github.com/anacrolix/dht/krpc"
+	"github.com/anacrolix/missinggo"
 )
 
 // Used internally to refer to node network addresses. String() is called a
@@ -11,35 +12,49 @@ import (
 // interface does not satisfy net.Addr, as the underlying type must be passed
 // to any OS-level function that take net.Addr.
 type Addr interface {
-	UDPAddr() *net.UDPAddr
+	Raw() net.Addr
+	Port() int
+	IP() net.IP
 	String() string
 	KRPC() krpc.NodeAddr
 }
 
 // Speeds up some of the commonly called Addr methods.
 type cachedAddr struct {
-	ua net.UDPAddr
-	s  string
+	raw  net.Addr
+	port int
+	ip   net.IP
+	s    string
 }
 
 func (ca cachedAddr) String() string {
 	return ca.s
 }
 
-func (ca cachedAddr) UDPAddr() *net.UDPAddr {
-	return &ca.ua
-}
-
 func (ca cachedAddr) KRPC() krpc.NodeAddr {
 	return krpc.NodeAddr{
-		IP:   ca.ua.IP,
-		Port: ca.ua.Port,
+		IP:   ca.ip,
+		Port: ca.port,
 	}
 }
 
-func NewAddr(ua *net.UDPAddr) Addr {
+func (ca cachedAddr) IP() net.IP {
+	return ca.ip
+}
+
+func (ca cachedAddr) Port() int {
+	return ca.port
+}
+
+func (ca cachedAddr) Raw() net.Addr {
+	return ca.raw
+}
+
+func NewAddr(raw net.Addr) Addr {
 	return cachedAddr{
-		ua: *ua,
-		s:  ua.String(),
+		raw:  raw,
+		s:    raw.String(),
+		ip:   missinggo.AddrIP(raw),
+		port: missinggo.AddrPort(raw),
 	}
 }

@@ -27,7 +27,7 @@ func (n *node) hasAddrAndID(addr Addr, id int160) bool {
 }
 
 func (n *node) IsSecure() bool {
-	return NodeIdSecure(n.id.AsByteArray(), n.addr.UDPAddr().IP)
+	return NodeIdSecure(n.id.AsByteArray(), n.addr.IP())
 }
 
 func (n *node) idString() string {

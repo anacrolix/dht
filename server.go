@@ -273,7 +273,7 @@ func (s *Server) serve() error {
 			readBlocked.Add(1)
 			continue
 		}
-		s.processPacket(b[:n], NewAddr(addr.(*net.UDPAddr)))
+		s.processPacket(b[:n], NewAddr(addr))
 	}
 }
 
@@ -332,10 +332,10 @@ func (s *Server) setReturnNodes(r *krpc.Return, queryMsg krpc.Msg, querySource A
 		return &krpcErrMissingArguments
 	}
 	target := int160FromByteArray(queryMsg.A.InfoHash)
-	if shouldReturnNodes(queryMsg.A.Want, querySource.UDPAddr().IP) {
+	if shouldReturnNodes(queryMsg.A.Want, querySource.IP()) {
 		r.Nodes = s.makeReturnNodes(target, func(na krpc.NodeAddr) bool { return na.IP.To4() != nil })
 	}
-	if shouldReturnNodes6(queryMsg.A.Want, querySource.UDPAddr().IP) {
+	if shouldReturnNodes6(queryMsg.A.Want, querySource.IP()) {
 		r.Nodes6 = s.makeReturnNodes(target, func(krpc.NodeAddr) bool { return true })
 	}
 	return nil
@@ -350,7 +350,7 @@ func (s *Server) handleQuery(source Addr, m krpc.Msg) {
 		}
 	}
 	if s.config.OnQuery != nil {
-		propagate := s.config.OnQuery(&m, source.UDPAddr())
+		propagate := s.config.OnQuery(&m, source.Raw())
 		if !propagate {
 			return
 		}
@@ -389,11 +389,11 @@ func (s *Server) handleQuery(source Addr, m krpc.Msg) {
 		expvars.Add("received announce_peer with valid token", 1)
 		if h := s.config.OnAnnouncePeer; h != nil {
 			p := Peer{
-				IP:   source.UDPAddr().IP,
+				IP:   source.IP(),
 				Port: args.Port,
 			}
 			if args.ImpliedPort {
-				p.Port = source.UDPAddr().Port
+				p.Port = source.Port()
 			}
 			go h(metainfo.Hash(args.InfoHash), p)
 		}
@@ -498,13 +498,13 @@ func (s *Server) nodeErr(n *node) error {
 
 func (s *Server) writeToNode(b []byte, node Addr) (wrote bool, err error) {
 	if list := s.ipBlockList; list != nil {
-		if r, ok := list.Lookup(missinggo.AddrIP(node.UDPAddr())); ok {
+		if r, ok := list.Lookup(node.IP()); ok {
 			err = fmt.Errorf("write to %s blocked: %s", node, r.Description)
 			return
 		}
 	}
 	// log.Printf("writing to %s: %q", node.UDPAddr(), b)
-	n, err := s.socket.WriteTo(b, node.UDPAddr())
+	n, err := s.socket.WriteTo(b, node.Raw())
 	writes.Add(1)
 	if err != nil {
 		writeErrors.Add(1)

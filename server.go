@@ -126,6 +126,9 @@ func NewServer(c *ServerConfig) (s *Server, err error) {
 			ConnectionTracking: conntrack.NewInstance(),
 		}
 	}
+	if c.Conn == nil {
+		return nil, errors.New("non-nil Conn required")
+	}
 	if missinggo.IsZeroValue(c.NodeId) {
 		c.NodeId = RandomNodeID()
 		if !c.NoSecurity && c.PublicIP != nil {

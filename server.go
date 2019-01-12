@@ -155,18 +155,20 @@ func NewServer(c *ServerConfig) (s *Server, err error) {
 	s.socket = c.Conn
 	s.id = int160FromByteArray(c.NodeId)
 	s.table.rootID = s.id
-	go func() {
-		err := s.serve()
-		s.mu.Lock()
-		defer s.mu.Unlock()
-		if s.closed.IsSet() {
-			return
-		}
-		if err != nil {
-			panic(err)
-		}
-	}()
+	go s.serveUntilClosed()
 	return
+}
+
+func (s *Server) serveUntilClosed() {
+	err := s.serve()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.closed.IsSet() {
+		return
+	}
+	if err != nil {
+		panic(err)
+	}
 }
 
 // Returns a description of the Server. Python repr-style.

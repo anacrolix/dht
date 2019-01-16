@@ -710,6 +710,10 @@ type TraversalStats struct {
 	NumResponses  int
 }
 
+func (me TraversalStats) String() string {
+	return fmt.Sprintf("%#v", me)
+}
+
 // Populates the node table.
 func (s *Server) Bootstrap() (ts TraversalStats, err error) {
 	initialAddrs, err := s.traversalStartingAddrs()

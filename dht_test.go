@@ -297,7 +297,6 @@ func TestBootstrapRace(t *testing.T) {
 	ts, err := s.Bootstrap()
 	t.Logf("%#v", ts)
 	require.NoError(t, err)
-	time.Sleep(time.Second)
 }
 
 type emptyNetAddr struct{}

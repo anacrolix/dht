@@ -1,6 +1,7 @@
 package dht
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/binary"
 	"errors"
@@ -572,12 +573,21 @@ func (s *Server) connTrackEntryForAddr(a Addr) conntrack.Entry {
 }
 
 func (s *Server) query(addr Addr, q string, a *krpc.MsgArgs, callback func(krpc.Msg, error)) error {
+	if callback == nil {
+		callback = func(krpc.Msg, error) {}
+	}
+	go func() {
+		callback(s.queryContext(context.Background(), addr, q, a))
+	}()
+	return nil
+}
+
+func (s *Server) queryContext(ctx context.Context, addr Addr, q string, a *krpc.MsgArgs) (reply krpc.Msg, err error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	tid := s.nextTransactionID()
 	if a == nil {
 		a = &krpc.MsgArgs{}
-	}
-	if callback == nil {
-		callback = func(krpc.Msg, error) {}
 	}
 	a.ID = s.ID()
 	m := krpc.Msg{
@@ -593,8 +603,10 @@ func (s *Server) query(addr Addr, q string, a *krpc.MsgArgs, callback func(krpc.
 	}
 	b, err := bencode.Marshal(m)
 	if err != nil {
-		return err
+		return
 	}
+	replyChan := make(chan krpc.Msg, 1)
+	errChan := make(chan error, 1)
 	var t *Transaction
 	t = &Transaction{
 		remoteAddr: addr,
@@ -610,26 +622,13 @@ func (s *Server) query(addr Addr, q string, a *krpc.MsgArgs, callback func(krpc.
 			return err
 		},
 		onResponse: func(m krpc.Msg) {
-			go callback(m, nil)
-			go s.deleteTransactionUnlocked(t)
+			replyChan <- m
 		},
 		onTimeout: func() {
-			go callback(krpc.Msg{}, errors.New("query timed out"))
-			s.mu.Lock()
-			defer s.mu.Unlock()
-			s.deleteTransaction(t)
-			for _, n := range s.table.addrNodes(addr) {
-				n.consecutiveFailures++
-			}
+			errChan <- errors.New("query timed out")
 		},
 		onSendError: func(err error) {
-			go callback(krpc.Msg{}, fmt.Errorf("error resending query: %s", err))
-			s.mu.Lock()
-			defer s.mu.Unlock()
-			s.deleteTransaction(t)
-			for _, n := range s.table.addrNodes(addr) {
-				n.consecutiveFailures++
-			}
+			errChan <- fmt.Errorf("error sending query: %s", err)
 		},
 		queryResendDelay: func() time.Duration {
 			if s.config.QueryResendDelay != nil {
@@ -643,7 +642,25 @@ func (s *Server) query(addr Addr, q string, a *krpc.MsgArgs, callback func(krpc.
 	t.startResendTimer()
 	t.mu.Unlock()
 	s.addTransaction(t)
-	return nil
+	defer func() {
+		if err != nil {
+			for _, n := range s.table.addrNodes(addr) {
+				n.consecutiveFailures++
+			}
+		}
+	}()
+	defer s.deleteTransaction(t)
+	s.mu.Unlock()
+	defer s.mu.Lock()
+	select {
+	case reply = <-replyChan:
+		return
+	case <-ctx.Done():
+		err = ctx.Err()
+		return
+	case err = <-errChan:
+		return
+	}
 }
 
 // Sends a ping query to the address given.

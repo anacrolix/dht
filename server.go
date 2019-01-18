@@ -659,6 +659,7 @@ func (s *Server) queryContext(ctx context.Context, addr Addr, q string, a *krpc.
 	}()
 	defer s.deleteTransaction(t)
 	s.mu.Unlock()
+	go expvars.Add(fmt.Sprintf("outbound %s queries", q), 1)
 	defer s.mu.Lock()
 	select {
 	case reply = <-replyChan:

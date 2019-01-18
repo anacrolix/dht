@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -12,6 +11,8 @@ import (
 	"sync"
 	"text/tabwriter"
 	"time"
+
+	"github.com/pkg/errors"
 
 	"github.com/anacrolix/dht/krpc"
 	"github.com/anacrolix/missinggo"
@@ -742,7 +743,7 @@ func (me TraversalStats) String() string {
 
 // Populates the node table.
 func (s *Server) Bootstrap() (ts TraversalStats, err error) {
-	initialAddrs, err := s.traversalStartingAddrs()
+	initialAddrs, err := s.traversalStartingNodes()
 	if err != nil {
 		return
 	}
@@ -773,7 +774,7 @@ func (s *Server) Bootstrap() (ts TraversalStats, err error) {
 	}
 	s.mu.Lock()
 	for _, addr := range initialAddrs {
-		onAddr(addr)
+		onAddr(NewAddr(addr.Addr.UDP()))
 	}
 	s.mu.Unlock()
 	outstanding.Wait()
@@ -854,23 +855,26 @@ func (s *Server) closestNodes(k int, target int160, filter func(*node) bool) []*
 	return s.table.closestNodes(k, target, filter)
 }
 
-func (s *Server) traversalStartingAddrs() (addrs []Addr, err error) {
+func (s *Server) traversalStartingNodes() (nodes []addrMaybeId, err error) {
 	s.mu.RLock()
 	s.table.forNodes(func(n *node) bool {
-		addrs = append(addrs, n.addr)
+		nodes = append(nodes, addrMaybeId{n.addr.KRPC(), &n.id})
 		return true
 	})
 	s.mu.RUnlock()
-	if len(addrs) > 0 {
+	if len(nodes) > 0 {
 		return
 	}
 	if s.config.StartingNodes != nil {
-		addrs, err = s.config.StartingNodes()
+		addrs, err := s.config.StartingNodes()
 		if err != nil {
-			return
+			return nil, errors.Wrap(err, "getting starting nodes")
+		}
+		for _, a := range addrs {
+			nodes = append(nodes, addrMaybeId{a.KRPC(), nil})
 		}
 	}
-	if len(addrs) == 0 {
+	if len(nodes) == 0 {
 		err = errors.New("no initial nodes")
 	}
 	return

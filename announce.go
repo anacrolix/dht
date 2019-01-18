@@ -20,11 +20,6 @@ type Announce struct {
 	values     chan PeersValues
 	stop       chan struct{}
 	triedAddrs *bloom.BloomFilter
-	// True when contact with all starting addrs has been initiated. This
-	// prevents a race where the first transaction finishes before the rest
-	// have been opened, sees no other transactions are pending and ends the
-	// announce.
-	contactedStartAddrs bool
 	// How many transactions are still ongoing.
 	pending  int
 	server   *Server
@@ -58,7 +53,7 @@ func newBloomFilterForTraversal() *bloom.BloomFilter {
 // caller, and announcing the local node to each node if allowed and
 // specified.
 func (s *Server) Announce(infoHash [20]byte, port int, impliedPort bool) (*Announce, error) {
-	startAddrs, err := s.traversalStartingAddrs()
+	startAddrs, err := s.traversalStartingNodes()
 	if err != nil {
 		return nil, err
 	}
@@ -90,28 +85,16 @@ func (s *Server) Announce(infoHash [20]byte, port int, impliedPort bool) (*Annou
 			}
 		}
 	}()
-	go func() {
-		a.mu.Lock()
-		defer a.mu.Unlock()
-		for _, addr := range startAddrs {
-			if !a.reserveContact(addr) {
-				continue
-			}
-			a.contact(addr)
-		}
-		a.contactedStartAddrs = true
-		// If we failed to contact any of the starting addrs, no transactions
-		// will complete triggering a check that there are no pending
-		// responses.
-		a.maybeClose()
-	}()
+	for _, n := range startAddrs {
+		a.pendContact(n)
+	}
 	go a.nodeContactor()
 	return a, nil
 }
 
-func validNodeAddr(addr Addr) bool {
+func validNodeAddr(addr net.Addr) bool {
 	// At least for UDP addresses, we know what doesn't work.
-	ua := addr.Raw().(*net.UDPAddr)
+	ua := addr.(*net.UDPAddr)
 	if ua.Port == 0 {
 		return false
 	}
@@ -122,18 +105,16 @@ func validNodeAddr(addr Addr) bool {
 	return true
 }
 
-func (a *Announce) reserveContact(addr Addr) bool {
-	if !validNodeAddr(addr) {
+func (a *Announce) shouldContact(addr krpc.NodeAddr) bool {
+	if !validNodeAddr(addr.UDP()) {
 		return false
 	}
-	if a.triedAddrs.Test([]byte(addr.String())) {
+	if a.triedAddrs.TestString(addr.String()) {
 		return false
 	}
-	if a.server.ipBlocked(addr.IP()) {
+	if a.server.ipBlocked(addr.IP) {
 		return false
 	}
-	a.pending++
-	a.triedAddrs.Add([]byte(addr.String()))
 	return true
 }
 
@@ -142,25 +123,33 @@ func (a *Announce) completeContact() {
 	a.maybeClose()
 }
 
-func (a *Announce) contact(addr Addr) {
+func (a *Announce) contact(node addrMaybeId) bool {
+	if !a.shouldContact(node.Addr) {
+		return false
+	}
+	// log.Printf("contacting %v: %d pending, %d outstanding", node, a.nodesPendingContact.Len(), a.pending)
 	a.numContacted++
+	a.pending++
+	a.triedAddrs.AddString(node.Addr.String())
 	go func() {
-		if a.getPeers(addr) != nil {
+		if a.getPeers(NewAddr(node.Addr.UDP())) != nil {
 			a.mu.Lock()
 			a.completeContact()
 			a.mu.Unlock()
 		}
 	}()
+	return true
 }
 
 func (a *Announce) maybeClose() {
-	if a.contactedStartAddrs && a.pending == 0 {
+	if a.nodesPendingContact.Len() == 0 && a.pending == 0 {
 		a.close()
 	}
 }
 
 func (a *Announce) responseNode(node krpc.NodeInfo) {
-	a.pendContact(node)
+	i := int160FromByteArray(node.ID)
+	a.pendContact(addrMaybeId{node.Addr, &i})
 }
 
 // Announce to a peer, if appropriate.
@@ -229,8 +218,8 @@ func (a *Announce) close() {
 	}
 }
 
-func (a *Announce) pendContact(node krpc.NodeInfo) {
-	if !a.reserveContact(NewAddr(node.Addr.UDP())) {
+func (a *Announce) pendContact(node addrMaybeId) {
+	if !a.shouldContact(node.Addr) {
 		return
 	}
 	heap.Push(&a.nodesPendingContact, node)
@@ -242,6 +231,7 @@ func (a *Announce) nodeContactor() {
 	defer a.mu.Unlock()
 	for {
 		for {
+			a.maybeClose()
 			select {
 			case <-a.stop:
 				return
@@ -252,7 +242,6 @@ func (a *Announce) nodeContactor() {
 			}
 			a.nodeContactorCond.Wait()
 		}
-		ni := heap.Pop(&a.nodesPendingContact).(krpc.NodeInfo)
-		a.contact(NewAddr(ni.Addr.UDP()))
+		a.contact(heap.Pop(&a.nodesPendingContact).(addrMaybeId))
 	}
 }

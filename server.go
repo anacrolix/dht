@@ -80,7 +80,12 @@ func (s *Server) WriteStatus(w io.Writer) {
 				i,
 				n.id.Bytes(),
 				n.addr,
-				len(n.announceToken),
+				func() int {
+					if n.announceToken == nil {
+						return -1
+					}
+					return len(*n.announceToken)
+				}(),
 				prettySince(n.lastGotQuery),
 				prettySince(n.lastGotResponse),
 				n.consecutiveFailures,
@@ -372,7 +377,10 @@ func (s *Server) handleQuery(source Addr, m krpc.Msg) {
 			s.sendError(source, m.T, *err)
 			break
 		}
-		r.Token = s.createToken(source)
+		r.Token = func() *string {
+			t := s.createToken(source)
+			return &t
+		}()
 		s.reply(source, m.T, r)
 	case "find_node":
 		var r krpc.Return
@@ -809,9 +817,18 @@ func (s *Server) getPeers(addr Addr, infoHash int160, callback func(krpc.Msg, er
 		s.mu.Lock()
 		defer s.mu.Unlock()
 		s.addResponseNodes(m)
-		if m.R != nil && m.R.Token != "" && m.SenderID() != nil {
-			if n, _ := s.getNode(addr, int160FromByteArray(*m.SenderID()), false); n != nil {
-				n.announceToken = m.R.Token
+		if m.R != nil {
+			if m.R.Token == nil {
+				expvars.Add("get_peers responses with no token", 1)
+			} else if len(*m.R.Token) == 0 {
+				expvars.Add("get_peers responses with empty token", 1)
+			} else {
+				expvars.Add("get_peers responses with token", 1)
+			}
+			if m.SenderID() != nil && m.R.Token != nil {
+				if n, _ := s.getNode(addr, int160FromByteArray(*m.SenderID()), false); n != nil {
+					n.announceToken = m.R.Token
+				}
 			}
 		}
 	})

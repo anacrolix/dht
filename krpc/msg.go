@@ -48,7 +48,7 @@ type Return struct {
 	ID     ID                  `bencode:"id"`               // ID of the querying node
 	Nodes  CompactIPv4NodeInfo `bencode:"nodes,omitempty"`  // K closest nodes to the requested target
 	Nodes6 CompactIPv6NodeInfo `bencode:"nodes6,omitempty"` // K closest nodes to the requested target
-	Token  string              `bencode:"token,omitempty"`  // Token for future announce_peer
+	Token  *string             `bencode:"token,omitempty"`  // Token for future announce_peer
 	Values []NodeAddr          `bencode:"values,omitempty"` // Torrent peers
 }
 

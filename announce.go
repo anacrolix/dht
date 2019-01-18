@@ -164,13 +164,16 @@ func (a *Announce) responseNode(node krpc.NodeInfo) {
 }
 
 // Announce to a peer, if appropriate.
-func (a *Announce) maybeAnnouncePeer(to Addr, token string, peerId *krpc.ID) {
+func (a *Announce) maybeAnnouncePeer(to Addr, token *string, peerId *krpc.ID) {
+	if token == nil {
+		return
+	}
 	if !a.server.config.NoSecurity && (peerId == nil || !NodeIdSecure(*peerId, to.IP())) {
 		return
 	}
 	a.server.mu.Lock()
 	defer a.server.mu.Unlock()
-	a.server.announcePeer(to, a.infoHash, a.announcePort, token, a.announcePortImplied, nil)
+	a.server.announcePeer(to, a.infoHash, a.announcePort, *token, a.announcePortImplied, nil)
 }
 
 func (a *Announce) getPeers(addr Addr) error {

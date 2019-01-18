@@ -17,7 +17,7 @@ var (
 	tableFileName = flag.String("tableFile", "", "name of file for storing node info")
 	serveAddr     = flag.String("serveAddr", ":0", "local UDP address")
 	infoHash      = flag.String("infoHash", "", "torrent infohash")
-	once          = flag.Bool("once", false, "only do one scrape iteration")
+	once          = flag.Bool("once", true, "only do one scrape iteration")
 
 	s        *dht.Server
 	quitting = make(chan struct{})

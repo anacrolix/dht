@@ -23,18 +23,10 @@ var (
 	quitting = make(chan struct{})
 )
 
-func loadTable() error {
-	ns, err := dht.ReadNodesFromFile(*tableFileName)
-	if err != nil {
-		return err
-	}
-	for _, ni := range ns {
-		s.AddNode(ni)
-	}
-	return nil
-}
-
 func saveTable() error {
+	if *tableFileName == "" {
+		return nil
+	}
 	return dht.WriteNodesToFile(s.Nodes(), *tableFileName)
 }
 
@@ -64,15 +56,19 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	s, err = dht.NewServer(&dht.ServerConfig{
+	sc := dht.ServerConfig{
 		Conn: conn,
-	})
+	}
+	ns, err := dht.ReadNodesFromFile(*tableFileName)
+	if os.IsNotExist(err) {
+		sc.StartingNodes = dht.GlobalBootstrapAddrs
+	}
+	s, err = dht.NewServer(&sc)
 	if err != nil {
 		log.Fatal(err)
 	}
-	err = loadTable()
-	if err != nil {
-		log.Fatalf("error loading table: %s", err)
+	for _, n := range ns {
+		s.AddNode(n)
 	}
 	log.Printf("dht server on %s, ID is %x", s.Addr(), s.ID())
 	setupSignals()

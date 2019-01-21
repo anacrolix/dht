@@ -32,11 +32,12 @@ func TestNodesByDistance(t *testing.T) {
 	push(0)
 	push(1)
 	pop := func(i int) {
+		assert.Equal(t, amis[i], a.nis[0])
 		assert.Equal(t, amis[i], heap.Pop(&a))
 	}
 	pop(1)
-	pop(3)
 	pop(2)
+	pop(3)
 	pop(0)
 	pop(0)
 }

@@ -241,7 +241,7 @@ func (s *Server) processPacket(b []byte, addr Addr) {
 		}
 	}
 	if d.Y == "q" {
-		readQuery.Add(1)
+		expvars.Add("received queries", 1)
 		s.handleQuery(addr, d)
 		return
 	}

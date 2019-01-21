@@ -4,7 +4,9 @@ package dht
 
 import (
 	"container/heap"
+	"context"
 	"net"
+	"time"
 
 	"github.com/anacrolix/dht/krpc"
 	"github.com/anacrolix/sync"
@@ -18,7 +20,9 @@ type Announce struct {
 	Peers chan PeersValues
 	// Inner chan is set to nil when on close.
 	values     chan PeersValues
-	stop       chan struct{}
+	ctx        context.Context
+	cancel     func()
+	stop       <-chan struct{}
 	triedAddrs *bloom.BloomFilter
 	// How many transactions are still ongoing.
 	pending  int
@@ -35,6 +39,7 @@ type Announce struct {
 
 	nodesPendingContact nodesByDistance
 	nodeContactorCond   sync.Cond
+	contactRateLimiter  chan struct{}
 }
 
 // Returns the number of distinct remote addresses the announce has queried.
@@ -59,16 +64,19 @@ func (s *Server) Announce(infoHash [20]byte, port int, impliedPort bool) (*Annou
 	}
 	a := &Announce{
 		Peers:               make(chan PeersValues, 100),
-		stop:                make(chan struct{}),
 		values:              make(chan PeersValues),
 		triedAddrs:          newBloomFilterForTraversal(),
 		server:              s,
 		infoHash:            int160FromByteArray(infoHash),
 		announcePort:        port,
 		announcePortImplied: impliedPort,
+		contactRateLimiter:  make(chan struct{}, 10),
 	}
+	a.ctx, a.cancel = context.WithCancel(context.Background())
+	a.stop = a.ctx.Done()
 	a.nodesPendingContact.target = int160FromByteArray(infoHash)
 	a.nodeContactorCond.L = &a.mu
+	go a.rateUnlimiter()
 	// Function ferries from values to Values until discovery is halted.
 	go func() {
 		defer close(a.Peers)
@@ -88,8 +96,24 @@ func (s *Server) Announce(infoHash [20]byte, port int, impliedPort bool) (*Annou
 	for _, n := range startAddrs {
 		a.pendContact(n)
 	}
+	a.maybeClose()
 	go a.nodeContactor()
 	return a, nil
+}
+
+func (a *Announce) rateUnlimiter() {
+	for {
+		select {
+		case a.contactRateLimiter <- struct{}{}:
+		case <-a.ctx.Done():
+			return
+		}
+		select {
+		case <-time.After(100 * time.Millisecond):
+		case <-a.ctx.Done():
+			return
+		}
+	}
 }
 
 func validNodeAddr(addr net.Addr) bool {
@@ -125,19 +149,13 @@ func (a *Announce) completeContact() {
 
 func (a *Announce) contact(node addrMaybeId) bool {
 	if !a.shouldContact(node.Addr) {
+		// log.Printf("shouldn't contact: %v", node)
 		return false
 	}
-	// log.Printf("contacting %v: %d pending, %d outstanding", node, a.nodesPendingContact.Len(), a.pending)
 	a.numContacted++
 	a.pending++
 	a.triedAddrs.AddString(node.Addr.String())
-	go func() {
-		if a.getPeers(NewAddr(node.Addr.UDP())) != nil {
-			a.mu.Lock()
-			a.completeContact()
-			a.mu.Unlock()
-		}
-	}()
+	go a.getPeers(node)
 	return true
 }
 
@@ -165,33 +183,40 @@ func (a *Announce) maybeAnnouncePeer(to Addr, token *string, peerId *krpc.ID) {
 	a.server.announcePeer(to, a.infoHash, a.announcePort, *token, a.announcePortImplied, nil)
 }
 
-func (a *Announce) getPeers(addr Addr) error {
-	a.server.mu.Lock()
-	defer a.server.mu.Unlock()
-	return a.server.getPeers(addr, a.infoHash, func(m krpc.Msg, err error) {
-		// Register suggested nodes closer to the target info-hash.
-		if m.R != nil && m.SenderID() != nil {
-			expvars.Add("announce get_peers response nodes values", int64(len(m.R.Nodes)))
-			expvars.Add("announce get_peers response nodes6 values", int64(len(m.R.Nodes6)))
-			a.mu.Lock()
-			m.R.ForAllNodes(a.responseNode)
-			a.mu.Unlock()
-			select {
-			case a.values <- PeersValues{
-				Peers: m.R.Values,
-				NodeInfo: krpc.NodeInfo{
-					Addr: addr.KRPC(),
-					ID:   *m.SenderID(),
-				},
-			}:
-			case <-a.stop:
-			}
-			a.maybeAnnouncePeer(addr, m.R.Token, m.SenderID())
+func (a *Announce) getPeers(node addrMaybeId) {
+	addr := NewAddr(node.Addr.UDP())
+	// log.Printf("sending get_peers to %v", node)
+	m, err := a.server.getPeers(context.TODO(), addr, a.infoHash)
+	// log.Print(err)
+	// log.Printf("get_peers response error from %v: %v", node, err)
+	if err == nil {
+		select {
+		case a.contactRateLimiter <- struct{}{}:
+		default:
 		}
+	}
+	// Register suggested nodes closer to the target info-hash.
+	if m.R != nil && m.SenderID() != nil {
+		expvars.Add("announce get_peers response nodes values", int64(len(m.R.Nodes)))
+		expvars.Add("announce get_peers response nodes6 values", int64(len(m.R.Nodes6)))
 		a.mu.Lock()
-		a.completeContact()
+		m.R.ForAllNodes(a.responseNode)
 		a.mu.Unlock()
-	})
+		select {
+		case a.values <- PeersValues{
+			Peers: m.R.Values,
+			NodeInfo: krpc.NodeInfo{
+				Addr: addr.KRPC(),
+				ID:   *m.SenderID(),
+			},
+		}:
+		case <-a.stop:
+		}
+		a.maybeAnnouncePeer(addr, m.R.Token, m.SenderID())
+	}
+	a.mu.Lock()
+	a.completeContact()
+	a.mu.Unlock()
 }
 
 // Corresponds to the "values" key in a get_peers KRPC response. A list of
@@ -213,35 +238,52 @@ func (a *Announce) close() {
 	select {
 	case <-a.stop:
 	default:
-		close(a.stop)
+		a.cancel()
 		a.nodeContactorCond.Broadcast()
 	}
 }
 
 func (a *Announce) pendContact(node addrMaybeId) {
 	if !a.shouldContact(node.Addr) {
+		// log.Printf("shouldn't contact (pend): %v", node)
 		return
 	}
 	heap.Push(&a.nodesPendingContact, node)
 	a.nodeContactorCond.Signal()
 }
 
-func (a *Announce) nodeContactor() {
+func (a *Announce) waitContactRateToken() bool {
+	select {
+	case <-a.ctx.Done():
+		return false
+	case <-a.contactRateLimiter:
+		return true
+	}
+}
+
+func (a *Announce) contactPendingNode() bool {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	for {
-		for {
-			a.maybeClose()
-			select {
-			case <-a.stop:
-				return
-			default:
-			}
-			if a.nodesPendingContact.Len() > 0 {
-				break
-			}
-			a.nodeContactorCond.Wait()
+		if a.ctx.Err() != nil {
+			return false
 		}
-		a.contact(heap.Pop(&a.nodesPendingContact).(addrMaybeId))
+		for a.nodesPendingContact.Len() > 0 {
+			if a.contact(heap.Pop(&a.nodesPendingContact).(addrMaybeId)) {
+				return true
+			}
+		}
+		a.nodeContactorCond.Wait()
+	}
+}
+
+func (a *Announce) nodeContactor() {
+	for {
+		if !a.waitContactRateToken() {
+			return
+		}
+		if !a.contactPendingNode() {
+			return
+		}
 	}
 }

@@ -810,30 +810,29 @@ func (s *Server) Close() {
 	s.socket.Close()
 }
 
-func (s *Server) getPeers(addr Addr, infoHash int160, callback func(krpc.Msg, error)) (err error) {
-	return s.query(addr, "get_peers", &krpc.MsgArgs{
+func (s *Server) getPeers(ctx context.Context, addr Addr, infoHash int160) (krpc.Msg, error) {
+	m, err := s.queryContext(ctx, addr, "get_peers", &krpc.MsgArgs{
 		InfoHash: infoHash.AsByteArray(),
 		Want:     []krpc.Want{krpc.WantNodes, krpc.WantNodes6},
-	}, func(m krpc.Msg, err error) {
-		go callback(m, err)
-		s.mu.Lock()
-		defer s.mu.Unlock()
-		s.addResponseNodes(m)
-		if m.R != nil {
-			if m.R.Token == nil {
-				expvars.Add("get_peers responses with no token", 1)
-			} else if len(*m.R.Token) == 0 {
-				expvars.Add("get_peers responses with empty token", 1)
-			} else {
-				expvars.Add("get_peers responses with token", 1)
-			}
-			if m.SenderID() != nil && m.R.Token != nil {
-				if n, _ := s.getNode(addr, int160FromByteArray(*m.SenderID()), false); n != nil {
-					n.announceToken = m.R.Token
-				}
+	})
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.addResponseNodes(m)
+	if m.R != nil {
+		if m.R.Token == nil {
+			expvars.Add("get_peers responses with no token", 1)
+		} else if len(*m.R.Token) == 0 {
+			expvars.Add("get_peers responses with empty token", 1)
+		} else {
+			expvars.Add("get_peers responses with token", 1)
+		}
+		if m.SenderID() != nil && m.R.Token != nil {
+			if n, _ := s.getNode(addr, int160FromByteArray(*m.SenderID()), false); n != nil {
+				n.announceToken = m.R.Token
 			}
 		}
-	})
+	}
+	return m, err
 }
 
 func (s *Server) closestGoodNodeInfos(

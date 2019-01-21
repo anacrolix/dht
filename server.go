@@ -351,6 +351,17 @@ func (s *Server) setReturnNodes(r *krpc.Return, queryMsg krpc.Msg, querySource A
 // TODO: Probably should write error messages back to senders if something is
 // wrong.
 func (s *Server) handleQuery(source Addr, m krpc.Msg) {
+	go func() {
+		expvars.Add(fmt.Sprintf("received query %s", m.Q), 1)
+		if a := m.A; a != nil {
+			if a.NoSeed != 0 {
+				expvars.Add("received argument noseed", 1)
+			}
+			if a.Scrape != 0 {
+				expvars.Add("received argument scrape", 1)
+			}
+		}
+	}()
 	if m.SenderID() != nil {
 		if n, _ := s.getNode(source, int160FromByteArray(*m.SenderID()), !m.ReadOnly); n != nil {
 			n.lastGotQuery = time.Now()

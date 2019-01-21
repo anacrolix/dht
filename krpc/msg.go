@@ -35,6 +35,8 @@ type MsgArgs struct {
 	Port        int    `bencode:"port,omitempty"`         // Senders torrent port
 	ImpliedPort bool   `bencode:"implied_port,omitempty"` // Use senders apparent DHT port
 	Want        []Want `bencode:"want,omitempty"`         // Contains strings like "n4" and "n6" from BEP 32.
+	NoSeed      int    `bencode:"noseed,omitempty"`       // BEP 33
+	Scrape      int    `bencode:"scrape,omitempty"`       // BEP 33
 }
 
 type Want string

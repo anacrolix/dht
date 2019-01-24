@@ -30,7 +30,7 @@ func main() {
 		}
 		wg.Add(1)
 		addrs[ih] = make(map[string]struct{})
-		go func() {
+		go func(ih [20]byte) {
 			defer wg.Done()
 			for ps := range a.Peers {
 				for _, p := range ps.Peers {
@@ -41,7 +41,7 @@ func main() {
 					}
 				}
 			}
-		}()
+		}(ih)
 	}
 	wg.Wait()
 	for _, ih := range flags.Infohash {

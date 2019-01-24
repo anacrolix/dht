@@ -35,6 +35,8 @@ type MsgArgs struct {
 	Port        int    `bencode:"port,omitempty"`         // Senders torrent port
 	ImpliedPort bool   `bencode:"implied_port,omitempty"` // Use senders apparent DHT port
 	Want        []Want `bencode:"want,omitempty"`         // Contains strings like "n4" and "n6" from BEP 32.
+	NoSeed      int    `bencode:"noseed,omitempty"`       // BEP 33
+	Scrape      int    `bencode:"scrape,omitempty"`       // BEP 33
 }
 
 type Want string
@@ -48,7 +50,7 @@ type Return struct {
 	ID     ID                  `bencode:"id"`               // ID of the querying node
 	Nodes  CompactIPv4NodeInfo `bencode:"nodes,omitempty"`  // K closest nodes to the requested target
 	Nodes6 CompactIPv6NodeInfo `bencode:"nodes6,omitempty"` // K closest nodes to the requested target
-	Token  string              `bencode:"token,omitempty"`  // Token for future announce_peer
+	Token  *string             `bencode:"token,omitempty"`  // Token for future announce_peer
 	Values []NodeAddr          `bencode:"values,omitempty"` // Torrent peers
 }
 

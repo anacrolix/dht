@@ -1,9 +1,9 @@
 package dht
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -11,6 +11,8 @@ import (
 	"sync"
 	"text/tabwriter"
 	"time"
+
+	"github.com/pkg/errors"
 
 	"github.com/anacrolix/dht/krpc"
 	"github.com/anacrolix/missinggo"
@@ -79,7 +81,12 @@ func (s *Server) WriteStatus(w io.Writer) {
 				i,
 				n.id.Bytes(),
 				n.addr,
-				len(n.announceToken),
+				func() int {
+					if n.announceToken == nil {
+						return -1
+					}
+					return len(*n.announceToken)
+				}(),
 				prettySince(n.lastGotQuery),
 				prettySince(n.lastGotResponse),
 				n.consecutiveFailures,
@@ -234,7 +241,7 @@ func (s *Server) processPacket(b []byte, addr Addr) {
 		}
 	}
 	if d.Y == "q" {
-		readQuery.Add(1)
+		expvars.Add("received queries", 1)
 		s.handleQuery(addr, d)
 		return
 	}
@@ -344,6 +351,17 @@ func (s *Server) setReturnNodes(r *krpc.Return, queryMsg krpc.Msg, querySource A
 // TODO: Probably should write error messages back to senders if something is
 // wrong.
 func (s *Server) handleQuery(source Addr, m krpc.Msg) {
+	go func() {
+		expvars.Add(fmt.Sprintf("received query %s", m.Q), 1)
+		if a := m.A; a != nil {
+			if a.NoSeed != 0 {
+				expvars.Add("received argument noseed", 1)
+			}
+			if a.Scrape != 0 {
+				expvars.Add("received argument scrape", 1)
+			}
+		}
+	}()
 	if m.SenderID() != nil {
 		if n, _ := s.getNode(source, int160FromByteArray(*m.SenderID()), !m.ReadOnly); n != nil {
 			n.lastGotQuery = time.Now()
@@ -371,7 +389,10 @@ func (s *Server) handleQuery(source Addr, m krpc.Msg) {
 			s.sendError(source, m.T, *err)
 			break
 		}
-		r.Token = s.createToken(source)
+		r.Token = func() *string {
+			t := s.createToken(source)
+			return &t
+		}()
 		s.reply(source, m.T, r)
 	case "find_node":
 		var r krpc.Return
@@ -572,12 +593,21 @@ func (s *Server) connTrackEntryForAddr(a Addr) conntrack.Entry {
 }
 
 func (s *Server) query(addr Addr, q string, a *krpc.MsgArgs, callback func(krpc.Msg, error)) error {
+	if callback == nil {
+		callback = func(krpc.Msg, error) {}
+	}
+	go func() {
+		callback(s.queryContext(context.Background(), addr, q, a))
+	}()
+	return nil
+}
+
+func (s *Server) queryContext(ctx context.Context, addr Addr, q string, a *krpc.MsgArgs) (reply krpc.Msg, err error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	tid := s.nextTransactionID()
 	if a == nil {
 		a = &krpc.MsgArgs{}
-	}
-	if callback == nil {
-		callback = func(krpc.Msg, error) {}
 	}
 	a.ID = s.ID()
 	m := krpc.Msg{
@@ -593,8 +623,10 @@ func (s *Server) query(addr Addr, q string, a *krpc.MsgArgs, callback func(krpc.
 	}
 	b, err := bencode.Marshal(m)
 	if err != nil {
-		return err
+		return
 	}
+	replyChan := make(chan krpc.Msg, 1)
+	errChan := make(chan error, 1)
 	var t *Transaction
 	t = &Transaction{
 		remoteAddr: addr,
@@ -610,26 +642,13 @@ func (s *Server) query(addr Addr, q string, a *krpc.MsgArgs, callback func(krpc.
 			return err
 		},
 		onResponse: func(m krpc.Msg) {
-			go callback(m, nil)
-			go s.deleteTransactionUnlocked(t)
+			replyChan <- m
 		},
 		onTimeout: func() {
-			go callback(krpc.Msg{}, errors.New("query timed out"))
-			s.mu.Lock()
-			defer s.mu.Unlock()
-			s.deleteTransaction(t)
-			for _, n := range s.table.addrNodes(addr) {
-				n.consecutiveFailures++
-			}
+			errChan <- errors.New("query timed out")
 		},
 		onSendError: func(err error) {
-			go callback(krpc.Msg{}, fmt.Errorf("error resending query: %s", err))
-			s.mu.Lock()
-			defer s.mu.Unlock()
-			s.deleteTransaction(t)
-			for _, n := range s.table.addrNodes(addr) {
-				n.consecutiveFailures++
-			}
+			errChan <- fmt.Errorf("error sending query: %s", err)
 		},
 		queryResendDelay: func() time.Duration {
 			if s.config.QueryResendDelay != nil {
@@ -643,7 +662,26 @@ func (s *Server) query(addr Addr, q string, a *krpc.MsgArgs, callback func(krpc.
 	t.startResendTimer()
 	t.mu.Unlock()
 	s.addTransaction(t)
-	return nil
+	defer func() {
+		if err != nil {
+			for _, n := range s.table.addrNodes(addr) {
+				n.consecutiveFailures++
+			}
+		}
+	}()
+	defer s.deleteTransaction(t)
+	s.mu.Unlock()
+	go expvars.Add(fmt.Sprintf("outbound %s queries", q), 1)
+	defer s.mu.Lock()
+	select {
+	case reply = <-replyChan:
+		return
+	case <-ctx.Done():
+		err = ctx.Err()
+		return
+	case err = <-errChan:
+		return
+	}
 }
 
 // Sends a ping query to the address given.
@@ -716,7 +754,7 @@ func (me TraversalStats) String() string {
 
 // Populates the node table.
 func (s *Server) Bootstrap() (ts TraversalStats, err error) {
-	initialAddrs, err := s.traversalStartingAddrs()
+	initialAddrs, err := s.traversalStartingNodes()
 	if err != nil {
 		return
 	}
@@ -747,7 +785,7 @@ func (s *Server) Bootstrap() (ts TraversalStats, err error) {
 	}
 	s.mu.Lock()
 	for _, addr := range initialAddrs {
-		onAddr(addr)
+		onAddr(NewAddr(addr.Addr.UDP()))
 	}
 	s.mu.Unlock()
 	outstanding.Wait()
@@ -783,21 +821,29 @@ func (s *Server) Close() {
 	s.socket.Close()
 }
 
-func (s *Server) getPeers(addr Addr, infoHash int160, callback func(krpc.Msg, error)) (err error) {
-	return s.query(addr, "get_peers", &krpc.MsgArgs{
+func (s *Server) getPeers(ctx context.Context, addr Addr, infoHash int160) (krpc.Msg, error) {
+	m, err := s.queryContext(ctx, addr, "get_peers", &krpc.MsgArgs{
 		InfoHash: infoHash.AsByteArray(),
 		Want:     []krpc.Want{krpc.WantNodes, krpc.WantNodes6},
-	}, func(m krpc.Msg, err error) {
-		go callback(m, err)
-		s.mu.Lock()
-		defer s.mu.Unlock()
-		s.addResponseNodes(m)
-		if m.R != nil && m.R.Token != "" && m.SenderID() != nil {
+	})
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.addResponseNodes(m)
+	if m.R != nil {
+		if m.R.Token == nil {
+			expvars.Add("get_peers responses with no token", 1)
+		} else if len(*m.R.Token) == 0 {
+			expvars.Add("get_peers responses with empty token", 1)
+		} else {
+			expvars.Add("get_peers responses with token", 1)
+		}
+		if m.SenderID() != nil && m.R.Token != nil {
 			if n, _ := s.getNode(addr, int160FromByteArray(*m.SenderID()), false); n != nil {
 				n.announceToken = m.R.Token
 			}
 		}
-	})
+	}
+	return m, err
 }
 
 func (s *Server) closestGoodNodeInfos(
@@ -819,23 +865,26 @@ func (s *Server) closestNodes(k int, target int160, filter func(*node) bool) []*
 	return s.table.closestNodes(k, target, filter)
 }
 
-func (s *Server) traversalStartingAddrs() (addrs []Addr, err error) {
+func (s *Server) traversalStartingNodes() (nodes []addrMaybeId, err error) {
 	s.mu.RLock()
 	s.table.forNodes(func(n *node) bool {
-		addrs = append(addrs, n.addr)
+		nodes = append(nodes, addrMaybeId{n.addr.KRPC(), &n.id})
 		return true
 	})
 	s.mu.RUnlock()
-	if len(addrs) > 0 {
+	if len(nodes) > 0 {
 		return
 	}
 	if s.config.StartingNodes != nil {
-		addrs, err = s.config.StartingNodes()
+		addrs, err := s.config.StartingNodes()
 		if err != nil {
-			return
+			return nil, errors.Wrap(err, "getting starting nodes")
+		}
+		for _, a := range addrs {
+			nodes = append(nodes, addrMaybeId{a.KRPC(), nil})
 		}
 	}
-	if len(addrs) == 0 {
+	if len(nodes) == 0 {
 		err = errors.New("no initial nodes")
 	}
 	return

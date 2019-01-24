@@ -13,7 +13,7 @@ type nodeKey struct {
 
 type node struct {
 	nodeKey
-	announceToken string
+	announceToken *string
 	readOnly      bool
 
 	lastGotQuery    time.Time

@@ -218,7 +218,7 @@ func TestHook(t *testing.T) {
 func TestResolveBadAddr(t *testing.T) {
 	ua, err := net.ResolveUDPAddr("udp", "0.131.255.145:33085")
 	require.NoError(t, err)
-	assert.False(t, validNodeAddr(NewAddr(ua)))
+	assert.False(t, validNodeAddr(ua))
 }
 
 func TestGlobalBootstrapAddrs(t *testing.T) {
@@ -297,7 +297,6 @@ func TestBootstrapRace(t *testing.T) {
 	ts, err := s.Bootstrap()
 	t.Logf("%#v", ts)
 	require.NoError(t, err)
-	time.Sleep(time.Second)
 }
 
 type emptyNetAddr struct{}

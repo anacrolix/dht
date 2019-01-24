@@ -627,8 +627,7 @@ func (s *Server) queryContext(ctx context.Context, addr Addr, q string, a *krpc.
 	}
 	replyChan := make(chan krpc.Msg, 1)
 	errChan := make(chan error, 1)
-	var t *Transaction
-	t = &Transaction{
+	t := &Transaction{
 		remoteAddr: addr,
 		t:          tid,
 		querySender: func() error {

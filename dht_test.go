@@ -122,6 +122,7 @@ func TestPing(t *testing.T) {
 		}
 		ok <- *m.SenderID() == srv0.ID()
 	})
+	require.NoError(t, err)
 	require.True(t, <-ok)
 }
 
@@ -284,7 +285,7 @@ func TestBootstrapRace(t *testing.T) {
 			remotePc.ReadFrom(nil)
 		}
 		var b [1024]byte
-		_, addr, err := remotePc.ReadFrom(b[:])
+		_, addr, _ := remotePc.ReadFrom(b[:])
 		var m krpc.Msg
 		bencode.Unmarshal(b[:], &m)
 		m.Y = "r"
@@ -319,7 +320,7 @@ func (me *bootstrapRacePacketConn) Close() error {
 	close(me.read)
 	return nil
 }
-func (me bootstrapRacePacketConn) LocalAddr() net.Addr { return emptyNetAddr{} }
+func (me *bootstrapRacePacketConn) LocalAddr() net.Addr { return emptyNetAddr{} }
 func (me *bootstrapRacePacketConn) ReadFrom(b []byte) (int, net.Addr, error) {
 	r, ok := <-me.read
 	if !ok {
@@ -329,9 +330,9 @@ func (me *bootstrapRacePacketConn) ReadFrom(b []byte) (int, net.Addr, error) {
 	log.Printf("reading %q from %s", r.b, r.addr)
 	return len(r.b), r.addr, nil
 }
-func (me bootstrapRacePacketConn) SetDeadline(time.Time) error      { return nil }
-func (me bootstrapRacePacketConn) SetReadDeadline(time.Time) error  { return nil }
-func (me bootstrapRacePacketConn) SetWriteDeadline(time.Time) error { return nil }
+func (me *bootstrapRacePacketConn) SetDeadline(time.Time) error      { return nil }
+func (me *bootstrapRacePacketConn) SetReadDeadline(time.Time) error  { return nil }
+func (me *bootstrapRacePacketConn) SetWriteDeadline(time.Time) error { return nil }
 
 func (me *bootstrapRacePacketConn) WriteTo(b []byte, addr net.Addr) (int, error) {
 	me.mu.Lock()

@@ -631,7 +631,7 @@ func (s *Server) queryContext(ctx context.Context, addr Addr, q string, a *krpc.
 		remoteAddr: addr,
 		t:          tid,
 		querySender: func() error {
-			cteh := s.config.ConnectionTracking.Wait(s.connTrackEntryForAddr(addr), "send dht query", -1)
+			cteh := s.config.ConnectionTracking.Wait(ctx, s.connTrackEntryForAddr(addr), "send dht query", -1)
 			wrote, err := s.writeToNode(b, addr)
 			if wrote {
 				cteh.Done()

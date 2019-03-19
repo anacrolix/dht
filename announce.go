@@ -8,7 +8,7 @@ import (
 	"net"
 	"time"
 
-	"github.com/anacrolix/dht/krpc"
+	"github.com/anacrolix/dht/v2/krpc"
 	"github.com/anacrolix/sync"
 	"github.com/willf/bloom"
 )

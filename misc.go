@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"net"
 
-	"github.com/anacrolix/dht/krpc"
+	"github.com/anacrolix/dht/v2/krpc"
 )
 
 func mustListen(addr string) net.PacketConn {

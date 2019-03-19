@@ -14,7 +14,7 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/anacrolix/dht/krpc"
+	"github.com/anacrolix/dht/v2/krpc"
 	"github.com/anacrolix/missinggo"
 	"github.com/anacrolix/missinggo/conntrack"
 	"github.com/anacrolix/torrent/bencode"

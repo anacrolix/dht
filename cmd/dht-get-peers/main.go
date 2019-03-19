@@ -10,7 +10,7 @@ import (
 
 	_ "github.com/anacrolix/envpprof"
 
-	"github.com/anacrolix/dht"
+	"github.com/anacrolix/dht/v2"
 )
 
 var (

@@ -5,7 +5,7 @@ import (
 	"net"
 	"sync"
 
-	"github.com/anacrolix/dht"
+	"github.com/anacrolix/dht/v2"
 	"github.com/anacrolix/tagflag"
 )
 

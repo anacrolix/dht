@@ -1,6 +1,7 @@
 package dht
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/binary"
 	"errors"
@@ -577,7 +578,7 @@ func (s *Server) query(addr Addr, q string, a *krpc.MsgArgs, callback func(krpc.
 		remoteAddr: addr,
 		t:          tid,
 		querySender: func() error {
-			cteh := s.config.ConnectionTracking.Wait(s.connTrackEntryForAddr(addr), "send dht query", -1)
+			cteh := s.config.ConnectionTracking.Wait(context.TODO(), s.connTrackEntryForAddr(addr), "send dht query", -1)
 			wrote, err := s.writeToNode(b, addr)
 			if wrote {
 				cteh.Done()

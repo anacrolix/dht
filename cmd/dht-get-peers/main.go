@@ -97,7 +97,7 @@ getPeers:
 					seen[p.String()] = struct{}{}
 					fmt.Println((&net.UDPAddr{
 						IP:   p.IP[:],
-						Port: int(p.Port),
+						Port: p.Port,
 					}).String())
 				}
 			case <-quitting:

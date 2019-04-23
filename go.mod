@@ -10,6 +10,7 @@ require (
 	github.com/docopt/docopt-go v0.0.0-20180111231733-ee0de3bc6815
 	github.com/edsrzf/mmap-go v0.0.0-20170320065105-0bce6a688712 // indirect
 	github.com/pkg/errors v0.8.1
+	github.com/prometheus/client_golang v0.9.2
 	github.com/stretchr/testify v1.2.1
 	github.com/willf/bloom v2.0.3+incompatible
 	golang.org/x/net v0.0.0-20190318221613-d196dffd7c2b // indirect

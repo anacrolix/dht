@@ -197,6 +197,7 @@ func (s *Server) IPBlocklist() iplist.Ranger {
 func (s *Server) processPacket(b []byte, addr Addr) {
 	if len(b) < 2 || b[0] != 'd' {
 		// KRPC messages are bencoded dicts.
+		readNotKRPCDict.Add(1)
 		return
 	}
 	var d krpc.Msg
@@ -205,6 +206,7 @@ func (s *Server) processPacket(b []byte, addr Addr) {
 		// log.Printf("%s: received message packet with %d trailing bytes: %q", s, _err.NumUnusedBytes, b[len(b)-_err.NumUnusedBytes:])
 		expvars.Add("processed packets with trailing bytes", 1)
 	} else if err != nil {
+		readUnmarshalError.Add(1)
 		func() {
 			if se, ok := err.(*bencode.SyntaxError); ok {
 				// The message was truncated.
@@ -268,12 +270,14 @@ func (s *Server) serve() error {
 			continue
 		}
 		if missinggo.AddrPort(addr) == 0 {
+			readZeroPort.Add(1)
 			continue
 		}
 		s.mu.Lock()
 		blocked := s.ipBlocked(missinggo.AddrIP(addr))
 		s.mu.Unlock()
 		if blocked {
+			readBlocked.Add(1)
 			continue
 		}
 		s.processPacket(b[:n], NewAddr(addr))
@@ -398,6 +402,7 @@ func (s *Server) handleQuery(source Addr, m krpc.Msg) {
 		}
 		s.reply(source, m.T, r)
 	case "announce_peer":
+		readAnnouncePeer.Add(1)
 		if !s.validToken(args.Token, source) {
 			expvars.Add("received announce_peer with invalid token", 1)
 			return
@@ -521,9 +526,9 @@ func (s *Server) writeToNode(b []byte, node Addr) (wrote bool, err error) {
 	}
 	// log.Printf("writing to %s: %q", node.UDPAddr(), b)
 	n, err := s.socket.WriteTo(b, node.Raw())
-	expvars.Add("packet writes", 1)
+	writes.Add(1)
 	if err != nil {
-		expvars.Add("packet write errors", 1)
+		writeErrors.Add(1)
 		err = fmt.Errorf("error writing %d bytes to %s: %s", len(b), node, err)
 		return
 	}
@@ -703,7 +708,7 @@ func (s *Server) announcePeer(node Addr, infoHash int160, port int, token string
 			go callback(m, err)
 		}
 		if err := m.Error(); err != nil {
-			expvars.Add("announce_peer error responses received", 1)
+			announceErrors.Add(1)
 			return
 		}
 		s.mu.Lock()

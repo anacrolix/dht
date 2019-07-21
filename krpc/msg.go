@@ -5,7 +5,7 @@ import (
 )
 
 // Msg represents messages that nodes in the network send to each other as specified by the protocol.
-// They are also refered to as the KRPC messages.
+// They are also referred to as the KRPC messages.
 // There are three types of messages: QUERY, RESPONSE, ERROR
 // The message is a dictonary that is then
 // "bencoded" (serialization & compression format adopted by the BitTorrent)

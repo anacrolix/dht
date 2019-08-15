@@ -12,6 +12,5 @@ require (
 	github.com/pkg/errors v0.8.1
 	github.com/stretchr/testify v1.2.1
 	github.com/willf/bloom v2.0.3+incompatible
-	golang.org/x/net v0.0.0-20190318221613-d196dffd7c2b // indirect
-	golang.org/x/time v0.0.0-20180412165947-fbb02b2291d2
+	golang.org/x/time v0.0.0-20190308202827-9d24e82272b4
 )

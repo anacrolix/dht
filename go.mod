@@ -1,16 +1,18 @@
 module github.com/anacrolix/dht/v2
 
 require (
-	github.com/anacrolix/envpprof v0.0.0-20180404065416-323002cec2fa
-	github.com/anacrolix/missinggo v0.2.1-0.20190310234110-9fbdc9f242a8
-	github.com/anacrolix/sync v0.0.0-20180611022320-3c4cb11f5a01
-	github.com/anacrolix/tagflag v0.0.0-20180605133421-f477c8c2f14c
-	github.com/anacrolix/torrent v0.0.0-20180622074351-fefeef4ee9eb
+	github.com/anacrolix/envpprof v1.0.1
+	github.com/anacrolix/missinggo v1.2.1
+	github.com/anacrolix/sync v0.2.0
+	github.com/anacrolix/tagflag v1.0.1
+	github.com/anacrolix/torrent v1.7.1
 	github.com/bradfitz/iter v0.0.0-20190303215204-33e6a9893b0c
 	github.com/docopt/docopt-go v0.0.0-20180111231733-ee0de3bc6815
-	github.com/edsrzf/mmap-go v0.0.0-20170320065105-0bce6a688712 // indirect
 	github.com/pkg/errors v0.8.1
-	github.com/stretchr/testify v1.2.1
+	github.com/stretchr/testify v1.4.0
 	github.com/willf/bloom v2.0.3+incompatible
+	golang.org/x/sys v0.0.0-20190910064555-bbd175535a8b // indirect
 	golang.org/x/time v0.0.0-20190308202827-9d24e82272b4
 )
+
+go 1.13

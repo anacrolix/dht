@@ -247,13 +247,16 @@ func (s *Server) processPacket(b []byte, addr Addr) {
 	}
 	if d.Y == "q" {
 		expvars.Add("received queries", 1)
+		s.logger().Printf("received query %q from %v", d.Q, addr)
 		s.handleQuery(addr, d)
 		return
 	}
 	t := s.findResponseTransaction(d.T, addr)
 	if t == nil {
+		s.logger().Printf("received response for untracked transaction %q from %v", d.T, addr)
 		return
 	}
+	s.logger().Printf("received response for transaction %q from %v", d.T, addr)
 	go t.handleResponse(d)
 	if n != nil {
 		n.lastGotResponse = time.Now()
@@ -439,6 +442,7 @@ func (s *Server) sendError(addr Addr, t string, e krpc.Error) {
 	if err != nil {
 		panic(err)
 	}
+	s.logger().Printf("sending error to %v: %v", addr, e)
 	_, err = s.writeToNode(b, addr)
 	if err != nil {
 		s.config.Logger.Printf("error replying to %s: %s", addr, err)
@@ -458,6 +462,7 @@ func (s *Server) reply(addr Addr, t string, r krpc.Return) {
 	if err != nil {
 		panic(err)
 	}
+	log.Fmsg("replying to %v", addr).Log(s.logger())
 	_, err = s.writeToNode(b, addr)
 	if err != nil {
 		s.config.Logger.Printf("error replying to %s: %s", addr, err)
@@ -635,7 +640,9 @@ func (s *Server) queryContext(ctx context.Context, addr Addr, q string, a *krpc.
 	t := &Transaction{
 		remoteAddr: addr,
 		t:          tid,
-		querySender: func() error {
+		q:          q,
+		querySender: func(attempt int) error {
+			s.logger().Printf("sending query %q to %v (attempt %d/%d)", q, addr, attempt, maxTransactionSends)
 			cteh := s.config.ConnectionTracking.Wait(ctx, s.connTrackEntryForAddr(addr), "send dht query", -1)
 			wrote, err := s.writeToNode(b, addr)
 			if wrote {

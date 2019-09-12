@@ -9,12 +9,13 @@ import (
 	"net"
 	"time"
 
-	"github.com/anacrolix/dht/v2/krpc"
 	"github.com/anacrolix/log"
 	"github.com/anacrolix/missinggo"
 	"github.com/anacrolix/missinggo/conntrack"
 	"github.com/anacrolix/torrent/iplist"
 	"github.com/anacrolix/torrent/metainfo"
+
+	"github.com/anacrolix/dht/v2/krpc"
 )
 
 func defaultQueryResendDelay() time.Duration {

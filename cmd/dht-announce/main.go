@@ -5,8 +5,9 @@ import (
 	"net"
 	"sync"
 
-	"github.com/anacrolix/dht/v2"
 	"github.com/anacrolix/tagflag"
+
+	"github.com/anacrolix/dht/v2"
 )
 
 func main() {

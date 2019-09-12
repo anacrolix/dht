@@ -14,13 +14,14 @@ import (
 	"github.com/anacrolix/log"
 	"github.com/pkg/errors"
 
-	"github.com/anacrolix/dht/v2/krpc"
 	"github.com/anacrolix/missinggo"
 	"github.com/anacrolix/missinggo/conntrack"
 	"github.com/anacrolix/torrent/bencode"
 	"github.com/anacrolix/torrent/iplist"
 	"github.com/anacrolix/torrent/logonce"
 	"github.com/anacrolix/torrent/metainfo"
+
+	"github.com/anacrolix/dht/v2/krpc"
 )
 
 // A Server defines parameters for a DHT node server that is able to send

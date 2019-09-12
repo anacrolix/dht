@@ -8,9 +8,10 @@ import (
 	"os"
 	"os/signal"
 
-	"github.com/anacrolix/dht/v2"
 	_ "github.com/anacrolix/envpprof"
 	"github.com/anacrolix/tagflag"
+
+	"github.com/anacrolix/dht/v2"
 )
 
 var (

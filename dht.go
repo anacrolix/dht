@@ -5,12 +5,12 @@ import (
 	crand "crypto/rand"
 	_ "crypto/sha1"
 	"errors"
-	"log"
 	"math/rand"
 	"net"
 	"time"
 
 	"github.com/anacrolix/dht/v2/krpc"
+	"github.com/anacrolix/log"
 	"github.com/anacrolix/missinggo"
 	"github.com/anacrolix/missinggo/conntrack"
 	"github.com/anacrolix/torrent/iplist"
@@ -61,6 +61,8 @@ type ServerConfig struct {
 	// TODO: Expose Peers, to return NodeInfo for received get_peers queries.
 
 	ConnectionTracking *conntrack.Instance
+
+	Logger log.Logger
 }
 
 // ServerStats instance is returned by Server.Stats() and stores Server metrics

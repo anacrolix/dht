@@ -6,12 +6,12 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
-	"log"
 	"net"
 	"sync"
 	"text/tabwriter"
 	"time"
 
+	"github.com/anacrolix/log"
 	"github.com/pkg/errors"
 
 	"github.com/anacrolix/dht/v2/krpc"
@@ -141,6 +141,11 @@ func NewServer(c *ServerConfig) (s *Server, err error) {
 		if !c.NoSecurity && c.PublicIP != nil {
 			SecureNodeId(&c.NodeId, c.PublicIP)
 		}
+	}
+	if c.Logger.LoggerImpl == nil {
+		c.Logger = log.Default.WithFilter(func(m log.Msg) bool {
+			return !m.HasValue(log.Debug)
+		})
 	}
 	s = &Server{
 		config:      *c,
@@ -436,7 +441,7 @@ func (s *Server) sendError(addr Addr, t string, e krpc.Error) {
 	}
 	_, err = s.writeToNode(b, addr)
 	if err != nil {
-		log.Printf("error replying to %s: %s", addr, err)
+		s.config.Logger.Printf("error replying to %s: %s", addr, err)
 	}
 }
 
@@ -455,7 +460,7 @@ func (s *Server) reply(addr Addr, t string, r krpc.Return) {
 	}
 	_, err = s.writeToNode(b, addr)
 	if err != nil {
-		log.Printf("error replying to %s: %s", addr, err)
+		s.config.Logger.Printf("error replying to %s: %s", addr, err)
 	}
 }
 
@@ -524,7 +529,7 @@ func (s *Server) writeToNode(b []byte, node Addr) (wrote bool, err error) {
 			return
 		}
 	}
-	// log.Printf("writing to %s: %q", node.UDPAddr(), b)
+	//s.config.Logger.WithValues(log.Debug).Printf("writing to %s: %q", node.String(), b)
 	n, err := s.socket.WriteTo(b, node.Raw())
 	writes.Add(1)
 	if err != nil {
@@ -900,4 +905,8 @@ func (s *Server) AddNodesFromFile(fileName string) (added int, err error) {
 		}
 	}
 	return
+}
+
+func (s *Server) logger() log.Logger {
+	return s.config.Logger
 }

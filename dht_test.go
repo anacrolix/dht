@@ -4,7 +4,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"io"
-	"log"
 	"math/big"
 	"net"
 	"testing"
@@ -18,6 +17,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/anacrolix/dht/v2/krpc"
+	"github.com/anacrolix/log"
 )
 
 func TestSetNilBigInt(t *testing.T) {
@@ -46,7 +46,6 @@ const zeroID = "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00
 var testIDs []int160
 
 func init() {
-	log.SetFlags(log.Flags() | log.Lshortfile)
 	for _, s := range []string{
 		zeroID,
 		"\x03" + zeroID[1:],
@@ -103,12 +102,14 @@ func TestPing(t *testing.T) {
 	srv, err := NewServer(&ServerConfig{
 		Conn:       recvConn,
 		NoSecurity: true,
+		Logger:     log.Default,
 	})
 	require.NoError(t, err)
 	defer srv.Close()
 	srv0, err := NewServer(&ServerConfig{
 		Conn:          mustListen("127.0.0.1:5681"),
 		StartingNodes: addrResolver("127.0.0.1:5680"),
+		Logger:        log.Default,
 	})
 	require.NoError(t, err)
 	defer srv0.Close()

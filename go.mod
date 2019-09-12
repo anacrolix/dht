@@ -2,6 +2,7 @@ module github.com/anacrolix/dht/v2
 
 require (
 	github.com/anacrolix/envpprof v1.0.1
+	github.com/anacrolix/log v0.3.0
 	github.com/anacrolix/missinggo v1.2.1
 	github.com/anacrolix/sync v0.2.0
 	github.com/anacrolix/tagflag v1.0.1

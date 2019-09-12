@@ -3,7 +3,6 @@ package dht
 import (
 	"crypto/rand"
 	"encoding/hex"
-	"log"
 	"net"
 	"testing"
 
@@ -45,7 +44,6 @@ func TestDHTSec(t *testing.T) {
 		require.NoError(t, err)
 		var id [20]byte
 		require.Equal(t, 20, copy(id[:], _id))
-		log.Printf("%q %q", id, _id)
 		secure := NodeIdSecure(id, ip)
 		assert.Equal(t, case_.valid, secure, "%v", case_)
 		if !secure {

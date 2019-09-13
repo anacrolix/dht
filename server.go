@@ -143,11 +143,22 @@ func NewServer(c *ServerConfig) (s *Server, err error) {
 			SecureNodeId(&c.NodeId, c.PublicIP)
 		}
 	}
+	// If Logger is empty, emulate the old behaviour: Everything is logged to the default location,
+	// and there are no debug messages.
 	if c.Logger.LoggerImpl == nil {
 		c.Logger = log.Default.WithFilter(func(m log.Msg) bool {
 			return !m.HasValue(log.Debug)
 		})
 	}
+	// Add log.Debug by default.
+	c.Logger = c.Logger.WithMap(func(m log.Msg) log.Msg {
+		var l log.Level
+		if m.GetValueByType(&l) {
+			return m
+		}
+		return m.WithValues(log.Debug)
+	})
+
 	s = &Server{
 		config:      *c,
 		ipBlockList: c.IPBlocklist,

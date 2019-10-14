@@ -13,6 +13,7 @@ import (
 
 	"github.com/anacrolix/log"
 	"github.com/pkg/errors"
+	"golang.org/x/time/rate"
 
 	"github.com/anacrolix/missinggo"
 	"github.com/anacrolix/missinggo/conntrack"
@@ -44,6 +45,7 @@ type Server struct {
 	tokenServer  tokenServer // Manages tokens we issue to our queriers.
 	config       ServerConfig
 	stats        ServerStats
+	sendLimit    *rate.Limiter
 }
 
 func (s *Server) numGoodNodes() (num int) {
@@ -171,6 +173,7 @@ func NewServer(c *ServerConfig) (s *Server, err error) {
 		table: table{
 			k: 8,
 		},
+		sendLimit: defaultSendLimiter,
 	}
 	if s.config.ConnectionTracking == nil {
 		s.config.ConnectionTracking = conntrack.NewInstance()
@@ -195,7 +198,7 @@ func (s *Server) serveUntilClosed() {
 	}
 }
 
-// Returns a description of the Server. Python repr-style.
+// Returns a description of the Server.
 func (s *Server) String() string {
 	return fmt.Sprintf("dht server on %s", s.socket.LocalAddr())
 }
@@ -454,15 +457,14 @@ func (s *Server) sendError(addr Addr, t string, e krpc.Error) {
 	if err != nil {
 		panic(err)
 	}
-	s.logger().Printf("sending error to %v: %v", addr, e)
-	_, err = s.writeToNode(b, addr)
+	s.logger().Printf("sending error to %q: %v", addr, e)
+	_, err = s.writeToNode(context.Background(), b, addr, false)
 	if err != nil {
-		s.config.Logger.Printf("error replying to %s: %s", addr, err)
+		s.logger().Printf("error replying to %q: %v", addr, err)
 	}
 }
 
 func (s *Server) reply(addr Addr, t string, r krpc.Return) {
-	expvars.Add("replied to peer", 1)
 	r.ID = s.id.AsByteArray()
 	m := krpc.Msg{
 		T:  t,
@@ -474,10 +476,13 @@ func (s *Server) reply(addr Addr, t string, r krpc.Return) {
 	if err != nil {
 		panic(err)
 	}
-	log.Fmsg("replying to %v", addr).Log(s.logger())
-	_, err = s.writeToNode(b, addr)
+	log.Fmsg("replying to %q", addr).Log(s.logger())
+	wrote, err := s.writeToNode(context.Background(), b, addr, false)
 	if err != nil {
 		s.config.Logger.Printf("error replying to %s: %s", addr, err)
+	}
+	if wrote {
+		expvars.Add("replied to peer", 1)
 	}
 }
 
@@ -539,7 +544,7 @@ func (s *Server) nodeErr(n *node) error {
 	return nil
 }
 
-func (s *Server) writeToNode(b []byte, node Addr) (wrote bool, err error) {
+func (s *Server) writeToNode(ctx context.Context, b []byte, node Addr, wait bool) (wrote bool, err error) {
 	if list := s.ipBlockList; list != nil {
 		if r, ok := list.Lookup(node.IP()); ok {
 			err = fmt.Errorf("write to %s blocked: %s", node, r.Description)
@@ -547,6 +552,16 @@ func (s *Server) writeToNode(b []byte, node Addr) (wrote bool, err error) {
 		}
 	}
 	//s.config.Logger.WithValues(log.Debug).Printf("writing to %s: %q", node.String(), b)
+	if wait {
+		err = s.sendLimit.Wait(ctx)
+		if err != nil {
+			return false, err
+		}
+	} else {
+		if !s.sendLimit.Allow() {
+			return false, errors.New("rate limit exceeded")
+		}
+	}
 	n, err := s.socket.WriteTo(b, node.Raw())
 	writes.Add(1)
 	if err != nil {
@@ -656,7 +671,7 @@ func (s *Server) queryContext(ctx context.Context, addr Addr, q string, a *krpc.
 		querySender: func(attempt int) error {
 			s.logger().Printf("sending query %q to %v (attempt %d/%d)", q, addr, attempt, maxTransactionSends)
 			cteh := s.config.ConnectionTracking.Wait(ctx, s.connTrackEntryForAddr(addr), "send dht query", -1)
-			wrote, err := s.writeToNode(b, addr)
+			wrote, err := s.writeToNode(ctx, b, addr, attempt == 1)
 			if wrote {
 				cteh.Done()
 			} else {

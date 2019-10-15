@@ -5,6 +5,7 @@ import (
 	"net"
 	"sync"
 
+	_ "github.com/anacrolix/envpprof"
 	"github.com/anacrolix/tagflag"
 
 	"github.com/anacrolix/dht/v2"

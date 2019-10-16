@@ -7,20 +7,19 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"sync"
 	"text/tabwriter"
 	"time"
 
 	"github.com/anacrolix/log"
-	"github.com/pkg/errors"
-	"golang.org/x/time/rate"
-
 	"github.com/anacrolix/missinggo"
 	"github.com/anacrolix/missinggo/conntrack"
+	"github.com/anacrolix/sync"
 	"github.com/anacrolix/torrent/bencode"
 	"github.com/anacrolix/torrent/iplist"
 	"github.com/anacrolix/torrent/logonce"
 	"github.com/anacrolix/torrent/metainfo"
+	"github.com/pkg/errors"
+	"golang.org/x/time/rate"
 
 	"github.com/anacrolix/dht/v2/krpc"
 )

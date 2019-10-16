@@ -1,10 +1,10 @@
 package dht
 
 import (
-	"sync"
 	"time"
 
 	"github.com/anacrolix/log"
+	"github.com/anacrolix/sync"
 
 	"github.com/anacrolix/dht/v2/krpc"
 )

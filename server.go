@@ -32,8 +32,9 @@ import (
 // is unable to function properly. Use `NewServer(nil)` to initialize a
 // default node.
 type Server struct {
-	id     int160
-	socket net.PacketConn
+	id          int160
+	socket      net.PacketConn
+	resendDelay func() time.Duration
 
 	mu           sync.RWMutex
 	transactions map[transactionKey]*Transaction
@@ -181,6 +182,10 @@ func NewServer(c *ServerConfig) (s *Server, err error) {
 	s.socket = c.Conn
 	s.id = int160FromByteArray(c.NodeId)
 	s.table.rootID = s.id
+	s.resendDelay = s.config.QueryResendDelay
+	if s.resendDelay == nil {
+		s.resendDelay = defaultQueryResendDelay
+	}
 	go s.serveUntilClosed()
 	return
 }
@@ -265,8 +270,12 @@ func (s *Server) processPacket(b []byte, addr Addr) {
 		s.handleQuery(addr, d)
 		return
 	}
-	t := s.findResponseTransaction(d.T, addr)
-	if t == nil {
+	tk := transactionKey{
+		RemoteAddr: addr.String(),
+		T:          d.T,
+	}
+	t, ok := s.transactions[tk]
+	if !ok {
 		s.logger().Printf("received response for untracked transaction %q from %v", d.T, addr)
 		return
 	}
@@ -276,7 +285,8 @@ func (s *Server) processPacket(b []byte, addr Addr) {
 		n.lastGotResponse = time.Now()
 		n.consecutiveFailures = 0
 	}
-	s.deleteTransaction(t)
+	// Ensure we don't send more than one response.
+	s.deleteTransaction(tk)
 }
 
 func (s *Server) serve() error {
@@ -546,7 +556,7 @@ func (s *Server) nodeErr(n *node) error {
 func (s *Server) writeToNode(ctx context.Context, b []byte, node Addr, wait bool) (wrote bool, err error) {
 	if list := s.ipBlockList; list != nil {
 		if r, ok := list.Lookup(node.IP()); ok {
-			err = fmt.Errorf("write to %s blocked: %s", node, r.Description)
+			err = fmt.Errorf("write to %v blocked by %v", node, r)
 			return
 		}
 	}
@@ -576,12 +586,6 @@ func (s *Server) writeToNode(ctx context.Context, b []byte, node Addr, wait bool
 	return
 }
 
-func (s *Server) findResponseTransaction(transactionID string, sourceNode Addr) *Transaction {
-	return s.transactions[transactionKey{
-		sourceNode.String(),
-		transactionID}]
-}
-
 func (s *Server) nextTransactionID() string {
 	var b [binary.MaxVarintLen64]byte
 	n := binary.PutUvarint(b[:], s.nextT)
@@ -589,21 +593,15 @@ func (s *Server) nextTransactionID() string {
 	return string(b[:n])
 }
 
-func (s *Server) deleteTransaction(t *Transaction) {
-	delete(s.transactions, t.key())
+func (s *Server) deleteTransaction(k transactionKey) {
+	delete(s.transactions, k)
 }
 
-func (s *Server) deleteTransactionUnlocked(t *Transaction) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.deleteTransaction(t)
-}
-
-func (s *Server) addTransaction(t *Transaction) {
-	if _, ok := s.transactions[t.key()]; ok {
+func (s *Server) addTransaction(k transactionKey, t *Transaction) {
+	if _, ok := s.transactions[k]; ok {
 		panic("transaction not unique")
 	}
-	s.transactions[t.key()] = t
+	s.transactions[k] = t
 }
 
 // ID returns the 20-byte server ID. This is the ID used to communicate with the
@@ -638,87 +636,105 @@ func (s *Server) query(addr Addr, q string, a *krpc.MsgArgs, callback func(krpc.
 	return nil
 }
 
-func (s *Server) queryContext(ctx context.Context, addr Addr, q string, a *krpc.MsgArgs) (reply krpc.Msg, err error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	tid := s.nextTransactionID()
+func (s *Server) makeQueryBytes(q string, a *krpc.MsgArgs, t string) []byte {
 	if a == nil {
 		a = &krpc.MsgArgs{}
 	}
 	a.ID = s.ID()
 	m := krpc.Msg{
-		T: tid,
+		T: t,
 		Y: "q",
 		Q: q,
 		A: a,
 	}
-	// BEP 43. Outgoing queries from passive nodes should contain "ro":1 in
-	// the top level dictionary.
+	// BEP 43. Outgoing queries from passive nodes should contain "ro":1 in the top level
+	// dictionary.
 	if s.config.Passive {
 		m.ReadOnly = true
 	}
 	b, err := bencode.Marshal(m)
 	if err != nil {
-		return
+		panic(err)
 	}
+	return b
+}
+
+func (s *Server) queryContext(ctx context.Context, addr Addr, q string, a *krpc.MsgArgs) (reply krpc.Msg, err error) {
+	defer func(started time.Time) {
+		s.logger().WithValues(log.Debug).Printf("queryContext returned after %v (err=%v, reply.Y=%v, reply.E=%v)", time.Since(started), err, reply.Y, reply.E)
+	}(time.Now())
 	replyChan := make(chan krpc.Msg, 1)
-	errChan := make(chan error, 1)
 	t := &Transaction{
-		remoteAddr: addr,
-		t:          tid,
-		q:          q,
-		querySender: func(attempt int) error {
-			s.logger().Printf("sending query %q to %v (attempt %d/%d)", q, addr, attempt, maxTransactionSends)
-			cteh := s.config.ConnectionTracking.Wait(ctx, s.connTrackEntryForAddr(addr), "send dht query", -1)
-			wrote, err := s.writeToNode(ctx, b, addr, attempt == 1)
-			if wrote {
-				cteh.Done()
-			} else {
-				cteh.Forget()
-			}
-			return err
-		},
 		onResponse: func(m krpc.Msg) {
 			replyChan <- m
 		},
-		onTimeout: func() {
-			errChan <- errors.New("query timed out")
-		},
-		onSendError: func(err error) {
-			errChan <- fmt.Errorf("error sending query: %s", err)
-		},
-		queryResendDelay: func() time.Duration {
-			if s.config.QueryResendDelay != nil {
-				return s.config.QueryResendDelay()
-			}
-			return defaultQueryResendDelay()
-		},
 	}
+	tk := transactionKey{
+		RemoteAddr: addr.String(),
+	}
+	s.mu.Lock()
+	tid := s.nextTransactionID()
 	s.stats.OutboundQueriesAttempted++
-	t.mu.Lock()
-	t.startResendTimer()
-	t.mu.Unlock()
-	s.addTransaction(t)
+	tk.T = tid
+	s.addTransaction(tk, t)
+	s.mu.Unlock()
+	writes := 0
+	cteh := s.config.ConnectionTracking.Wait(ctx, s.connTrackEntryForAddr(addr), "send dht query", -1)
+	sendErr := make(chan error, 1)
 	defer func() {
-		if err != nil {
-			for _, n := range s.table.addrNodes(addr) {
-				n.consecutiveFailures++
-			}
+		<-sendErr
+		if writes > 0 {
+			cteh.Done()
+		} else {
+			cteh.Forget()
 		}
 	}()
-	defer s.deleteTransaction(t)
-	s.mu.Unlock()
-	go expvars.Add(fmt.Sprintf("outbound %s queries", q), 1)
-	defer s.mu.Lock()
+	sendCtx, cancelSend := context.WithCancel(ctx)
+	defer cancelSend()
+	go s.transactionQuerySender(sendCtx, sendErr, s.makeQueryBytes(q, a, tid), &writes, addr)
+	expvars.Add(fmt.Sprintf("outbound %s queries", q), 1)
 	select {
 	case reply = <-replyChan:
-		return
 	case <-ctx.Done():
 		err = ctx.Err()
-		return
-	case err = <-errChan:
+	case err = <-sendErr:
+	}
+	s.mu.Lock()
+	s.deleteTransaction(tk)
+	if err != nil {
+		for _, n := range s.table.addrNodes(addr) {
+			n.consecutiveFailures++
+		}
+	}
+	s.mu.Unlock()
+	return
+}
+
+func (s *Server) transactionQuerySender(sendCtx context.Context, sendErr chan<- error, b []byte, writes *int, addr Addr) {
+	defer close(sendErr)
+	err := transactionSender(
+		sendCtx,
+		func() error {
+			wrote, err := s.writeToNode(sendCtx, b, addr, *writes == 0)
+			if wrote {
+				(*writes)++
+			}
+			return err
+		},
+		s.resendDelay,
+		maxTransactionSends,
+	)
+	if err != nil {
+		sendErr <- err
 		return
 	}
+	select {
+	case <-sendCtx.Done():
+		sendErr <- sendCtx.Err()
+	case <-time.After(s.resendDelay()):
+		sendErr <- errors.New("timed out")
+	}
+
 }
 
 // Sends a ping query to the address given.

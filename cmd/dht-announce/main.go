@@ -13,6 +13,7 @@ import (
 
 func main() {
 	var flags = struct {
+		Port int
 		tagflag.StartPos
 		Infohash [][20]byte
 	}{}
@@ -25,7 +26,7 @@ func main() {
 	wg := sync.WaitGroup{}
 	addrs := make(map[[20]byte]map[string]struct{}, len(flags.Infohash))
 	for _, ih := range flags.Infohash {
-		a, err := s.Announce(ih, 0, true)
+		a, err := s.Announce(ih, flags.Port, false)
 		if err != nil {
 			log.Printf("error announcing %s: %s", ih, err)
 			continue

@@ -55,7 +55,7 @@ type ServerConfig struct {
 	// the default handlers.
 	OnQuery func(query *krpc.Msg, source net.Addr) (propagate bool)
 	// Called when a peer successfully announces to us.
-	OnAnnouncePeer func(infoHash metainfo.Hash, peer Peer)
+	OnAnnouncePeer func(infoHash metainfo.Hash, ip net.IP, port int, portOk bool)
 	// How long to wait before resending queries that haven't received a
 	// response. Defaults to a random value between 4.5 and 5.5s.
 	QueryResendDelay func() time.Duration

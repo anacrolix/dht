@@ -441,14 +441,17 @@ func (s *Server) handleQuery(source Addr, m krpc.Msg) {
 		}
 		expvars.Add("received announce_peer with valid token", 1)
 		if h := s.config.OnAnnouncePeer; h != nil {
-			p := Peer{
-				IP:   source.IP(),
-				Port: args.Port,
+			var port int
+			portOk := false
+			if args.Port != nil {
+				port = *args.Port
+				portOk = true
 			}
 			if args.ImpliedPort {
-				p.Port = source.Port()
+				port = source.Port()
+				portOk = true
 			}
-			go h(metainfo.Hash(args.InfoHash), p)
+			go h(metainfo.Hash(args.InfoHash), source.IP(), port, portOk)
 		}
 		s.reply(source, m.T, krpc.Return{})
 	default:
@@ -755,7 +758,7 @@ func (s *Server) announcePeer(node Addr, infoHash int160, port int, token string
 	return s.query(node, "announce_peer", &krpc.MsgArgs{
 		ImpliedPort: impliedPort,
 		InfoHash:    infoHash.AsByteArray(),
-		Port:        port,
+		Port:        &port,
 		Token:       token,
 	}, func(m krpc.Msg, err error) {
 		if callback != nil {

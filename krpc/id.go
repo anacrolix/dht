@@ -8,10 +8,12 @@ import (
 
 type ID [20]byte
 
-var _ interface {
-	bencode.Marshaler
-	bencode.Unmarshaler
-} = (*ID)(nil)
+var (
+	_ interface {
+		bencode.Unmarshaler
+	} = (*ID)(nil)
+	_ bencode.Marshaler = ID{}
+)
 
 func IdFromString(s string) (id ID) {
 	if n := copy(id[:], s); n != 20 {
@@ -20,7 +22,7 @@ func IdFromString(s string) (id ID) {
 	return
 }
 
-func (id *ID) MarshalBencode() ([]byte, error) {
+func (id ID) MarshalBencode() ([]byte, error) {
 	return []byte("20:" + string(id[:])), nil
 }
 

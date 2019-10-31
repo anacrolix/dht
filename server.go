@@ -19,7 +19,6 @@ import (
 	"github.com/anacrolix/torrent/logonce"
 	"github.com/anacrolix/torrent/metainfo"
 	"github.com/pkg/errors"
-	"golang.org/x/time/rate"
 
 	"github.com/anacrolix/dht/v2/krpc"
 )
@@ -45,7 +44,10 @@ type Server struct {
 	tokenServer  tokenServer // Manages tokens we issue to our queriers.
 	config       ServerConfig
 	stats        ServerStats
-	sendLimit    *rate.Limiter
+	sendLimit    interface {
+		Wait(ctx context.Context) error
+		Allow() bool
+	}
 }
 
 func (s *Server) numGoodNodes() (num int) {

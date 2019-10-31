@@ -18,3 +18,5 @@ require (
 )
 
 go 1.13
+
+replace github.com/lukechampine/stm => github.com/anacrolix/stm v0.0.0-20191031052127-d04075d6f23e

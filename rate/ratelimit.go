@@ -67,7 +67,7 @@ func (rl *Limiter) tokenGenerator(interval time.Duration) {
 			if newCur != cur {
 				tx.Set(rl.cur, newCur)
 			}
-			tx.Set(rl.lastAdd, now)
+			tx.Set(rl.lastAdd, lastAdd.Add(interval*time.Duration(available)))
 		})
 	}
 }

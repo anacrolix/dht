@@ -104,6 +104,7 @@ func (s *Server) Announce(infoHash [20]byte, port int, impliedPort bool) (*Annou
 }
 
 func (a *Announce) closer() {
+	defer a.cancel()
 	stm.Atomically(func(tx *stm.Tx) {
 		if tx.Get(a.doneVar).(bool) {
 			return
@@ -111,7 +112,6 @@ func (a *Announce) closer() {
 		tx.Assert(tx.Get(a.pending).(int) == 0)
 		tx.Assert(tx.Get(a.nodesPendingContact).(stmutil.Lenner).Len() == 0)
 	})
-	a.cancel()
 }
 
 func validNodeAddr(addr net.Addr) bool {

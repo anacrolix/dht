@@ -1,14 +1,14 @@
 package dht
 
 import (
-	"container/heap"
 	"testing"
 
+	"github.com/anacrolix/missinggo/v2/iter"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestNodesByDistance(t *testing.T) {
-	var a nodesByDistance
+	a := nodesByDistance(int160{})
 	amis := []addrMaybeId{
 		addrMaybeId{},
 		addrMaybeId{Id: new(int160)},
@@ -24,7 +24,7 @@ func TestNodesByDistance(t *testing.T) {
 		}()},
 	}
 	push := func(i int) {
-		heap.Push(&a, amis[i])
+		a = a.Add(amis[i])
 	}
 	push(2)
 	push(0)
@@ -32,12 +32,14 @@ func TestNodesByDistance(t *testing.T) {
 	push(0)
 	push(1)
 	pop := func(i int) {
-		assert.Equal(t, amis[i], a.nis[0])
-		assert.Equal(t, amis[i], heap.Pop(&a))
+		first, ok := iter.First(a.Iter)
+		assert.True(t, ok)
+		assert.Equal(t, amis[i], first)
+		a = a.Delete(first)
 	}
 	pop(1)
 	pop(2)
 	pop(3)
 	pop(0)
-	pop(0)
+	assert.EqualValues(t, 0, a.Len())
 }

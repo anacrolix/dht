@@ -11,7 +11,7 @@ import (
 
 	"github.com/anacrolix/log"
 	"github.com/anacrolix/missinggo"
-	"github.com/anacrolix/missinggo/conntrack"
+	"github.com/anacrolix/missinggo/v2/conntrack"
 	"github.com/anacrolix/torrent/iplist"
 	"github.com/anacrolix/torrent/metainfo"
 

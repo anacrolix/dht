@@ -38,10 +38,14 @@ github.com/anacrolix/missinggo/perf v1.0.0 h1:7ZOGYziGEBytW49+KmYGTaNfnwUqP1HBsy
 github.com/anacrolix/missinggo/perf v1.0.0/go.mod h1:ljAFWkBuzkO12MQclXzZrosP5urunoLS0Cbvb4V0uMQ=
 github.com/anacrolix/missinggo/v2 v2.2.0 h1:JUZh/gF/F4hXejj6I71wuO92MQDwQdLM3yRgYqTlmCg=
 github.com/anacrolix/missinggo/v2 v2.2.0/go.mod h1:o0jgJoYOyaoYQ4E2ZMISVa9c88BbUBVQQW4QeRkNCGY=
+github.com/anacrolix/missinggo/v2 v2.2.1-0.20191101011458-82a06684e1c9 h1:UHbhazB778Q10vLLC+QxTVxouI/vQ30S5dsFh0McZpo=
+github.com/anacrolix/missinggo/v2 v2.2.1-0.20191101011458-82a06684e1c9/go.mod h1:exO54zGN3NlmbfgJ3DlmyddQFSwfQbjHVT+7w8mHDew=
 github.com/anacrolix/mmsg v0.0.0-20180515031531-a4a3ba1fc8bb/go.mod h1:x2/ErsYUmT77kezS63+wzZp8E3byYB0gzirM/WMBLfw=
 github.com/anacrolix/mmsg v1.0.0/go.mod h1:x8kRaJY/dCrY9Al0PEcj1mb/uFHwP6GCJ9fLl4thEPc=
 github.com/anacrolix/stm v0.0.0-20191031052127-d04075d6f23e h1:YeX6qcKZDpQaJN0M2nssJzKBoPpIA88Wgc+iK7F4QKY=
 github.com/anacrolix/stm v0.0.0-20191031052127-d04075d6f23e/go.mod h1:wTLsd5FC9rts7GkMpsPGk64CIuea+03yaLAp19Jmlg8=
+github.com/anacrolix/stm v0.0.0-20191102104501-9bf56d22767b h1:R7jT5ClYKNAB7E4x3Tj07FXNtm0GF9OzUfQ1uQjxaEY=
+github.com/anacrolix/stm v0.0.0-20191102104501-9bf56d22767b/go.mod h1:+LgX5tLMH/MmapICSjBO4LY1iIMSuySbhHlquq5cjEs=
 github.com/anacrolix/sync v0.0.0-20171108081538-eee974e4f8c1/go.mod h1:+u91KiUuf0lyILI6x3n/XrW7iFROCZCG+TjgK8nW52w=
 github.com/anacrolix/sync v0.0.0-20180611022320-3c4cb11f5a01 h1:14t4kCoWXaUXrHErRD0bLMNolOE50nyPA0gO8+J3hP8=
 github.com/anacrolix/sync v0.0.0-20180611022320-3c4cb11f5a01/go.mod h1:+u91KiUuf0lyILI6x3n/XrW7iFROCZCG+TjgK8nW52w=

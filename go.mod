@@ -4,7 +4,7 @@ require (
 	github.com/anacrolix/envpprof v1.0.1
 	github.com/anacrolix/log v0.3.1-0.20190913000754-831e4ffe0174
 	github.com/anacrolix/missinggo v1.2.1
-	github.com/anacrolix/missinggo/v2 v2.2.0
+	github.com/anacrolix/missinggo/v2 v2.2.1-0.20191101011458-82a06684e1c9
 	github.com/anacrolix/sync v0.2.0
 	github.com/anacrolix/tagflag v1.0.1
 	github.com/anacrolix/torrent v1.7.1
@@ -20,4 +20,4 @@ require (
 
 go 1.13
 
-replace github.com/lukechampine/stm => github.com/anacrolix/stm v0.0.0-20191031052127-d04075d6f23e
+replace github.com/lukechampine/stm => github.com/anacrolix/stm v0.0.0-20191102104501-9bf56d22767b

@@ -20,7 +20,7 @@ import (
 	"github.com/anacrolix/torrent/metainfo"
 	"github.com/pkg/errors"
 
-	"github.com/lukechampine/stm"
+	"github.com/anacrolix/stm"
 
 	"github.com/anacrolix/dht/v2/krpc"
 )

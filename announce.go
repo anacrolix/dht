@@ -8,8 +8,8 @@ import (
 
 	"github.com/anacrolix/missinggo/v2/conntrack"
 	"github.com/anacrolix/missinggo/v2/iter"
-	"github.com/lukechampine/stm"
-	"github.com/lukechampine/stm/stmutil"
+	"github.com/anacrolix/stm"
+	"github.com/anacrolix/stm/stmutil"
 	"github.com/willf/bloom"
 
 	"github.com/anacrolix/dht/v2/krpc"

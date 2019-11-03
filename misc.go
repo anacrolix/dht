@@ -6,7 +6,7 @@ import (
 	"net"
 
 	"github.com/anacrolix/missinggo/v2"
-	"github.com/lukechampine/stm/stmutil"
+	"github.com/anacrolix/stm/stmutil"
 
 	"github.com/anacrolix/dht/v2/krpc"
 )

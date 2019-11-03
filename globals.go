@@ -1,7 +1,7 @@
 package dht
 
 import (
-	"github.com/lukechampine/stm/rate"
+	"github.com/anacrolix/stm/rate"
 )
 
 var defaultSendLimiter = rate.NewLimiter(25, 25)

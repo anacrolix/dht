@@ -2,8 +2,10 @@ package dht
 
 import (
 	"fmt"
+	"hash/fnv"
 	"net"
 
+	"github.com/anacrolix/missinggo/v2"
 	"github.com/lukechampine/stm/stmutil"
 
 	"github.com/anacrolix/dht/v2/krpc"
@@ -39,14 +41,23 @@ func (me addrMaybeId) String() string {
 
 func nodesByDistance(target int160) stmutil.Settish {
 	return stmutil.NewSortedSet(func(_l, _r interface{}) bool {
+		var ml missinggo.MultiLess
 		l := _l.(addrMaybeId)
-		if l.Id == nil {
-			return false
-		}
 		r := _r.(addrMaybeId)
-		if r.Id == nil {
-			return true
+		ml.NextBool(r.Id == nil, l.Id == nil)
+		if l.Id != nil && r.Id != nil {
+			d := distance(*l.Id, target).Cmp(distance(*r.Id, target))
+			ml.StrictNext(d == 0, d < 0)
 		}
-		return distance(*l.Id, target).Cmp(distance(*r.Id, target)) < 0
+		hashString := func(s string) uint64 {
+			h := fnv.New64a()
+			h.Write([]byte(s))
+			return h.Sum64()
+		}
+		lh := hashString(l.Addr.String())
+		rh := hashString(r.Addr.String())
+		ml.StrictNext(lh == rh, lh < rh)
+		//ml.StrictNext(l.Addr.String() == r.Addr.String(), l.Addr.String() < r.Addr.String())
+		return ml.Less()
 	})
 }

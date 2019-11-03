@@ -93,11 +93,11 @@ func (s *Server) Announce(infoHash [20]byte, port int, impliedPort bool) (*Annou
 			}
 		}
 	}()
-	stm.Atomically(func(tx *stm.Tx) {
-		for _, n := range startAddrs {
+	for _, n := range startAddrs {
+		stm.Atomically(func(tx *stm.Tx) {
 			a.pendContact(n, tx)
-		}
-	})
+		})
+	}
 	go a.closer()
 	go a.nodeContactor()
 	return a, nil
@@ -235,21 +235,15 @@ func (a *Announce) nodeContactor() {
 			}
 			npc := tx.Get(a.nodesPendingContact).(stmutil.Settish)
 			first, ok := iter.First(npc.Iter)
-			if !ok {
-				tx.Retry()
-			}
+			tx.Assert(ok)
 			addr := first.(addrMaybeId).Addr
 			tx.Set(a.nodesPendingContact, npc.Delete(first))
 			if !a.shouldContact(addr, tx) {
 				tx.Return(txResT{})
 			}
 			cteh := a.server.config.ConnectionTracking.Allow(tx, a.server.connTrackEntryForAddr(NewAddr(addr.UDP())), "announce get_peers", -1)
-			if cteh == nil {
-				tx.Retry()
-			}
-			if !a.server.sendLimit.AllowStm(tx) {
-				tx.Retry()
-			}
+			tx.Assert(cteh != nil)
+			tx.Assert(a.server.sendLimit.AllowStm(tx))
 			tx.Set(a.numContacted, tx.Get(a.numContacted).(int)+1)
 			tx.Set(a.pending, tx.Get(a.pending).(int)+1)
 			tx.Set(a.triedAddrs, tx.Get(a.triedAddrs).(stmutil.Settish).Add(addr.String()))

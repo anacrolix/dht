@@ -49,6 +49,8 @@ func nodesByDistance(target int160) stmutil.Settish {
 			d := distance(*l.Id, target).Cmp(distance(*r.Id, target))
 			ml.StrictNext(d == 0, d < 0)
 		}
+		// TODO: Use bytes/hash when it's available (go1.14?), and have a unique seed for each
+		// instance.
 		hashString := func(s string) uint64 {
 			h := fnv.New64a()
 			h.Write([]byte(s))

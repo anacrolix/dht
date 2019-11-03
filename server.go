@@ -131,15 +131,19 @@ func (s *Server) Addr() net.Addr {
 	return s.socket.LocalAddr()
 }
 
+func NewDefaultServerConfig() *ServerConfig {
+	return &ServerConfig{
+		Conn:               mustListen(":0"),
+		NoSecurity:         true,
+		StartingNodes:      GlobalBootstrapAddrs,
+		ConnectionTracking: conntrack.NewInstance(),
+	}
+}
+
 // NewServer initializes a new DHT node server.
 func NewServer(c *ServerConfig) (s *Server, err error) {
 	if c == nil {
-		c = &ServerConfig{
-			Conn:               mustListen(":0"),
-			NoSecurity:         true,
-			StartingNodes:      GlobalBootstrapAddrs,
-			ConnectionTracking: conntrack.NewInstance(),
-		}
+		c = NewDefaultServerConfig()
 	}
 	if c.Conn == nil {
 		return nil, errors.New("non-nil Conn required")

@@ -1,9 +1,11 @@
 package main
 
 import (
-	"log"
 	"net"
+	"os"
 	"sync"
+
+	"github.com/anacrolix/log"
 
 	_ "github.com/anacrolix/envpprof"
 	"github.com/anacrolix/tagflag"
@@ -12,15 +14,30 @@ import (
 )
 
 func main() {
+	code := mainErr()
+	if code != 0 {
+		os.Exit(code)
+	}
+}
+
+func mainErr() int {
 	var flags = struct {
-		Port int
+		Port  int
+		Debug bool
 		tagflag.StartPos
 		Infohash [][20]byte
 	}{}
 	tagflag.Parse(&flags)
-	s, err := dht.NewServer(nil)
+	s, err := dht.NewServer(func() *dht.ServerConfig {
+		sc := dht.NewDefaultServerConfig()
+		if flags.Debug {
+			sc.Logger = log.Default
+		}
+		return sc
+	}())
 	if err != nil {
-		log.Fatalf("error creating server: %s", err)
+		log.Printf("error creating server: %s", err)
+		return 1
 	}
 	defer s.Close()
 	wg := sync.WaitGroup{}
@@ -58,4 +75,5 @@ func main() {
 		}
 		log.Printf("%x: %d addrs %d distinct ips", ih, len(addrs[ih]), len(ips))
 	}
+	return 0
 }

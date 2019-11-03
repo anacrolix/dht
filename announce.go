@@ -168,13 +168,13 @@ func (a *Announce) maybeAnnouncePeer(to Addr, token *string, peerId *krpc.ID) {
 
 func (a *Announce) getPeers(addr Addr, cteh *conntrack.EntryHandle) {
 	// log.Printf("sending get_peers to %v", node)
-	m, writes, _ := a.server.getPeers(context.TODO(), addr, a.infoHash)
+	m, writes, err := a.server.getPeers(context.TODO(), addr, a.infoHash)
 	if writes == 0 {
 		cteh.Forget()
 	} else {
 		cteh.Done()
 	}
-	// log.Print(err)
+	a.server.logger().Printf("Announce.server.getPeers result: m.Y=%v, writes=%v, err=%v", m.Y, writes, err)
 	// log.Printf("get_peers response error from %v: %v", node, err)
 	// Register suggested nodes closer to the target info-hash.
 	if m.R != nil && m.SenderID() != nil {

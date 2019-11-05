@@ -292,7 +292,7 @@ func (a *Announce) beginGetPeers(tx *stm.Tx) {
 	addr := first.(addrMaybeId).Addr
 	tx.Set(a.nodesPendingContact, npc.Delete(first))
 	if !a.shouldContact(addr, tx) {
-		tx.Return(txResT{})
+		tx.Return(txResT{run: func() {}})
 	}
 	cteh := a.server.config.ConnectionTracking.Allow(tx, a.server.connTrackEntryForAddr(NewAddr(addr.UDP())), "announce get_peers", -1)
 	tx.Assert(cteh != nil)

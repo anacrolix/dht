@@ -650,7 +650,7 @@ func (s *Server) query(addr Addr, q string, a *krpc.MsgArgs, callback func(krpc.
 		callback = func(krpc.Msg, error) {}
 	}
 	go func() {
-		cteh := s.config.ConnectionTracking.Wait(context.TODO(), s.connTrackEntryForAddr(addr), "send dht query", -1)
+		cteh := s.config.ConnectionTracking.Wait(context.TODO(), s.connTrackEntryForAddr(addr), fmt.Sprintf("send dht query %q", q), -1)
 		s.sendLimit.Wait(context.TODO())
 		m, writes, err := s.queryContext(context.Background(), addr, q, a)
 		if writes > 0 {
@@ -765,27 +765,31 @@ func (s *Server) ping(node *net.UDPAddr, callback func(krpc.Msg, error)) error {
 	return s.query(NewAddr(node), "ping", nil, callback)
 }
 
-func (s *Server) announcePeer(node Addr, infoHash int160, port int, token string, impliedPort bool, callback func(krpc.Msg, error)) error {
+func (s *Server) announcePeer(node Addr, infoHash int160, port int, token string, impliedPort bool) (m krpc.Msg, writes int, err error) {
 	if port == 0 && !impliedPort {
-		return errors.New("nothing to announce")
+		err = errors.New("no port specified")
+		return
 	}
-	return s.query(node, "announce_peer", &krpc.MsgArgs{
-		ImpliedPort: impliedPort,
-		InfoHash:    infoHash.AsByteArray(),
-		Port:        &port,
-		Token:       token,
-	}, func(m krpc.Msg, err error) {
-		if callback != nil {
-			go callback(m, err)
-		}
-		if err := m.Error(); err != nil {
-			announceErrors.Add(1)
-			return
-		}
-		s.mu.Lock()
-		defer s.mu.Unlock()
-		s.stats.SuccessfulOutboundAnnouncePeerQueries++
-	})
+	m, writes, err = s.queryContext(
+		context.TODO(), node, "announce_peer",
+		&krpc.MsgArgs{
+			ImpliedPort: impliedPort,
+			InfoHash:    infoHash.AsByteArray(),
+			Port:        &port,
+			Token:       token,
+		},
+	)
+	if err != nil {
+		return
+	}
+	if err = m.Error(); err != nil {
+		announceErrors.Add(1)
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.stats.SuccessfulOutboundAnnouncePeerQueries++
+	return
 }
 
 // Add response nodes to node table.
@@ -894,7 +898,8 @@ func (s *Server) Close() {
 func (s *Server) getPeers(ctx context.Context, addr Addr, infoHash int160) (krpc.Msg, int, error) {
 	m, writes, err := s.queryContext(ctx, addr, "get_peers", &krpc.MsgArgs{
 		InfoHash: infoHash.AsByteArray(),
-		Want:     []krpc.Want{krpc.WantNodes, krpc.WantNodes6},
+		// TODO: Maybe IPv4-only Servers won't want IPv6 nodes?
+		Want: []krpc.Want{krpc.WantNodes, krpc.WantNodes6},
 	})
 	s.mu.Lock()
 	defer s.mu.Unlock()

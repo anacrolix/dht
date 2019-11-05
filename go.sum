@@ -50,6 +50,8 @@ github.com/anacrolix/stm v0.0.0-20191102104501-9bf56d22767b h1:R7jT5ClYKNAB7E4x3
 github.com/anacrolix/stm v0.0.0-20191102104501-9bf56d22767b/go.mod h1:+LgX5tLMH/MmapICSjBO4LY1iIMSuySbhHlquq5cjEs=
 github.com/anacrolix/stm v0.1.0 h1:B/Kt3e4+0uqJoLcNZFW69cCBASok6WxX9CEhz9PqIPM=
 github.com/anacrolix/stm v0.1.0/go.mod h1:ZKz7e7ERWvP0KgL7WXfRjBXHNRhlVRlbBQecqFtPq+A=
+github.com/anacrolix/stm v0.1.1-0.20191105075537-443c0b33d649 h1:ZMMjQrpZH1cpbd7PWRsBWCoJNxPZRvK5VZNCFv6dtr8=
+github.com/anacrolix/stm v0.1.1-0.20191105075537-443c0b33d649/go.mod h1:zoVQRvSiGjGoTmbM0vSLIiaKjWtNPeTvXUSdJQA4hsg=
 github.com/anacrolix/sync v0.0.0-20171108081538-eee974e4f8c1/go.mod h1:+u91KiUuf0lyILI6x3n/XrW7iFROCZCG+TjgK8nW52w=
 github.com/anacrolix/sync v0.0.0-20180611022320-3c4cb11f5a01 h1:14t4kCoWXaUXrHErRD0bLMNolOE50nyPA0gO8+J3hP8=
 github.com/anacrolix/sync v0.0.0-20180611022320-3c4cb11f5a01/go.mod h1:+u91KiUuf0lyILI6x3n/XrW7iFROCZCG+TjgK8nW52w=

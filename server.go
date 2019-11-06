@@ -647,15 +647,15 @@ func (s *Server) connTrackEntryForAddr(a Addr) conntrack.Entry {
 
 type numWrites int
 
-func (s *Server) beginQuery(addr Addr, reason string, f func() numWrites) func(tx *stm.Tx) {
-	return func(tx *stm.Tx) {
+func (s *Server) beginQuery(addr Addr, reason string, f func() numWrites) stm.Operation {
+	return func(tx *stm.Tx) interface{} {
 		tx.Assert(s.sendLimit.AllowStm(tx))
 		cteh := s.config.ConnectionTracking.Allow(tx, s.connTrackEntryForAddr(addr), reason, -1)
 		tx.Assert(cteh != nil)
-		tx.Return(func() {
+		return func() {
 			writes := f()
 			finalizeCteh(cteh, writes)
-		})
+		}
 	}
 }
 

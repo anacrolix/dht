@@ -40,8 +40,8 @@ func (t traversal) finished(tx *stm.Tx) {
 	tx.Assert(tx.Get(t.nodesPendingContact).(stmutil.Lenner).Len() == 0)
 }
 
-func (t traversal) pendContact(node addrMaybeId) func(*stm.Tx) {
-	return func(tx *stm.Tx) {
+func (t traversal) pendContact(node addrMaybeId) stm.Operation {
+	return stm.VoidOperation(func(tx *stm.Tx) {
 		nodeAddrString := node.Addr.String()
 		if tx.Get(t.triedAddrs).(stmutil.Settish).Contains(nodeAddrString) {
 			return
@@ -64,7 +64,7 @@ func (t traversal) pendContact(node addrMaybeId) func(*stm.Tx) {
 		tx.Set(t.addrBestIds, addrBestIds.Set(nodeAddrString, node.Id))
 		nodesPendingContact = nodesPendingContact.Add(node)
 		tx.Set(t.nodesPendingContact, nodesPendingContact)
-	}
+	})
 }
 
 func (a traversal) nextAddr(tx *stm.Tx) krpc.NodeAddr {

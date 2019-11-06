@@ -11,8 +11,8 @@ import (
 )
 
 type TraversalStats struct {
-	NumAddrsTried int
-	NumResponses  int
+	NumAddrsTried int64
+	NumResponses  int64
 }
 
 func (me TraversalStats) String() string {

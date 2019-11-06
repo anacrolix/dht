@@ -279,6 +279,7 @@ func TestBootstrapRace(t *testing.T) {
 		Conn:             &serverPc,
 		StartingNodes:    addrResolver(remotePc.LocalAddr().String()),
 		QueryResendDelay: func() time.Duration { return 0 },
+		Logger:           log.Default,
 	})
 	require.NoError(t, err)
 	defer s.Close()

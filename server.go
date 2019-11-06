@@ -819,18 +819,17 @@ func (s *Server) addResponseNodes(d krpc.Msg) {
 }
 
 // Sends a find_node query to addr. targetID is the node we're looking for.
-func (s *Server) findNode(addr Addr, targetID int160, callback func(krpc.Msg, error)) (err error) {
-	return s.query(addr, "find_node", &krpc.MsgArgs{
+func (s *Server) findNode(addr Addr, targetID int160) (krpc.Msg, numWrites, error) {
+	m, writes, err := s.queryContext(context.TODO(), addr, "find_node", &krpc.MsgArgs{
 		Target: targetID.AsByteArray(),
 		Want:   []krpc.Want{krpc.WantNodes, krpc.WantNodes6},
-	}, func(m krpc.Msg, err error) {
-		// Scrape peers from the response to put in the server's table before
-		// handing the response back to the caller.
-		s.mu.Lock()
-		s.addResponseNodes(m)
-		s.mu.Unlock()
-		callback(m, err)
 	})
+	// Scrape peers from the response to put in the server's table before
+	// handing the response back to the caller.
+	s.mu.Lock()
+	s.addResponseNodes(m)
+	s.mu.Unlock()
+	return m, writes, err
 }
 
 // Returns how many nodes are in the node table.

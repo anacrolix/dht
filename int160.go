@@ -1,12 +1,17 @@
 package dht
 
 import (
+	"encoding/hex"
 	"math"
 	"math/big"
 )
 
 type int160 struct {
 	bits [20]uint8
+}
+
+func (me int160) String() string {
+	return hex.EncodeToString(me.bits[:])
 }
 
 func (me *int160) AsByteArray() [20]byte {

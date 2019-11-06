@@ -702,7 +702,9 @@ func (s *Server) makeQueryBytes(q string, a *krpc.MsgArgs, t string) []byte {
 
 func (s *Server) queryContext(ctx context.Context, addr Addr, q string, a *krpc.MsgArgs) (reply krpc.Msg, writes numWrites, err error) {
 	defer func(started time.Time) {
-		s.logger().WithValues(log.Debug).Printf("queryContext returned after %v (err=%v, reply.Y=%v, reply.E=%v)", time.Since(started), err, reply.Y, reply.E)
+		s.logger().WithValues(log.Debug, q).Printf(
+			"queryContext(%v) returned after %v (err=%v, reply.Y=%v, reply.E=%v, writes=%v)",
+			q, time.Since(started), err, reply.Y, reply.E, writes)
 	}(time.Now())
 	replyChan := make(chan krpc.Msg, 1)
 	t := &Transaction{

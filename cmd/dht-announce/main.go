@@ -61,6 +61,7 @@ func mainErr() int {
 					}
 				}
 			}
+			log.Printf("%v contacted %v nodes", a, a.NumContacted())
 		}(ih)
 	}
 	wg.Wait()

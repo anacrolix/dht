@@ -4,6 +4,7 @@ package dht
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"sync/atomic"
 
@@ -38,9 +39,15 @@ type Announce struct {
 	// being NATed.
 	announcePortImplied bool
 
-	pendingAnnouncePeers *stm.Var // List of pendingAnnouncePeer
+	// List of pendingAnnouncePeer. TODO: Perhaps this should be sorted by distance to the target,
+	// so we can do that sloppy hash stuff ;).
+	pendingAnnouncePeers *stm.Var
 
 	traversal traversal
+}
+
+func (a *Announce) String() string {
+	return fmt.Sprintf("%[1]T %[1]p of %v on %v", a, a.infoHash, a.server)
 }
 
 type pendingAnnouncePeer struct {
@@ -270,6 +277,7 @@ func (a *Announce) beginQuery(addr Addr, reason string, f func() numWrites) stm.
 	return func(tx *stm.Tx) interface{} {
 		tx.Set(a.pending, tx.Get(a.pending).(int)+1)
 		return a.server.beginQuery(addr, reason, func() numWrites {
+			a.server.logger().Printf("doing %s to %v", reason, addr)
 			defer stm.Atomically(stm.VoidOperation(func(tx *stm.Tx) { tx.Set(a.pending, tx.Get(a.pending).(int)-1) }))
 			return f()
 		})(tx)

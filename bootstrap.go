@@ -49,7 +49,6 @@ func (s *Server) Bootstrap() (ts TraversalStats, err error) {
 						}
 						stm.Atomically(stm.VoidOperation(func(tx *stm.Tx) {
 							tx.Set(outstanding, tx.Get(outstanding).(int)-1)
-							log.Println("setting outstanding", tx.Get(outstanding))
 						}))
 						return writes
 					})(tx).(func()),

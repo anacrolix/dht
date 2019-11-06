@@ -115,7 +115,7 @@ func (a *Announce) closer() {
 			return
 		}
 		tx.Assert(tx.Get(a.pending).(int) == 0)
-		a.traversal.finished(tx)
+		a.traversal.waitFinished(tx)
 		tx.Assert(tx.Get(a.pendingAnnouncePeers).(stmutil.Lenner).Len() == 0)
 	}))
 }

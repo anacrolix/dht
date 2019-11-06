@@ -36,7 +36,7 @@ func newTraversal(targetInfohash int160) traversal {
 	}
 }
 
-func (t traversal) finished(tx *stm.Tx) {
+func (t traversal) waitFinished(tx *stm.Tx) {
 	tx.Assert(tx.Get(t.nodesPendingContact).(stmutil.Lenner).Len() == 0)
 }
 

@@ -5,6 +5,7 @@ package dht
 import (
 	"context"
 	"net"
+	"sync/atomic"
 
 	"github.com/anacrolix/missinggo/v2/conntrack"
 	"github.com/anacrolix/stm"
@@ -30,7 +31,7 @@ type Announce struct {
 	server   *Server
 	infoHash int160 // Target
 	// Count of (probably) distinct addresses we've sent get_peers requests to.
-	numContacted *stm.Var // int
+	numContacted int64
 	// The torrent port that we're announcing.
 	announcePort int
 	// The torrent port should be determined by the receiver in case we're
@@ -48,8 +49,8 @@ type pendingAnnouncePeer struct {
 }
 
 // Returns the number of distinct remote addresses the announce has queried.
-func (a *Announce) NumContacted() int {
-	return stm.AtomicGet(a.numContacted).(int)
+func (a *Announce) NumContacted() int64 {
+	return atomic.LoadInt64(&a.numContacted)
 }
 
 // Traverses the DHT graph toward nodes that store peers for the infohash, streaming them to the
@@ -69,7 +70,6 @@ func (s *Server) Announce(infoHash [20]byte, port int, impliedPort bool) (*Annou
 		announcePort:         port,
 		announcePortImplied:  impliedPort,
 		pending:              stm.NewVar(0),
-		numContacted:         stm.NewVar(0),
 		pendingAnnouncePeers: stm.NewVar(immutable.NewList()),
 		traversal:            newTraversal(infoHashInt160),
 	}
@@ -260,8 +260,8 @@ func (a *Announce) nodeContactor() {
 func (a *Announce) beginGetPeers(tx *stm.Tx) interface{} {
 	addr := a.traversal.nextAddr(tx)
 	dhtAddr := NewAddr(addr.UDP())
-	tx.Set(a.numContacted, tx.Get(a.numContacted).(int)+1)
 	return a.beginQuery(dhtAddr, "dht announce get_peers", func() numWrites {
+		atomic.AddInt64(&a.numContacted, 1)
 		return a.getPeers(dhtAddr)
 	})(tx)
 }

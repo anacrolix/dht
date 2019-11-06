@@ -772,8 +772,6 @@ func (s *Server) transactionQuerySender(sendCtx context.Context, sendErr chan<- 
 
 // Sends a ping query to the address given.
 func (s *Server) Ping(node *net.UDPAddr, callback func(krpc.Msg, error)) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
 	return s.ping(node, callback)
 }
 

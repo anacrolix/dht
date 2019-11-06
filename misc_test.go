@@ -9,25 +9,27 @@ import (
 	"github.com/anacrolix/dht/v2/krpc"
 )
 
+func int160WithBitSet(bit int) *int160 {
+	var i int160
+	i.bits[bit] = 1
+	return &i
+}
+
+var sampleAddrMaybeIds = []addrMaybeId{
+	addrMaybeId{},
+	addrMaybeId{Id: new(int160)},
+	addrMaybeId{Id: int160WithBitSet(13)},
+	addrMaybeId{Id: int160WithBitSet(12)},
+	addrMaybeId{Addr: krpc.NodeAddr{Port: 1}},
+	addrMaybeId{
+		Id:   int160WithBitSet(14),
+		Addr: krpc.NodeAddr{Port: 1}},
+}
+
 func TestNodesByDistance(t *testing.T) {
 	a := nodesByDistance(int160{})
-	amis := []addrMaybeId{
-		addrMaybeId{},
-		addrMaybeId{Id: new(int160)},
-		addrMaybeId{Id: func() *int160 {
-			var i int160
-			i.bits[13] = 1
-			return &i
-		}()},
-		addrMaybeId{Id: func() *int160 {
-			var i int160
-			i.bits[12] = 1
-			return &i
-		}()},
-		addrMaybeId{Addr: krpc.NodeAddr{Port: 1}},
-	}
 	push := func(i int) {
-		a = a.Add(amis[i])
+		a = a.Add(sampleAddrMaybeIds[i])
 	}
 	push(4)
 	push(2)
@@ -40,7 +42,7 @@ func TestNodesByDistance(t *testing.T) {
 		assert.True(t, ok)
 		assert.Contains(t, func() (ret []addrMaybeId) {
 			for _, i := range is {
-				ret = append(ret, amis[i])
+				ret = append(ret, sampleAddrMaybeIds[i])
 			}
 			return
 		}(), first)

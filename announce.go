@@ -7,7 +7,6 @@ import (
 	"net"
 
 	"github.com/anacrolix/missinggo/v2/conntrack"
-	"github.com/anacrolix/missinggo/v2/iter"
 	"github.com/anacrolix/stm"
 	"github.com/anacrolix/stm/stmutil"
 	"github.com/benbjohnson/immutable"
@@ -28,8 +27,6 @@ type Announce struct {
 	doneVar *stm.Var
 	cancel  func()
 
-	triedAddrs *stm.Var // Settish of krpc.NodeAddr.String
-
 	pending  *stm.Var // How many transactions are still ongoing (int).
 	server   *Server
 	infoHash int160 // Target
@@ -41,8 +38,9 @@ type Announce struct {
 	// being NATed.
 	announcePortImplied bool
 
-	nodesPendingContact  *stm.Var // Settish of addrMaybeId sorted by distance from the target
 	pendingAnnouncePeers *stm.Var // List of pendingAnnouncePeer
+
+	traversal traversal
 }
 
 type pendingAnnouncePeer struct {
@@ -71,15 +69,14 @@ func (s *Server) Announce(infoHash [20]byte, port int, impliedPort bool) (*Annou
 	a := &Announce{
 		Peers:                make(chan PeersValues, 100),
 		values:               make(chan PeersValues),
-		triedAddrs:           stm.NewVar(stmutil.NewSet()),
 		server:               s,
 		infoHash:             infoHashInt160,
 		announcePort:         port,
 		announcePortImplied:  impliedPort,
-		nodesPendingContact:  stm.NewVar(nodesByDistance(infoHashInt160)),
 		pending:              stm.NewVar(0),
 		numContacted:         stm.NewVar(0),
 		pendingAnnouncePeers: stm.NewVar(immutable.NewList()),
+		traversal:            newTraversal(infoHashInt160),
 	}
 	var ctx context.Context
 	ctx, a.cancel = context.WithCancel(context.Background())
@@ -102,9 +99,7 @@ func (s *Server) Announce(infoHash [20]byte, port int, impliedPort bool) (*Annou
 		}
 	}()
 	for _, n := range startAddrs {
-		stm.Atomically(func(tx *stm.Tx) {
-			a.pendContact(n, tx)
-		})
+		stm.Atomically(a.pendContact(n))
 	}
 	go a.closer()
 	go a.nodeContactor()
@@ -118,7 +113,7 @@ func (a *Announce) closer() {
 			return
 		}
 		tx.Assert(tx.Get(a.pending).(int) == 0)
-		tx.Assert(tx.Get(a.nodesPendingContact).(stmutil.Lenner).Len() == 0)
+		a.traversal.finished(tx)
 		tx.Assert(tx.Get(a.pendingAnnouncePeers).(stmutil.Lenner).Len() == 0)
 	})
 }
@@ -140,9 +135,6 @@ func (a *Announce) shouldContact(addr krpc.NodeAddr, tx *stm.Tx) bool {
 	if !validNodeAddr(addr.UDP()) {
 		return false
 	}
-	if tx.Get(a.triedAddrs).(stmutil.Settish).Contains(addr.String()) {
-		return false
-	}
 	if a.server.ipBlocked(addr.IP) {
 		return false
 	}
@@ -157,9 +149,7 @@ func (a *Announce) completeContact() {
 
 func (a *Announce) responseNode(node krpc.NodeInfo) {
 	i := int160FromByteArray(node.ID)
-	stm.Atomically(func(tx *stm.Tx) {
-		a.pendContact(addrMaybeId{node.Addr, &i}, tx)
-	})
+	stm.Atomically(a.pendContact(addrMaybeId{node.Addr, &i}))
 }
 
 // Announce to a peer, if appropriate.
@@ -201,9 +191,10 @@ func (a *Announce) beginAnnouncePeer(tx *stm.Tx) {
 	}})
 }
 
-func finalizeCteh(cteh *conntrack.EntryHandle, writes int) {
+func finalizeCteh(cteh *conntrack.EntryHandle, writes numWrites) {
 	if writes == 0 {
 		cteh.Forget()
+		panic("how to reverse rate limit?")
 	} else {
 		cteh.Done()
 	}
@@ -213,7 +204,7 @@ func (a *Announce) getPeers(addr Addr, cteh *conntrack.EntryHandle) {
 	// log.Printf("sending get_peers to %v", node)
 	m, writes, err := a.server.getPeers(context.TODO(), addr, a.infoHash)
 	finalizeCteh(cteh, writes)
-	a.server.logger().Printf("Announce.server.getPeers result: m.Y=%v, writes=%v, err=%v", m.Y, writes, err)
+	a.server.logger().Printf("Announce.server.getPeers result: m.Y=%v, numWrites=%v, err=%v", m.Y, writes, err)
 	// log.Printf("get_peers response error from %v: %v", node, err)
 	// Register suggested nodes closer to the target info-hash.
 	if m.R != nil && m.SenderID() != nil {
@@ -252,20 +243,19 @@ func (a *Announce) close() {
 	a.cancel()
 }
 
-func (a *Announce) pendContact(node addrMaybeId, tx *stm.Tx) {
-	if !a.shouldContact(node.Addr, tx) {
-		// log.Printf("shouldn't contact (pend): %v", node)
-		return
+func (a *Announce) pendContact(node addrMaybeId) func(tx *stm.Tx) {
+	return func(tx *stm.Tx) {
+		if !a.shouldContact(node.Addr, tx) {
+			// log.Printf("shouldn't contact (pend): %v", node)
+			return
+		}
+		a.traversal.pendContact(node)(tx)
 	}
-	tx.Set(a.nodesPendingContact, tx.Get(a.nodesPendingContact).(stmutil.Settish).Add(node))
 }
 
 type txResT struct {
 	done bool
 	run  func()
-	//contact bool
-	//addr    Addr
-	//cteh    *conntrack.EntryHandle
 }
 
 func (a *Announce) nodeContactor() {
@@ -286,19 +276,11 @@ func (a *Announce) nodeContactor() {
 }
 
 func (a *Announce) beginGetPeers(tx *stm.Tx) {
-	npc := tx.Get(a.nodesPendingContact).(stmutil.Settish)
-	first, ok := iter.First(npc.Iter)
-	tx.Assert(ok)
-	addr := first.(addrMaybeId).Addr
-	tx.Set(a.nodesPendingContact, npc.Delete(first))
-	if !a.shouldContact(addr, tx) {
-		tx.Return(txResT{run: func() {}})
-	}
+	addr := a.traversal.nextAddr(tx)
 	cteh := a.server.config.ConnectionTracking.Allow(tx, a.server.connTrackEntryForAddr(NewAddr(addr.UDP())), "announce get_peers", -1)
 	tx.Assert(cteh != nil)
 	tx.Assert(a.server.sendLimit.AllowStm(tx))
 	tx.Set(a.numContacted, tx.Get(a.numContacted).(int)+1)
 	tx.Set(a.pending, tx.Get(a.pending).(int)+1)
-	tx.Set(a.triedAddrs, tx.Get(a.triedAddrs).(stmutil.Settish).Add(addr.String()))
 	tx.Return(txResT{run: func() { a.getPeers(NewAddr(addr.UDP()), cteh) }})
 }

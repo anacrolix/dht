@@ -645,20 +645,34 @@ func (s *Server) connTrackEntryForAddr(a Addr) conntrack.Entry {
 	}
 }
 
+type numWrites int
+
+func (s *Server) beginQuery(addr Addr, reason string, f func() numWrites) func(tx *stm.Tx) {
+	return func(tx *stm.Tx) {
+		tx.Assert(s.sendLimit.AllowStm(tx))
+		cteh := s.config.ConnectionTracking.Allow(tx, s.connTrackEntryForAddr(addr), reason, -1)
+		tx.Assert(cteh != nil)
+		tx.Return(func() {
+			writes := f()
+			finalizeCteh(cteh, writes)
+		})
+	}
+}
+
 func (s *Server) query(addr Addr, q string, a *krpc.MsgArgs, callback func(krpc.Msg, error)) error {
 	if callback == nil {
 		callback = func(krpc.Msg, error) {}
 	}
 	go func() {
-		cteh := s.config.ConnectionTracking.Wait(context.TODO(), s.connTrackEntryForAddr(addr), fmt.Sprintf("send dht query %q", q), -1)
-		s.sendLimit.Wait(context.TODO())
-		m, writes, err := s.queryContext(context.Background(), addr, q, a)
-		if writes > 0 {
-			cteh.Done()
-		} else {
-			cteh.Forget()
-		}
-		callback(m, err)
+		stm.Atomically(
+			s.beginQuery(addr, fmt.Sprintf("send dht query %q", q),
+				func() numWrites {
+					m, writes, err := s.queryContext(context.Background(), addr, q, a)
+					callback(m, err)
+					return writes
+				},
+			),
+		).(func())()
 	}()
 	return nil
 }
@@ -686,7 +700,7 @@ func (s *Server) makeQueryBytes(q string, a *krpc.MsgArgs, t string) []byte {
 	return b
 }
 
-func (s *Server) queryContext(ctx context.Context, addr Addr, q string, a *krpc.MsgArgs) (reply krpc.Msg, writes int, err error) {
+func (s *Server) queryContext(ctx context.Context, addr Addr, q string, a *krpc.MsgArgs) (reply krpc.Msg, writes numWrites, err error) {
 	defer func(started time.Time) {
 		s.logger().WithValues(log.Debug).Printf("queryContext returned after %v (err=%v, reply.Y=%v, reply.E=%v)", time.Since(started), err, reply.Y, reply.E)
 	}(time.Now())
@@ -727,7 +741,7 @@ func (s *Server) queryContext(ctx context.Context, addr Addr, q string, a *krpc.
 	return
 }
 
-func (s *Server) transactionQuerySender(sendCtx context.Context, sendErr chan<- error, b []byte, writes *int, addr Addr) {
+func (s *Server) transactionQuerySender(sendCtx context.Context, sendErr chan<- error, b []byte, writes *numWrites, addr Addr) {
 	defer close(sendErr)
 	err := transactionSender(
 		sendCtx,
@@ -765,7 +779,7 @@ func (s *Server) ping(node *net.UDPAddr, callback func(krpc.Msg, error)) error {
 	return s.query(NewAddr(node), "ping", nil, callback)
 }
 
-func (s *Server) announcePeer(node Addr, infoHash int160, port int, token string, impliedPort bool) (m krpc.Msg, writes int, err error) {
+func (s *Server) announcePeer(node Addr, infoHash int160, port int, token string, impliedPort bool) (m krpc.Msg, writes numWrites, err error) {
 	if port == 0 && !impliedPort {
 		err = errors.New("no port specified")
 		return
@@ -846,7 +860,7 @@ func (s *Server) Close() {
 	s.socket.Close()
 }
 
-func (s *Server) getPeers(ctx context.Context, addr Addr, infoHash int160) (krpc.Msg, int, error) {
+func (s *Server) getPeers(ctx context.Context, addr Addr, infoHash int160) (krpc.Msg, numWrites, error) {
 	m, writes, err := s.queryContext(ctx, addr, "get_peers", &krpc.MsgArgs{
 		InfoHash: infoHash.AsByteArray(),
 		// TODO: Maybe IPv4-only Servers won't want IPv6 nodes?

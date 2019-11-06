@@ -10,7 +10,6 @@ import (
 	"github.com/anacrolix/stm"
 	"github.com/anacrolix/stm/stmutil"
 	"github.com/benbjohnson/immutable"
-	"github.com/willf/bloom"
 
 	"github.com/anacrolix/dht/v2/krpc"
 )
@@ -51,10 +50,6 @@ type pendingAnnouncePeer struct {
 // Returns the number of distinct remote addresses the announce has queried.
 func (a *Announce) NumContacted() int {
 	return stm.AtomicGet(a.numContacted).(int)
-}
-
-func newBloomFilterForTraversal() *bloom.BloomFilter {
-	return bloom.NewWithEstimates(10000, 0.5)
 }
 
 // Traverses the DHT graph toward nodes that store peers for the infohash, streaming them to the

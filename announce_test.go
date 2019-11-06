@@ -25,11 +25,6 @@ func TestAnnounceNoStartingNodes(t *testing.T) {
 	require.EqualError(t, err, "no initial nodes")
 }
 
-func TestDefaultTraversalBloomFilterCharacteristics(t *testing.T) {
-	bf := newBloomFilterForTraversal()
-	t.Logf("%d bits with %d hashes per item", bf.Cap(), bf.K())
-}
-
 func randomInfohash() (ih [20]byte) {
 	rand.Read(ih[:])
 	return

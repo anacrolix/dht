@@ -1,7 +1,6 @@
 package dht
 
 import (
-	"log"
 	"sync/atomic"
 
 	"github.com/anacrolix/stm"
@@ -17,7 +16,6 @@ func (s *Server) Bootstrap() (ts TraversalStats, err error) {
 	}
 	traversal := newTraversal(s.id)
 	for _, addr := range initialAddrs {
-		log.Println("pending", addr)
 		stm.Atomically(traversal.pendContact(addr))
 	}
 	outstanding := stm.NewVar(0)

@@ -34,7 +34,7 @@ func (s *Server) Bootstrap() (ts TraversalStats, err error) {
 						atomic.AddInt64(&ts.NumAddrsTried, 1)
 						m, writes, err := s.findNode(dhtAddr, s.id)
 						if err == nil {
-							ts.NumResponses++
+							atomic.AddInt64(&ts.NumResponses, 1)
 						}
 						if r := m.R; r != nil {
 							r.ForAllNodes(func(ni krpc.NodeInfo) {

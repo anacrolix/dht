@@ -103,14 +103,14 @@ func TestPing(t *testing.T) {
 	srv, err := NewServer(&ServerConfig{
 		Conn:       recvConn,
 		NoSecurity: true,
-		Logger:     log.Default,
+		Logger:     log.Default(),
 	})
 	require.NoError(t, err)
 	defer srv.Close()
 	srv0, err := NewServer(&ServerConfig{
 		Conn:          mustListen("127.0.0.1:5681"),
 		StartingNodes: addrResolver("127.0.0.1:5680"),
-		Logger:        log.Default,
+		Logger:        log.Default(),
 	})
 	require.NoError(t, err)
 	defer srv0.Close()
@@ -279,7 +279,7 @@ func TestBootstrapRace(t *testing.T) {
 		Conn:             &serverPc,
 		StartingNodes:    addrResolver(remotePc.LocalAddr().String()),
 		QueryResendDelay: func() time.Duration { return 0 },
-		Logger:           log.Default,
+		Logger:           log.Default(),
 	})
 	require.NoError(t, err)
 	defer s.Close()

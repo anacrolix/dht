@@ -31,7 +31,7 @@ func mainErr() int {
 	s, err := dht.NewServer(func() *dht.ServerConfig {
 		sc := dht.NewDefaultServerConfig()
 		if flags.Debug {
-			sc.Logger = log.Default()
+			sc.Logger = log.Default
 		}
 		return sc
 	}())

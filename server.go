@@ -158,7 +158,7 @@ func NewServer(c *ServerConfig) (s *Server, err error) {
 	// If Logger is empty, emulate the old behaviour: Everything is logged to the default location,
 	// and there are no debug messages.
 	if c.Logger.LoggerImpl == nil {
-		c.Logger = log.Default().WithFilter(func(m log.Msg) bool {
+		c.Logger = log.Default.WithFilter(func(m log.Msg) bool {
 			return !m.HasValue(log.Debug)
 		})
 	}

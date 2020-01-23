@@ -6,12 +6,18 @@ import (
 	"github.com/anacrolix/torrent/bencode"
 )
 
-// These are documented in BEP 5.
 const (
+	// These are documented in BEP 5.
 	ErrorCodeGenericError  = 201
 	ErrorCodeServerError   = 202
 	ErrorCodeProtocolError = 203
 	ErrorCodeMethodUnknown = 204
+	// BEP 44
+	ErrorCodeMessageValueFieldTooBig       = 205
+	ErrorCodeInvalidSignature              = 206
+	ErrorCodeSaltFieldTooBig               = 207
+	ErrorCodeCasHashMismatched             = 301
+	ErrorCodeSequenceNumberLessThanCurrent = 302
 )
 
 var ErrorMethodUnknown = Error{

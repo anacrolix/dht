@@ -390,8 +390,6 @@ func (s *Server) setReturnNodes(r *krpc.Return, queryMsg krpc.Msg, querySource A
 	return nil
 }
 
-// TODO: Probably should write error messages back to senders if something is
-// wrong.
 func (s *Server) handleQuery(source Addr, m krpc.Msg) {
 	go func() {
 		expvars.Add(fmt.Sprintf("received query %q", m.Q), 1)

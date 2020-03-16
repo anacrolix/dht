@@ -63,6 +63,9 @@ type ServerConfig struct {
 
 	ConnectionTracking *conntrack.Instance
 
+	// If no Logger is provided, log.Default is used and log.Debug messages are filtered out. Note
+	// that all messages without a log.Level, have log.Debug added to them before being passed to
+	// this Logger.
 	Logger log.Logger
 }
 

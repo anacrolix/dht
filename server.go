@@ -749,7 +749,7 @@ func (s *Server) transactionQuerySender(sendCtx context.Context, sendErr chan<- 
 	err := transactionSender(
 		sendCtx,
 		func() error {
-			wrote, err := s.writeToNode(sendCtx, b, addr, *writes == 0, *writes != 0)
+			wrote, err := s.writeToNode(sendCtx, b, addr, *writes == 0, true)
 			if wrote {
 				*writes++
 			}

@@ -916,6 +916,7 @@ func (s *Server) traversalStartingNodes() (nodes []addrMaybeId, err error) {
 		return
 	}
 	if s.config.StartingNodes != nil {
+		s.logger().WithValues(log.Warning).Printf("falling back on starting nodes")
 		addrs, err := s.config.StartingNodes()
 		if err != nil {
 			return nil, errors.Wrap(err, "getting starting nodes")

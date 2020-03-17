@@ -61,7 +61,7 @@ func main() {
 	}
 	ns, err := dht.ReadNodesFromFile(*tableFileName)
 	if os.IsNotExist(err) {
-		sc.StartingNodes = dht.GlobalBootstrapAddrs
+		sc.StartingNodes = func() ([]dht.Addr, error) { return dht.GlobalBootstrapAddrs("udp") }
 	}
 	s, err = dht.NewServer(&sc)
 	if err != nil {

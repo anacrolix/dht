@@ -45,7 +45,7 @@ func main() {
 	defer conn.Close()
 	s, err = dht.NewServer(&dht.ServerConfig{
 		Conn:          conn,
-		StartingNodes: dht.GlobalBootstrapAddrs,
+		StartingNodes: func() ([]dht.Addr, error) { return dht.GlobalBootstrapAddrs("udp") },
 	})
 	if err != nil {
 		log.Fatal(err)

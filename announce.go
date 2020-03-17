@@ -192,7 +192,15 @@ func finalizeCteh(cteh *conntrack.EntryHandle, writes numWrites) {
 func (a *Announce) getPeers(addr Addr) numWrites {
 	// log.Printf("sending get_peers to %v", node)
 	m, writes, err := a.server.getPeers(context.TODO(), addr, a.infoHash)
-	a.server.logger().Printf("Announce.server.getPeers result: m.Y=%v, numWrites=%v, err=%v", m.Y, writes, err)
+	a.server.logger().WithValues(
+	//func() log.Level {
+	//	if err != nil {
+	//		return log.Warning
+	//	} else {
+	//		return log.Debug
+	//	}
+	//}(),
+	).Printf("Announce.server.getPeers result: m.Y=%v, numWrites=%v, err=%v", m.Y, writes, err)
 	// log.Printf("get_peers response error from %v: %v", node, err)
 	// Register suggested nodes closer to the target info-hash.
 	if m.R != nil && m.SenderID() != nil {

@@ -192,12 +192,12 @@ func (a *Announce) beginAnnouncePeer(tx *stm.Tx) interface{} {
 	tx.Set(a.pendingAnnouncePeers, l.Slice(1, l.Len()))
 	/*
 
-		TODO: put back this good nodes on transaction
+			TODO: put back this good nodes on transaction
 
-		i := int160FromByteArray(x.ID)
-		var nodeAddr = krpc.NodeAddr{}
-		nodeAddr.FromUDPAddr(x.Addr)
-	        stm.Atomically(a.pendContact(addrMaybeId{nodeAddr.FromUDPAddr, &i}))
+			i := int160FromByteArray(x.ID)
+			var nodeAddr = krpc.NodeAddr{}
+			nodeAddr.FromUDPAddr(x.Addr)
+		        stm.Atomically(a.pendContact(addrMaybeId{nodeAddr.FromUDPAddr, &i}))
 	*/
 	return a.beginQuery(x.Addr, "dht announce announce_peer", func() numWrites {
 		return a.announcePeer(x)
@@ -336,6 +336,10 @@ func (a *Announce) logic(tx *stm.Tx) interface{} {
 		a.server.logger().Printf("dht Changed mode to: announce_peer")
 		// Is it the best way to get a sorted list of good node?
 		a.traversal = newTraversal(a.infoHash)
+		startAddrs, _ := a.server.traversalStartingNodes()
+		for _, n := range startAddrs {
+			stm.Atomically(a.pendContact(n))
+		}
 	}
 
 	tx.Set(a.mode, mode)

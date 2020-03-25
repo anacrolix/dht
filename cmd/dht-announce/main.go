@@ -24,6 +24,7 @@ func mainErr() int {
 	var flags = struct {
 		Port  int
 		Debug bool
+		Quiet bool
 		tagflag.StartPos
 		Infohash [][20]byte
 	}{}
@@ -56,7 +57,9 @@ func mainErr() int {
 				for _, p := range ps.Peers {
 					s := p.String()
 					if _, ok := addrs[ih][s]; !ok {
-						log.Printf("got peer %s for %x from %s", p, ih, ps.NodeInfo)
+						if !flags.Quiet {
+							log.Printf("got peer %s for %x from %s", p, ih, ps.NodeInfo)
+						}
 						addrs[ih][s] = struct{}{}
 					}
 				}

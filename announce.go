@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net"
 	"sync/atomic"
+	"time"
 
 	"github.com/anacrolix/missinggo/v2/conntrack"
 	"github.com/anacrolix/stm"
@@ -27,6 +28,9 @@ type Announce struct {
 	done    <-chan struct{}
 	doneVar *stm.Var
 	cancel  func()
+
+	inFlightGetPeers int64
+	mode             *stm.Var
 
 	pending  *stm.Var // How many transactions are still ongoing (int).
 	server   *Server
@@ -49,6 +53,15 @@ type Announce struct {
 func (a *Announce) String() string {
 	return fmt.Sprintf("%[1]T %[1]p of %v on %v", a, a.infoHash, a.server)
 }
+
+type dhtMode int
+
+const (
+	get_peers dhtMode = iota + 1
+	get_peers_stall
+	announce_peer
+	sleep
+)
 
 type pendingAnnouncePeer struct {
 	Addr
@@ -79,6 +92,7 @@ func (s *Server) Announce(infoHash [20]byte, port int, impliedPort bool) (*Annou
 		pending:              stm.NewVar(0),
 		pendingAnnouncePeers: stm.NewVar(immutable.NewList()),
 		traversal:            newTraversal(infoHashInt160),
+		mode:                 stm.NewVar(get_peers),
 	}
 	var ctx context.Context
 	ctx, a.cancel = context.WithCancel(context.Background())
@@ -171,10 +185,20 @@ func (a *Announce) announcePeer(peer pendingAnnouncePeer) numWrites {
 }
 
 func (a *Announce) beginAnnouncePeer(tx *stm.Tx) interface{} {
+	tx.Assert(tx.Get(a.mode).(dhtMode) == announce_peer)
 	l := tx.Get(a.pendingAnnouncePeers).(stmutil.List)
 	tx.Assert(l.Len() != 0)
 	x := l.Get(0).(pendingAnnouncePeer)
 	tx.Set(a.pendingAnnouncePeers, l.Slice(1, l.Len()))
+	/*
+
+		TODO: put back this good nodes on transaction
+
+		i := int160FromByteArray(x.ID)
+		var nodeAddr = krpc.NodeAddr{}
+		nodeAddr.FromUDPAddr(x.Addr)
+	        stm.Atomically(a.pendContact(addrMaybeId{nodeAddr.FromUDPAddr, &i}))
+	*/
 	return a.beginQuery(x.Addr, "dht announce announce_peer", func() numWrites {
 		return a.announcePeer(x)
 	})(tx).(func())
@@ -192,6 +216,7 @@ func finalizeCteh(cteh *conntrack.EntryHandle, writes numWrites) {
 func (a *Announce) getPeers(addr Addr) numWrites {
 	// log.Printf("sending get_peers to %v", node)
 	m, writes, err := a.server.getPeers(context.TODO(), addr, a.infoHash)
+	atomic.AddInt64(&a.inFlightGetPeers, -1)
 	a.server.logger().WithValues(
 	//func() log.Level {
 	//	if err != nil {
@@ -255,6 +280,19 @@ type txResT struct {
 }
 
 func (a *Announce) nodeContactor() {
+	go func() {
+		for {
+			a.server.logger().Printf("*** Important vars: inFlightGetPeers:%d mode:%v", a.inFlightGetPeers, stm.AtomicGet(a.mode).(dhtMode))
+			time.Sleep(time.Second * 3)
+		}
+	}()
+
+	go func() {
+		for {
+			stm.Atomically(a.logic)
+			time.Sleep(time.Millisecond * 50)
+		}
+	}()
 	for {
 		txRes := stm.Atomically(func(tx *stm.Tx) interface{} {
 			if tx.Get(a.doneVar).(bool) {
@@ -269,13 +307,49 @@ func (a *Announce) nodeContactor() {
 			break
 		}
 		go txRes.run()
+		time.Sleep(time.Millisecond * 100)
+	}
+}
+
+func (a *Announce) logic(tx *stm.Tx) interface{} {
+	inFlightGetPeers := atomic.LoadInt64(&a.inFlightGetPeers)
+	var mode dhtMode
+	nowMode := tx.Get(a.mode).(dhtMode)
+	mode = nowMode
+	if nowMode == get_peers && inFlightGetPeers >= 3 {
+		a.server.logger().Printf("dht Changed mode to: get_peers_stall")
+		mode = get_peers_stall
+	}
+	if nowMode == get_peers_stall && inFlightGetPeers < 1 {
+		mode = get_peers
+		a.server.logger().Printf("dht Changed mode to: from get_peers_stall to get_peers")
+	}
+
+	l := tx.Get(a.pendingAnnouncePeers).(stmutil.List)
+	if l.Len() > 8 {
+		go func() {
+			time.Sleep(time.Minute * 15)
+			stm.AtomicSet(a.mode, get_peers)
+			a.server.logger().Printf("dht Changed mode to: get_peers")
+		}()
+		mode = announce_peer
+		a.server.logger().Printf("dht Changed mode to: announce_peer")
+		// Is it the best way to get a sorted list of good node?
+		a.traversal = newTraversal(a.infoHash)
+	}
+
+	tx.Set(a.mode, mode)
+	return func() {
+		// a.server.logger().Printf("*** Important vars: inFlightGetPeers:%d mode:%s", a.inFlightGetPeers,a.mode)
 	}
 }
 
 func (a *Announce) beginGetPeers(tx *stm.Tx) interface{} {
+	tx.Assert(tx.Get(a.mode).(dhtMode) == get_peers)
 	addr := a.traversal.nextAddr(tx)
 	dhtAddr := NewAddr(addr.UDP())
 	return a.beginQuery(dhtAddr, "dht announce get_peers", func() numWrites {
+		atomic.AddInt64(&a.inFlightGetPeers, 1)
 		atomic.AddInt64(&a.numContacted, 1)
 		return a.getPeers(dhtAddr)
 	})(tx)

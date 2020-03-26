@@ -6,8 +6,6 @@ import (
 	"github.com/anacrolix/missinggo/v2/iter"
 	"github.com/anacrolix/stm"
 	"github.com/anacrolix/stm/stmutil"
-
-	"github.com/anacrolix/dht/v2/krpc"
 )
 
 type TraversalStats struct {
@@ -67,14 +65,24 @@ func (t traversal) pendContact(node addrMaybeId) stm.Operation {
 	})
 }
 
-func (a traversal) nextAddr(tx *stm.Tx) krpc.NodeAddr {
+func (a traversal) nextContact(tx *stm.Tx) (ret addrMaybeId, ok bool) {
 	npc := tx.Get(a.nodesPendingContact).(stmutil.Settish)
 	first, ok := iter.First(npc.Iter)
-	tx.Assert(ok)
-	addr := first.(addrMaybeId).Addr
-	addrString := addr.String()
-	tx.Set(a.nodesPendingContact, npc.Delete(first))
+	if !ok {
+		return
+	}
+	ret = first.(addrMaybeId)
+	return
+}
+
+func (a traversal) popNextContact(tx *stm.Tx) (ret addrMaybeId, ok bool) {
+	ret, ok = a.nextContact(tx)
+	if !ok {
+		return
+	}
+	addrString := ret.Addr.String()
+	tx.Set(a.nodesPendingContact, tx.Get(a.nodesPendingContact).(stmutil.Settish).Delete(ret))
 	tx.Set(a.addrBestIds, tx.Get(a.addrBestIds).(stmutil.Mappish).Delete(addrString))
 	tx.Set(a.triedAddrs, tx.Get(a.triedAddrs).(stmutil.Settish).Add(addrString))
-	return addr
+	return
 }

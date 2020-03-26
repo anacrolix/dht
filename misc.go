@@ -39,27 +39,30 @@ func (me addrMaybeId) String() string {
 	}
 }
 
+func (l addrMaybeId) closerThan(r addrMaybeId, target int160) bool {
+	var ml missinggo.MultiLess
+	ml.NextBool(r.Id == nil, l.Id == nil)
+	if l.Id != nil && r.Id != nil {
+		d := distance(*l.Id, target).Cmp(distance(*r.Id, target))
+		ml.StrictNext(d == 0, d < 0)
+	}
+	// TODO: Use bytes/hash when it's available (go1.14?), and have a unique seed for each
+	// instance.
+	hashString := func(s string) uint64 {
+		h := fnv.New64a()
+		h.Write([]byte(s))
+		return h.Sum64()
+	}
+	lh := hashString(l.Addr.String())
+	rh := hashString(r.Addr.String())
+	ml.StrictNext(lh == rh, lh < rh)
+	//ml.StrictNext(l.Addr.String() == r.Addr.String(), l.Addr.String() < r.Addr.String())
+	return ml.Less()
+
+}
+
 func nodesByDistance(target int160) stmutil.Settish {
-	return stmutil.NewSortedSet(func(_l, _r interface{}) bool {
-		var ml missinggo.MultiLess
-		l := _l.(addrMaybeId)
-		r := _r.(addrMaybeId)
-		ml.NextBool(r.Id == nil, l.Id == nil)
-		if l.Id != nil && r.Id != nil {
-			d := distance(*l.Id, target).Cmp(distance(*r.Id, target))
-			ml.StrictNext(d == 0, d < 0)
-		}
-		// TODO: Use bytes/hash when it's available (go1.14?), and have a unique seed for each
-		// instance.
-		hashString := func(s string) uint64 {
-			h := fnv.New64a()
-			h.Write([]byte(s))
-			return h.Sum64()
-		}
-		lh := hashString(l.Addr.String())
-		rh := hashString(r.Addr.String())
-		ml.StrictNext(lh == rh, lh < rh)
-		//ml.StrictNext(l.Addr.String() == r.Addr.String(), l.Addr.String() < r.Addr.String())
-		return ml.Less()
+	return stmutil.NewSortedSet(func(l, r interface{}) bool {
+		return l.(addrMaybeId).closerThan(r.(addrMaybeId), target)
 	})
 }

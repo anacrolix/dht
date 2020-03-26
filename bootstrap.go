@@ -26,8 +26,9 @@ func (s *Server) Bootstrap() (ts TraversalStats, err error) {
 		}
 		txRes := stm.Atomically(stm.Select(
 			func(tx *stm.Tx) interface{} {
-				addr := traversal.nextAddr(tx)
-				dhtAddr := NewAddr(addr.UDP())
+				addr, ok := traversal.popNextContact(tx)
+				tx.Assert(ok)
+				dhtAddr := NewAddr(addr.Addr.UDP())
 				tx.Set(outstanding, tx.Get(outstanding).(int)+1)
 				return txResT{
 					io: s.beginQuery(dhtAddr, "dht bootstrap find_node", func() numWrites {

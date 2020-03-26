@@ -289,7 +289,7 @@ func (s *Server) processPacket(b []byte, addr Addr) {
 		s.logger().Printf("received response for untracked transaction %q from %v", d.T, addr)
 		return
 	}
-	s.logger().Printf("received response for transaction %q from %v", d.T, addr)
+	//s.logger().Printf("received response for transaction %q from %v", d.T, addr)
 	go t.handleResponse(d)
 	if n != nil {
 		n.lastGotResponse = time.Now()

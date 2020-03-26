@@ -35,7 +35,7 @@ func (me addrMaybeId) String() string {
 	if me.Id == nil {
 		return fmt.Sprintf("unknown id at %s", me.Addr)
 	} else {
-		return fmt.Sprintf("%x at %v", *me.Id, me.Addr)
+		return fmt.Sprintf("%v at %v", *me.Id, me.Addr)
 	}
 }
 

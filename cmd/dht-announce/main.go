@@ -3,7 +3,9 @@ package main
 import (
 	"net"
 	"os"
+	"os/signal"
 	"sync"
+	"time"
 
 	"github.com/anacrolix/log"
 
@@ -40,7 +42,14 @@ func mainErr() int {
 		return 1
 	}
 	defer s.Close()
-	wg := sync.WaitGroup{}
+	var wg sync.WaitGroup
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, os.Interrupt)
+	stop := make(chan struct{})
+	go func() {
+		<-sigChan
+		close(stop)
+	}()
 	addrs := make(map[[20]byte]map[string]struct{}, len(flags.Infohash))
 	for _, ih := range flags.Infohash {
 		a, err := s.Announce(ih, flags.Port, false)
@@ -61,8 +70,13 @@ func mainErr() int {
 					}
 				}
 			}
+			time.Sleep(time.Second)
 			log.Printf("%v contacted %v nodes", a, a.NumContacted())
 		}(ih)
+		go func() {
+			<-stop
+			a.Close()
+		}()
 	}
 	wg.Wait()
 	for _, ih := range flags.Infohash {

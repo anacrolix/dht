@@ -263,8 +263,9 @@ func TestBadGetPeersResponse(t *testing.T) {
 	}()
 	a, err := s.Announce([20]byte{}, 0, true)
 	require.NoError(t, err)
-	_, ok := <-a.Peers
-	require.False(t, ok)
+	// Drain the Announce until it closes.
+	for range a.Peers {
+	}
 }
 
 func TestBootstrapRace(t *testing.T) {

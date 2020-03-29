@@ -9,11 +9,10 @@ import (
 	"sync/atomic"
 
 	"github.com/anacrolix/log"
-	"github.com/benbjohnson/immutable"
-
 	"github.com/anacrolix/missinggo/v2/conntrack"
 	"github.com/anacrolix/stm"
 	"github.com/anacrolix/stm/stmutil"
+	"github.com/benbjohnson/immutable"
 
 	"github.com/anacrolix/dht/v2/krpc"
 )
@@ -40,6 +39,7 @@ type Announce struct {
 	// The torrent port should be determined by the receiver in case we're
 	// being NATed.
 	announcePortImplied bool
+	scrape              bool
 
 	// List of pendingAnnouncePeer. TODO: Perhaps this should be sorted by distance to the target,
 	// so we can do that sloppy hash stuff ;).
@@ -62,10 +62,16 @@ func (a *Announce) NumContacted() int64 {
 	return atomic.LoadInt64(&a.numGetPeers)
 }
 
+type AnnounceOpt *struct{}
+
+var scrape = AnnounceOpt(&struct{}{})
+
+func Scrape() AnnounceOpt { return scrape }
+
 // Traverses the DHT graph toward nodes that store peers for the infohash, streaming them to the
 // caller, and announcing the local node to each responding node if port is non-zero or impliedPort
 // is true.
-func (s *Server) Announce(infoHash [20]byte, port int, impliedPort bool) (*Announce, error) {
+func (s *Server) Announce(infoHash [20]byte, port int, impliedPort bool, opts ...AnnounceOpt) (*Announce, error) {
 	startAddrs, err := s.traversalStartingNodes()
 	if err != nil {
 		return nil, err
@@ -81,6 +87,11 @@ func (s *Server) Announce(infoHash [20]byte, port int, impliedPort bool) (*Annou
 		pending:              stm.NewVar(0),
 		pendingAnnouncePeers: stm.NewVar(newPendingAnnouncePeers(infoHashInt160)),
 		traversal:            newTraversal(infoHashInt160),
+	}
+	for _, opt := range opts {
+		if opt == scrape {
+			a.scrape = true
+		}
 	}
 	var ctx context.Context
 	ctx, a.cancel = context.WithCancel(context.Background())
@@ -184,23 +195,25 @@ func finalizeCteh(cteh *conntrack.EntryHandle, writes numWrites) {
 }
 
 func (a *Announce) getPeers(addr Addr) numWrites {
-	m, writes, _ := a.server.getPeers(context.TODO(), addr, a.infoHash)
+	m, writes, _ := a.server.getPeers(context.TODO(), addr, a.infoHash, a.scrape)
 	// Register suggested nodes closer to the target info-hash.
-	if m.R != nil && m.SenderID() != nil {
-		expvars.Add("announce get_peers response nodes values", int64(len(m.R.Nodes)))
-		expvars.Add("announce get_peers response nodes6 values", int64(len(m.R.Nodes6)))
-		m.R.ForAllNodes(a.responseNode)
+	if r := m.R; r != nil {
+		id := &r.ID
+		expvars.Add("announce get_peers response nodes values", int64(len(r.Nodes)))
+		expvars.Add("announce get_peers response nodes6 values", int64(len(r.Nodes6)))
+		r.ForAllNodes(a.responseNode)
 		select {
 		case a.values <- PeersValues{
-			Peers: m.R.Values,
+			Peers: r.Values,
 			NodeInfo: krpc.NodeInfo{
 				Addr: addr.KRPC(),
-				ID:   *m.SenderID(),
+				ID:   *id,
 			},
+			Return: *r,
 		}:
 		case <-a.done:
 		}
-		a.maybeAnnouncePeer(addr, m.R.Token, m.SenderID())
+		a.maybeAnnouncePeer(addr, r.Token, id)
 	}
 	return writes
 }
@@ -211,6 +224,7 @@ func (a *Announce) getPeers(addr Addr) numWrites {
 type PeersValues struct {
 	Peers         []Peer // Peers given in get_peers response.
 	krpc.NodeInfo        // The node that gave the response.
+	krpc.Return
 }
 
 // Stop the announce.

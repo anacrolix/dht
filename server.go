@@ -860,12 +860,16 @@ func (s *Server) Close() {
 	s.socket.Close()
 }
 
-func (s *Server) getPeers(ctx context.Context, addr Addr, infoHash int160) (krpc.Msg, numWrites, error) {
-	m, writes, err := s.queryContext(ctx, addr, "get_peers", &krpc.MsgArgs{
+func (s *Server) getPeers(ctx context.Context, addr Addr, infoHash int160, scrape bool) (krpc.Msg, numWrites, error) {
+	args := krpc.MsgArgs{
 		InfoHash: infoHash.AsByteArray(),
 		// TODO: Maybe IPv4-only Servers won't want IPv6 nodes?
 		Want: []krpc.Want{krpc.WantNodes, krpc.WantNodes6},
-	})
+	}
+	if scrape {
+		args.Scrape = 1
+	}
+	m, writes, err := s.queryContext(ctx, addr, "get_peers", &args)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.addResponseNodes(m)

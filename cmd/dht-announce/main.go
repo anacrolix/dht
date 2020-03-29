@@ -24,8 +24,9 @@ func main() {
 
 func mainErr() int {
 	var flags = struct {
-		Port  int
-		Debug bool
+		Port   int
+		Debug  bool
+		Scrape bool
 		tagflag.StartPos
 		Infohash [][20]byte
 	}{}
@@ -52,7 +53,13 @@ func mainErr() int {
 	}()
 	addrs := make(map[[20]byte]map[string]struct{}, len(flags.Infohash))
 	for _, ih := range flags.Infohash {
-		a, err := s.Announce(ih, flags.Port, false)
+		// PSA: Go sucks.
+		a, err := s.Announce(ih, flags.Port, false, func() (ret []dht.AnnounceOpt) {
+			if flags.Scrape {
+				ret = append(ret, dht.Scrape())
+			}
+			return
+		}()...)
 		if err != nil {
 			log.Printf("error announcing %s: %s", ih, err)
 			continue
@@ -68,6 +75,12 @@ func mainErr() int {
 						log.Printf("got peer %s for %x from %s", p, ih, ps.NodeInfo)
 						addrs[ih][s] = struct{}{}
 					}
+				}
+				if bf := ps.BFpe; bf != nil {
+					log.Printf("%v claims %v peers for %x", ps.NodeInfo, bf.EstimateCount(), ih)
+				}
+				if bf := ps.BFsd; bf != nil {
+					log.Printf("%v claims %v seeds for %x", ps.NodeInfo, bf.EstimateCount(), ih)
 				}
 			}
 			time.Sleep(time.Second)

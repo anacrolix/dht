@@ -52,6 +52,10 @@ type Return struct {
 	Nodes6 CompactIPv6NodeInfo `bencode:"nodes6,omitempty"` // K closest nodes to the requested target
 	Token  *string             `bencode:"token,omitempty"`  // Token for future announce_peer
 	Values []NodeAddr          `bencode:"values,omitempty"` // Torrent peers
+
+	// BEP 33
+	BFsd *ScrapeBloomFilter `bencode:"BFsd,omitempty"`
+	BFpe *ScrapeBloomFilter `bencode:"BFpe,omitempty"`
 }
 
 func (r Return) ForAllNodes(f func(NodeInfo)) {

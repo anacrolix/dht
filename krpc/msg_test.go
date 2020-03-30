@@ -123,3 +123,8 @@ func floorDecimals(f float64, decimals int) float64 {
 	p := math.Pow10(decimals)
 	return math.Floor(f*p) / p
 }
+
+func TestEmptyScrapeBloomFilterEstimatedCount(t *testing.T) {
+	var f ScrapeBloomFilter
+	assert.EqualValues(t, 0, math.Floor(f.EstimateCount()))
+}

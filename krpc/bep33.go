@@ -37,7 +37,10 @@ func (me ScrapeBloomFilter) countZeroes() (ret int) {
 	return
 }
 
-func (me ScrapeBloomFilter) EstimateCount() float64 {
+func (me *ScrapeBloomFilter) EstimateCount() float64 {
+	if me == nil {
+		return 0
+	}
 	c := float64(me.countZeroes())
 	if c > m-1 {
 		c = m - 1

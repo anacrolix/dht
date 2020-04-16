@@ -158,18 +158,10 @@ func NewServer(c *ServerConfig) (s *Server, err error) {
 	// If Logger is empty, emulate the old behaviour: Everything is logged to the default location,
 	// and there are no debug messages.
 	if c.Logger.LoggerImpl == nil {
-		c.Logger = log.Default.WithFilter(func(m log.Msg) bool {
-			return !m.HasValue(log.Debug)
-		})
+		c.Logger = log.Default.FilterLevel(log.Info)
 	}
 	// Add log.Debug by default.
-	c.Logger = c.Logger.WithMap(func(m log.Msg) log.Msg {
-		var l log.Level
-		if m.GetValueByType(&l) {
-			return m
-		}
-		return m.WithValues(log.Debug)
-	})
+	c.Logger = c.Logger.WithDefaultLevel(log.Debug)
 
 	s = &Server{
 		config:      *c,
@@ -701,7 +693,7 @@ func (s *Server) makeQueryBytes(q string, a *krpc.MsgArgs, t string) []byte {
 
 func (s *Server) queryContext(ctx context.Context, addr Addr, q string, a *krpc.MsgArgs) (reply krpc.Msg, writes numWrites, err error) {
 	defer func(started time.Time) {
-		s.logger().WithValues(log.Debug, q).Printf(
+		s.logger().WithDefaultLevel(log.Debug).WithValues(q).Printf(
 			"queryContext(%v) returned after %v (err=%v, reply.Y=%v, reply.E=%v, writes=%v)",
 			q, time.Since(started), err, reply.Y, reply.E, writes)
 	}(time.Now())

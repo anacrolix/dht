@@ -169,50 +169,51 @@ func TestEqualPointers(t *testing.T) {
 }
 
 func TestHook(t *testing.T) {
-	t.Log("TestHook: Starting with Ping intercept/passthrough")
-	srv, err := NewServer(&ServerConfig{
+	pinger, err := NewServer(&ServerConfig{
 		Conn:     mustListen("127.0.0.1:5678"),
 		PublicIP: net.IPv4(127, 0, 0, 1),
 	})
 	require.NoError(t, err)
-	defer srv.Close()
+	defer pinger.Close()
 	// Establish server with a hook attached to "ping"
-	hookCalled := make(chan bool)
-	srv0, err := NewServer(&ServerConfig{
+	hookCalled := make(chan struct{}, 1)
+	receiver, err := NewServer(&ServerConfig{
 		Conn:          mustListen("127.0.0.1:5679"),
 		PublicIP:      net.IPv4(127, 0, 0, 1),
 		StartingNodes: addrResolver("127.0.0.1:5678"),
 		OnQuery: func(m *krpc.Msg, addr net.Addr) bool {
+			t.Logf("receiver got msg: %v", m)
 			if m.Q == "ping" {
-				hookCalled <- true
+				select {
+				case hookCalled <- struct{}{}:
+				default:
+				}
 			}
 			return true
 		},
 	})
 	require.NoError(t, err)
-	defer srv0.Close()
-	// Ping srv0 from srv to trigger hook. Should also receive a response.
+	defer receiver.Close()
+	// Ping receiver from pinger to trigger hook. Should also receive a response.
 	t.Log("TestHook: Servers created, hook for ping established. Calling Ping.")
-	err = srv.Ping(&net.UDPAddr{
+	pingCallbackHit := make(chan struct{})
+	err = pinger.Ping(&net.UDPAddr{
 		IP:   []byte{127, 0, 0, 1},
-		Port: srv0.Addr().(*net.UDPAddr).Port,
+		Port: receiver.Addr().(*net.UDPAddr).Port,
 	}, func(m krpc.Msg, err error) {
-		t.Log("TestHook: Sender received response from pinged hook server, so normal execution resumed.")
+		close(pingCallbackHit)
 	})
 	assert.NoError(t, err)
 	// Await signal that hook has been called.
 	select {
 	case <-hookCalled:
-		{
-			// Success, hook was triggered. Todo: Ensure that "ok" channel
-			// receives, also, indicating normal handling proceeded also.
-			t.Log("TestHook: Received ping, hook called and returned to normal execution!")
-			return
-		}
+		// Success, hook was triggered. TODO: Ensure that "ok" channel
+		// receives, also, indicating normal handling proceeded also.
+		t.Log("TestHook: Received ping, hook called and returned to normal execution!")
+		<-pingCallbackHit
+		t.Log("TestHook: Sender received response from pinged hook server, so normal execution resumed.")
 	case <-time.After(time.Second * 1):
-		{
-			t.Error("Failed to see evidence of ping hook being called after 2 seconds.")
-		}
+		t.Error("Failed to see evidence of ping hook being called after 2 seconds.")
 	}
 }
 

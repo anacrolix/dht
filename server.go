@@ -712,11 +712,15 @@ func (s *Server) queryContext(ctx context.Context, addr Addr, q string, a *krpc.
 	tk.T = tid
 	s.addTransaction(tk, t)
 	s.mu.Unlock()
+	// Receives a non-nil error from the sender, and closes when the sender completes.
 	sendErr := make(chan error, 1)
 	sendCtx, cancelSend := context.WithCancel(ctx)
-	defer cancelSend()
 	go pprof.Do(sendCtx, pprof.Labels("q", q), func(ctx context.Context) {
-		s.transactionQuerySender(ctx, sendErr, s.makeQueryBytes(q, a, tid), &writes, addr)
+		err := s.transactionQuerySender(ctx, s.makeQueryBytes(q, a, tid), &writes, addr)
+		if err != nil {
+			sendErr <- err
+		}
+		close(sendErr)
 	})
 	expvars.Add(fmt.Sprintf("outbound %s queries", q), 1)
 	select {
@@ -725,6 +729,11 @@ func (s *Server) queryContext(ctx context.Context, addr Addr, q string, a *krpc.
 		err = ctx.Err()
 	case err = <-sendErr:
 	}
+	// Make sure the query sender stops.
+	cancelSend()
+	// Make sure the query sender has returned, it will either send an error that we didn't catch
+	// above, or the channel will be closed by the sender completing.
+	<-sendErr
 	s.mu.Lock()
 	s.deleteTransaction(tk)
 	if err != nil {
@@ -736,8 +745,7 @@ func (s *Server) queryContext(ctx context.Context, addr Addr, q string, a *krpc.
 	return
 }
 
-func (s *Server) transactionQuerySender(sendCtx context.Context, sendErr chan<- error, b []byte, writes *numWrites, addr Addr) {
-	defer close(sendErr)
+func (s *Server) transactionQuerySender(sendCtx context.Context, b []byte, writes *numWrites, addr Addr) error {
 	err := transactionSender(
 		sendCtx,
 		func() error {
@@ -751,14 +759,13 @@ func (s *Server) transactionQuerySender(sendCtx context.Context, sendErr chan<- 
 		maxTransactionSends,
 	)
 	if err != nil {
-		sendErr <- err
-		return
+		return err
 	}
 	select {
 	case <-sendCtx.Done():
-		sendErr <- sendCtx.Err()
+		return sendCtx.Err()
 	case <-time.After(s.resendDelay()):
-		sendErr <- errors.New("timed out")
+		return errors.New("timed out")
 	}
 
 }

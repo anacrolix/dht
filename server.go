@@ -927,6 +927,8 @@ func (s *Server) traversalStartingNodes() (nodes []addrMaybeId, err error) {
 		addrs, err := s.config.StartingNodes()
 		if err != nil {
 			return nil, errors.Wrap(err, "getting starting nodes")
+		} else {
+			//log.Printf("resolved %v addresses", len(addrs))
 		}
 		for _, a := range addrs {
 			nodes = append(nodes, addrMaybeId{a.KRPC(), nil})

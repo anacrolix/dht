@@ -97,7 +97,7 @@ type Peer = krpc.NodeAddr
 var dnsResolver = &dnscache.Resolver{}
 
 func dnsResolverRefresher() {
-	ticker := time.NewTicker(time.Minute)
+	ticker := time.NewTicker(5 * time.Minute)
 	defer ticker.Stop()
 	for {
 		<-ticker.C

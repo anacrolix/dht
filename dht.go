@@ -124,7 +124,7 @@ func GlobalBootstrapAddrs(network string) (addrs []Addr, err error) {
 		}
 		hostAddrs, err := dnsResolver.LookupHost(context.Background(), host)
 		if err != nil {
-			log.Default.WithDefaultLevel(log.Debug).Printf("error looking up %q: %v", s, err)
+			//log.Default.WithDefaultLevel(log.Debug).Printf("error looking up %q: %v", s, err)
 			continue
 		}
 		for _, a := range hostAddrs {

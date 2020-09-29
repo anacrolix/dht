@@ -78,7 +78,7 @@ func (s *Server) Announce(infoHash [20]byte, port int, impliedPort bool, opts ..
 	}
 	infoHashInt160 := int160FromByteArray(infoHash)
 	a := &Announce{
-		Peers:                make(chan PeersValues, 100),
+		Peers:                make(chan PeersValues),
 		values:               make(chan PeersValues),
 		server:               s,
 		infoHash:             infoHashInt160,

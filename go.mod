@@ -5,7 +5,7 @@ require (
 	github.com/anacrolix/log v0.6.1-0.20200416071330-f58a030e6149
 	github.com/anacrolix/missinggo v1.2.1
 	github.com/anacrolix/missinggo/v2 v2.4.1-0.20200227072623-f02f6484f997
-	github.com/anacrolix/stm v0.2.0
+	github.com/anacrolix/stm v0.2.1-0.20201002073511-c35a2c748c6a
 	github.com/anacrolix/sync v0.2.0
 	github.com/anacrolix/tagflag v1.0.1
 	github.com/anacrolix/torrent v1.15.0

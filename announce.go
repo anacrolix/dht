@@ -318,7 +318,7 @@ func (a *Announce) run() {
 				if tx.Get(a.doneVar).(bool) || a.getPending(tx) == 0 && a.getPendingAnnouncePeers(tx).Len() == 0 {
 					return txResT{done: true}
 				}
-				panic(stm.Retry)
+				return tx.Retry()
 			},
 		)).(txResT)
 		if txRes.done {

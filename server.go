@@ -714,14 +714,14 @@ func (s *Server) queryContext(ctx context.Context, addr Addr, q string, a *krpc.
 	s.mu.Unlock()
 	// Receives a non-nil error from the sender, and closes when the sender completes.
 	sendErr := make(chan error, 1)
-	sendCtx, cancelSend := context.WithCancel(ctx)
-	go pprof.Do(sendCtx, pprof.Labels("q", q), func(ctx context.Context) {
-		err := s.transactionQuerySender(ctx, s.makeQueryBytes(q, a, tid), &writes, addr)
+	sendCtx, cancelSend := context.WithCancel(pprof.WithLabels(ctx, pprof.Labels("q", q)))
+	go func() {
+		err := s.transactionQuerySender(sendCtx, s.makeQueryBytes(q, a, tid), &writes, addr)
 		if err != nil {
 			sendErr <- err
 		}
 		close(sendErr)
-	})
+	}()
 	expvars.Add(fmt.Sprintf("outbound %s queries", q), 1)
 	select {
 	case reply = <-replyChan:

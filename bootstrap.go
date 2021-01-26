@@ -33,11 +33,11 @@ func (s *Server) Bootstrap() (ts TraversalStats, err error) {
 				return txResT{
 					io: s.beginQuery(dhtAddr, "dht bootstrap find_node", func() numWrites {
 						atomic.AddInt64(&ts.NumAddrsTried, 1)
-						m, writes, err := s.findNode(dhtAddr, s.id)
-						if err == nil {
+						res := s.findNode(dhtAddr, s.id)
+						if res.Err == nil {
 							atomic.AddInt64(&ts.NumResponses, 1)
 						}
-						if r := m.R; r != nil {
+						if r := res.Reply.R; r != nil {
 							r.ForAllNodes(func(ni krpc.NodeInfo) {
 								id := int160FromByteArray(ni.ID)
 								stm.Atomically(traversal.pendContact(addrMaybeId{
@@ -49,7 +49,7 @@ func (s *Server) Bootstrap() (ts TraversalStats, err error) {
 						stm.Atomically(stm.VoidOperation(func(tx *stm.Tx) {
 							tx.Set(outstanding, tx.Get(outstanding).(int)-1)
 						}))
-						return writes
+						return res.writes
 					})(tx).(func()),
 				}
 			},

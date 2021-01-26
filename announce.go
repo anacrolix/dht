@@ -170,8 +170,8 @@ func (a *Announce) maybeAnnouncePeer(to Addr, token *string, peerId *krpc.ID) {
 }
 
 func (a *Announce) announcePeer(peer pendingAnnouncePeer) numWrites {
-	_, writes, _ := a.server.announcePeer(NewAddr(peer.Addr.UDP()), a.infoHash, a.announcePort, peer.token, a.announcePortImplied)
-	return writes
+	res := a.server.announcePeer(NewAddr(peer.Addr.UDP()), a.infoHash, a.announcePort, peer.token, a.announcePortImplied)
+	return res.writes
 }
 
 func (a *Announce) beginAnnouncePeer(tx *stm.Tx) interface{} {
@@ -195,7 +195,8 @@ func finalizeCteh(cteh *conntrack.EntryHandle, writes numWrites) {
 }
 
 func (a *Announce) getPeers(addr Addr) numWrites {
-	m, writes, _ := a.server.getPeers(context.TODO(), addr, a.infoHash, a.scrape)
+	res := a.server.getPeers(context.TODO(), addr, a.infoHash, a.scrape)
+	m := res.Reply
 	// Register suggested nodes closer to the target info-hash.
 	if r := m.R; r != nil {
 		id := &r.ID
@@ -215,7 +216,7 @@ func (a *Announce) getPeers(addr Addr) numWrites {
 		}
 		a.maybeAnnouncePeer(addr, r.Token, id)
 	}
-	return writes
+	return res.writes
 }
 
 // Corresponds to the "values" key in a get_peers KRPC response. A list of

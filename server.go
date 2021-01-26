@@ -47,11 +47,13 @@ type Server struct {
 	tokenServer  tokenServer // Manages tokens we issue to our queriers.
 	config       ServerConfig
 	stats        ServerStats
-	sendLimit    interface {
-		Wait(ctx context.Context) error
-		Allow() bool
-		AllowStm(tx *stm.Tx) bool
-	}
+	sendLimit    sendLimiter
+}
+
+type sendLimiter interface{
+	Wait(ctx context.Context) error
+	Allow() bool
+	AllowStm(tx *stm.Tx) bool
 }
 
 func (s *Server) numGoodNodes() (num int) {

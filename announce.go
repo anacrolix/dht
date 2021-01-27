@@ -170,7 +170,8 @@ func (a *Announce) maybeAnnouncePeer(to Addr, token *string, peerId *krpc.ID) {
 }
 
 func (a *Announce) announcePeer(peer pendingAnnouncePeer) numWrites {
-	res := a.server.announcePeer(NewAddr(peer.Addr.UDP()), a.infoHash, a.announcePort, peer.token, a.announcePortImplied)
+	res := a.server.announcePeer(NewAddr(peer.Addr.UDP()), a.infoHash, a.announcePort, peer.token, a.announcePortImplied,
+		QueryRateLimiting{NotFirst: true})
 	return res.writes
 }
 
@@ -195,7 +196,10 @@ func finalizeCteh(cteh *conntrack.EntryHandle, writes numWrites) {
 }
 
 func (a *Announce) getPeers(addr Addr) numWrites {
-	res := a.server.getPeers(context.TODO(), addr, a.infoHash, a.scrape)
+	res := a.server.GetPeers(context.TODO(), addr, a.infoHash, a.scrape, QueryRateLimiting{
+		// This is paid for in earlier in a call to Server.beginQuery.
+		NotFirst: true,
+	})
 	m := res.Reply
 	// Register suggested nodes closer to the target info-hash.
 	if r := m.R; r != nil {

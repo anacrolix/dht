@@ -50,7 +50,7 @@ type Server struct {
 	sendLimit    sendLimiter
 }
 
-type sendLimiter interface{
+type sendLimiter interface {
 	Wait(ctx context.Context) error
 	Allow() bool
 	AllowStm(tx *stm.Tx) bool
@@ -640,6 +640,11 @@ func (s *Server) connTrackEntryForAddr(a Addr) conntrack.Entry {
 
 type numWrites int
 
+// Returns an STM operation that returns a func() when the Server's connection tracking and send
+// rate-limiting allow, that executes `f`, where `f` returns the number of send operations actually
+// performed. After `f` completes, the func rectifies any rate-limiting against the number of writes
+// reported. If the operation returns, the *first* write has been accounted for already (See
+// QueryRateLimiting.NotFirst).
 func (s *Server) beginQuery(addr Addr, reason string, f func() numWrites) stm.Operation {
 	return func(tx *stm.Tx) interface{} {
 		tx.Assert(s.sendLimit.AllowStm(tx))
@@ -652,7 +657,7 @@ func (s *Server) beginQuery(addr Addr, reason string, f func() numWrites) stm.Op
 	}
 }
 
-func (s *Server) query(addr Addr, q string, a *krpc.MsgArgs, callback func(krpc.Msg, error)) error {
+func (s *Server) query(addr Addr, q string, a krpc.MsgArgs, callback func(krpc.Msg, error)) error {
 	if callback == nil {
 		callback = func(krpc.Msg, error) {}
 	}
@@ -660,7 +665,8 @@ func (s *Server) query(addr Addr, q string, a *krpc.MsgArgs, callback func(krpc.
 		stm.Atomically(
 			s.beginQuery(addr, fmt.Sprintf("send dht query %q", q),
 				func() numWrites {
-					res := s.queryContext(context.Background(), addr, q, a)
+					res := s.Query(context.Background(), addr, q, QueryInput{
+						MsgArgs: a, RateLimiting: QueryRateLimiting{NotFirst: true}})
 					callback(res.Reply, res.Err)
 					return res.writes
 				},
@@ -670,16 +676,13 @@ func (s *Server) query(addr Addr, q string, a *krpc.MsgArgs, callback func(krpc.
 	return nil
 }
 
-func (s *Server) makeQueryBytes(q string, a *krpc.MsgArgs, t string) []byte {
-	if a == nil {
-		a = &krpc.MsgArgs{}
-	}
+func (s *Server) makeQueryBytes(q string, a krpc.MsgArgs, t string) []byte {
 	a.ID = s.ID()
 	m := krpc.Msg{
 		T: t,
 		Y: "q",
 		Q: q,
-		A: a,
+		A: &a,
 	}
 	// BEP 43. Outgoing queries from passive nodes should contain "ro":1 in the top level
 	// dictionary.
@@ -699,10 +702,30 @@ type QueryResult struct {
 	Err    error
 }
 
-func (s *Server) queryContext(ctx context.Context, addr Addr, q string, a *krpc.MsgArgs) (ret QueryResult) {
+// Rate-limiting to be applied to writes for a given query. Queries occur inside transactions that
+// will attempt to send several times. If the STM rate-limiting helpers are used, the first send is
+// often already accounted for in the rate-limiting machinery before the query method that does the
+// IO is invoked.
+type QueryRateLimiting struct {
+	// Don't rate-limit the first send for a query.
+	NotFirst bool
+	// Don't rate-limit any sends for a query. Note that there's still built-in waits before retries.
+	NotAny bool
+}
+
+type QueryInput struct {
+	MsgArgs      krpc.MsgArgs
+	RateLimiting QueryRateLimiting
+}
+
+// Performs an arbitrary query. `q` is the query value, defined by the DHT BEP. `a` should contain
+// the appropriate argument values, if any. `a.ID` is clobbered by the Server. Responses to queries
+// made this way are not interpreted by the Server. More specific methods like FindNode and GetPeers
+// may make use of the response internally before passing it back to the caller.
+func (s *Server) Query(ctx context.Context, addr Addr, q string, input QueryInput) (ret QueryResult) {
 	defer func(started time.Time) {
 		s.logger().WithDefaultLevel(log.Debug).WithValues(q).Printf(
-			"queryContext(%v) returned after %v (err=%v, reply.Y=%v, reply.E=%v, writes=%v)",
+			"Query(%v) returned after %v (err=%v, reply.Y=%v, reply.E=%v, writes=%v)",
 			q, time.Since(started), ret.Err, ret.Reply.Y, ret.Reply.E, ret.writes)
 	}(time.Now())
 	replyChan := make(chan krpc.Msg, 1)
@@ -724,7 +747,12 @@ func (s *Server) queryContext(ctx context.Context, addr Addr, q string, a *krpc.
 	sendErr := make(chan error, 1)
 	sendCtx, cancelSend := context.WithCancel(pprof.WithLabels(ctx, pprof.Labels("q", q)))
 	go func() {
-		err := s.transactionQuerySender(sendCtx, s.makeQueryBytes(q, a, tid), &ret.writes, addr)
+		err := s.transactionQuerySender(
+			sendCtx,
+			s.makeQueryBytes(q, input.MsgArgs, tid),
+			&ret.writes,
+			addr,
+			input.RateLimiting)
 		if err != nil {
 			sendErr <- err
 		}
@@ -753,11 +781,17 @@ func (s *Server) queryContext(ctx context.Context, addr Addr, q string, a *krpc.
 	return
 }
 
-func (s *Server) transactionQuerySender(sendCtx context.Context, b []byte, writes *numWrites, addr Addr) error {
+func (s *Server) transactionQuerySender(
+	sendCtx context.Context, b []byte, writes *numWrites, addr Addr, rateLimiting QueryRateLimiting,
+) error {
 	err := transactionSender(
 		sendCtx,
 		func() error {
-			wrote, err := s.writeToNode(sendCtx, b, addr, *writes == 0, true)
+			wrote, err := s.writeToNode(sendCtx, b, addr,
+				// We only wait for the first write if rate-limiting is enabled for this query.
+				// Retries will defer to other queries.
+				*writes == 0,
+				!rateLimiting.NotAny && !(rateLimiting.NotFirst && *writes == 0))
 			if wrote {
 				*writes++
 			}
@@ -783,24 +817,26 @@ func (s *Server) Ping(node *net.UDPAddr, callback func(krpc.Msg, error)) error {
 	return s.ping(node, callback)
 }
 
+// This method is old, and probably needs a new signature.
 func (s *Server) ping(node *net.UDPAddr, callback func(krpc.Msg, error)) error {
-	return s.query(NewAddr(node), "ping", nil, callback)
+	return s.query(NewAddr(node), "ping", krpc.MsgArgs{}, callback)
 }
 
-func (s *Server) announcePeer(node Addr, infoHash int160, port int, token string, impliedPort bool) (ret QueryResult) {
+func (s *Server) announcePeer(node Addr, infoHash int160, port int, token string, impliedPort bool, rl QueryRateLimiting) (ret QueryResult) {
 	if port == 0 && !impliedPort {
 		ret.Err = errors.New("no port specified")
 		return
 	}
-	ret = s.queryContext(
+	ret = s.Query(
 		context.TODO(), node, "announce_peer",
-		&krpc.MsgArgs{
-			ImpliedPort: impliedPort,
-			InfoHash:    infoHash.AsByteArray(),
-			Port:        &port,
-			Token:       token,
-		},
-	)
+		QueryInput{
+			MsgArgs: krpc.MsgArgs{
+				ImpliedPort: impliedPort,
+				InfoHash:    infoHash.AsByteArray(),
+				Port:        &port,
+				Token:       token,
+			},
+			RateLimiting: rl})
 	if ret.Err != nil {
 		return
 	}
@@ -824,12 +860,15 @@ func (s *Server) addResponseNodes(d krpc.Msg) {
 	})
 }
 
-// Sends a find_node query to addr. targetID is the node we're looking for.
-func (s *Server) findNode(addr Addr, targetID int160) (ret QueryResult) {
-	ret = s.queryContext(context.TODO(), addr, "find_node", &krpc.MsgArgs{
-		Target: targetID.AsByteArray(),
-		Want:   []krpc.Want{krpc.WantNodes, krpc.WantNodes6},
-	})
+// Sends a find_node query to addr. targetID is the node we're looking for. The Server makes use of
+// some of the response fields.
+func (s *Server) FindNode(addr Addr, targetID int160, rl QueryRateLimiting) (ret QueryResult) {
+	ret = s.Query(context.TODO(), addr, "find_node", QueryInput{
+		MsgArgs: krpc.MsgArgs{
+			Target: targetID.AsByteArray(),
+			Want:   []krpc.Want{krpc.WantNodes, krpc.WantNodes6},
+		},
+		RateLimiting: rl})
 	// Scrape peers from the response to put in the server's table before
 	// handing the response back to the caller.
 	s.mu.Lock()
@@ -867,7 +906,7 @@ func (s *Server) Close() {
 	s.socket.Close()
 }
 
-func (s *Server) getPeers(ctx context.Context, addr Addr, infoHash int160, scrape bool) (ret QueryResult) {
+func (s *Server) GetPeers(ctx context.Context, addr Addr, infoHash int160, scrape bool, rl QueryRateLimiting) (ret QueryResult) {
 	args := krpc.MsgArgs{
 		InfoHash: infoHash.AsByteArray(),
 		// TODO: Maybe IPv4-only Servers won't want IPv6 nodes?
@@ -876,7 +915,10 @@ func (s *Server) getPeers(ctx context.Context, addr Addr, infoHash int160, scrap
 	if scrape {
 		args.Scrape = 1
 	}
-	ret = s.queryContext(ctx, addr, "get_peers", &args)
+	ret = s.Query(ctx, addr, "get_peers", QueryInput{
+		MsgArgs:      args,
+		RateLimiting: rl,
+	})
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	m := ret.Reply

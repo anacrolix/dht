@@ -33,7 +33,7 @@ func (s *Server) Bootstrap() (ts TraversalStats, err error) {
 				return txResT{
 					io: s.beginQuery(dhtAddr, "dht bootstrap find_node", func() numWrites {
 						atomic.AddInt64(&ts.NumAddrsTried, 1)
-						res := s.findNode(dhtAddr, s.id)
+						res := s.FindNode(dhtAddr, s.id, QueryRateLimiting{NotFirst: true})
 						if res.Err == nil {
 							atomic.AddInt64(&ts.NumResponses, 1)
 						}

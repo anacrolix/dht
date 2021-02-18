@@ -24,7 +24,7 @@ type Msg struct {
 	R        *Return  `bencode:"r,omitempty"` // RESPONSE type only
 	E        *Error   `bencode:"e,omitempty"` // ERROR type only
 	IP       NodeAddr `bencode:"ip,omitempty"`
-	ReadOnly bool     `bencode:"ro,omitempty"`
+	ReadOnly bool     `bencode:"ro,omitempty"` // BEP 43. Sender does not respond to queries.
 }
 
 type MsgArgs struct {

@@ -43,24 +43,21 @@ type ServerConfig struct {
 	// Don't respond to queries from other nodes.
 	Passive       bool
 	StartingNodes StartingNodesGetter
-	// Disable the DHT security extension:
-	// http://www.libtorrent.org/dht_sec.html.
+	// Disable the DHT security extension: http://www.libtorrent.org/dht_sec.html.
 	NoSecurity bool
 	// Initial IP blocklist to use. Applied before serving and bootstrapping
 	// begins.
 	IPBlocklist iplist.Ranger
-	// Used to secure the server's ID. Defaults to the Conn's LocalAddr(). Set
-	// to the IP that remote nodes will see, as that IP is what they'll use to
-	// validate our ID.
+	// Used to secure the server's ID. Defaults to the Conn's LocalAddr(). Set to the IP that remote
+	// nodes will see, as that IP is what they'll use to validate our ID.
 	PublicIP net.IP
 
-	// Hook received queries. Return false if you don't want to propagate to
-	// the default handlers.
+	// Hook received queries. Return false if you don't want to propagate to the default handlers.
 	OnQuery func(query *krpc.Msg, source net.Addr) (propagate bool)
 	// Called when a peer successfully announces to us.
 	OnAnnouncePeer func(infoHash metainfo.Hash, ip net.IP, port int, portOk bool)
-	// How long to wait before resending queries that haven't received a
-	// response. Defaults to a random value between 4.5 and 5.5s.
+	// How long to wait before resending queries that haven't received a response. Defaults to a
+	// random value between 4.5 and 5.5s.
 	QueryResendDelay func() time.Duration
 	// TODO: Expose Peers, to return NodeInfo for received get_peers queries.
 

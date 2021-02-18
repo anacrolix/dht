@@ -10,6 +10,7 @@ import (
 	"net"
 	"time"
 
+	peer_store "github.com/anacrolix/dht/v2/peer-store"
 	"github.com/rs/dnscache"
 
 	"github.com/anacrolix/log"
@@ -60,6 +61,7 @@ type ServerConfig struct {
 	// random value between 4.5 and 5.5s.
 	QueryResendDelay func() time.Duration
 	// TODO: Expose Peers, to return NodeInfo for received get_peers queries.
+	PeerStore peer_store.Interface
 
 	ConnectionTracking *conntrack.Instance
 

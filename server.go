@@ -11,6 +11,7 @@ import (
 	"text/tabwriter"
 	"time"
 
+	peer_store "github.com/anacrolix/dht/v2/peer-store"
 	"github.com/anacrolix/log"
 	"github.com/anacrolix/missinggo"
 	"github.com/anacrolix/missinggo/v2/conntrack"
@@ -351,6 +352,7 @@ func shouldReturnNodes(queryWants []krpc.Want, querySource net.IP) bool {
 	if len(queryWants) != 0 {
 		return wantsContain(queryWants, krpc.WantNodes)
 	}
+	// Is it possible to be over IPv6 with IPv4 endpoints?
 	return querySource.To4() != nil
 }
 
@@ -368,6 +370,37 @@ func (s *Server) makeReturnNodes(target int160, filter func(krpc.NodeAddr) bool)
 var krpcErrMissingArguments = krpc.Error{
 	Code: krpc.ErrorCodeProtocolError,
 	Msg:  "missing arguments dict",
+}
+
+// Filters peers per BEP 32 to return in the values field to a get_peers query.
+func filterPeers(querySourceIp net.IP, queryWants []krpc.Want, allPeers []krpc.NodeAddr) (filtered []krpc.NodeAddr) {
+	// The logic here is common with nodes, see BEP 32.
+	retain4 := shouldReturnNodes(queryWants, querySourceIp)
+	retain6 := shouldReturnNodes6(queryWants, querySourceIp)
+	for _, peer := range allPeers {
+		if ip, ok := func(ip net.IP) (net.IP, bool) {
+			as4 := peer.IP.To4()
+			as16 := peer.IP.To16()
+			switch {
+			case retain4 && len(ip) == net.IPv4len:
+				return ip, true
+			case retain6 && len(ip) == net.IPv6len:
+				return ip, true
+			case retain4 && as4 != nil:
+				// Is it possible that we're converting to an IPv4 address when the transport in use
+				// is IPv6?
+				return as4, true
+			case retain6 && as16 != nil:
+				// Couldn't any IPv4 address be converted to IPv6, but isn't listening over IPv6?
+				return as16, true
+			default:
+				return nil, false
+			}
+		}(peer.IP); ok {
+			filtered = append(filtered, krpc.NodeAddr{ip, peer.Port})
+		}
+	}
+	return
 }
 
 func (s *Server) setReturnNodes(r *krpc.Return, queryMsg krpc.Msg, querySource Addr) *krpc.Error {
@@ -417,12 +450,23 @@ func (s *Server) handleQuery(source Addr, m krpc.Msg) {
 	case "ping":
 		s.reply(source, m.T, krpc.Return{})
 	case "get_peers":
-		var r krpc.Return
-		// TODO: Return values.
-		if err := s.setReturnNodes(&r, m, source); err != nil {
-			s.sendError(source, m.T, *err)
+		// Check for the naked m.A.Want deref below.
+		if m.A == nil {
+			s.sendError(source, m.T, krpcErrMissingArguments)
 			break
 		}
+		var r krpc.Return
+		if ps := s.config.PeerStore; ps != nil {
+			r.Values = filterPeers(source.IP(), m.A.Want, ps.GetPeers(peer_store.InfoHash(args.InfoHash)))
+		}
+		if len(r.Values) == 0 {
+			if err := s.setReturnNodes(&r, m, source); err != nil {
+				s.sendError(source, m.T, *err)
+				break
+			}
+		}
+		// I wonder if we could choose not to return a token here, if we don't want an announce_peer
+		// from the querier.
 		r.Token = func() *string {
 			t := s.createToken(source)
 			return &t
@@ -437,24 +481,37 @@ func (s *Server) handleQuery(source Addr, m krpc.Msg) {
 		s.reply(source, m.T, r)
 	case "announce_peer":
 		readAnnouncePeer.Add(1)
+
 		if !s.validToken(args.Token, source) {
 			expvars.Add("received announce_peer with invalid token", 1)
 			return
 		}
 		expvars.Add("received announce_peer with valid token", 1)
+
+		var port int
+		portOk := false
+		if args.Port != nil {
+			port = *args.Port
+			portOk = true
+		}
+		if args.ImpliedPort {
+			port = source.Port()
+			portOk = true
+		}
+		if !portOk {
+			expvars.Add("received announce_peer with no derivable port", 1)
+		}
+
 		if h := s.config.OnAnnouncePeer; h != nil {
-			var port int
-			portOk := false
-			if args.Port != nil {
-				port = *args.Port
-				portOk = true
-			}
-			if args.ImpliedPort {
-				port = source.Port()
-				portOk = true
-			}
 			go h(metainfo.Hash(args.InfoHash), source.IP(), port, portOk)
 		}
+		if ps := s.config.PeerStore; ps != nil {
+			go ps.AddPeer(
+				peer_store.InfoHash(args.InfoHash),
+				krpc.NodeAddr{source.IP(), port},
+			)
+		}
+
 		s.reply(source, m.T, krpc.Return{})
 	default:
 		s.sendError(source, m.T, krpc.ErrorMethodUnknown)

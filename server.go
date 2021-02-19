@@ -86,10 +86,10 @@ func (s *Server) WriteStatus(w io.Writer) {
 	fmt.Fprintf(w, "Server node ID: %x\n", s.id.Bytes())
 	fmt.Fprintln(w)
 	tw := tabwriter.NewWriter(w, 0, 0, 1, ' ', 0)
-	fmt.Fprintf(tw, "b#\tnode id\taddr\tanntok\tlast query\tlast response\tcf\n")
+	fmt.Fprintf(tw, "b#\tnode id\taddr\tanntok\tlast query\tlast response\tcf\tro\n")
 	for i, b := range s.table.buckets {
 		b.EachNode(func(n *node) bool {
-			fmt.Fprintf(tw, "%d\t%x\t%s\t%v\t%s\t%s\t%d\n",
+			fmt.Fprintf(tw, "%d\t%x\t%s\t%v\t%s\t%s\t%d\t%b\n",
 				i,
 				n.id.Bytes(),
 				n.addr,
@@ -102,6 +102,7 @@ func (s *Server) WriteStatus(w io.Writer) {
 				prettySince(n.lastGotQuery),
 				prettySince(n.lastGotResponse),
 				n.consecutiveFailures,
+				n.readOnly,
 			)
 			return true
 		})

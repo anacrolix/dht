@@ -1064,3 +1064,7 @@ func (s *Server) AddNodesFromFile(fileName string) (added int, err error) {
 func (s *Server) logger() log.Logger {
 	return s.config.Logger
 }
+
+func (s *Server) PeerStore() peer_store.Interface {
+	return s.config.PeerStore
+}

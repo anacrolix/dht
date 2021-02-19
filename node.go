@@ -16,8 +16,8 @@ type node struct {
 	announceToken *string
 	readOnly      bool
 
-	lastGotQuery    time.Time
-	lastGotResponse time.Time
+	lastGotQuery    time.Time // From the remote node
+	lastGotResponse time.Time // From the remote node
 
 	consecutiveFailures int
 }

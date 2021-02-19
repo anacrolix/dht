@@ -47,6 +47,9 @@ func (n *node) IsGood() bool {
 	if n.id.IsZero() {
 		return false
 	}
+	if n.readOnly {
+		return false
+	}
 	if time.Since(n.lastGotResponse) < 15*time.Minute {
 		return true
 	}

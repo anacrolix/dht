@@ -265,10 +265,9 @@ func (s *Server) processPacket(b []byte, addr Addr) {
 	}
 	var n *node
 	if sid := d.SenderID(); sid != nil {
-		n, _ = s.getNode(addr, int160FromByteArray(*sid), !d.ReadOnly)
-		if n != nil && d.ReadOnly {
+		s.updateNode(addr, int160FromByteArray(*sid), !d.ReadOnly, func(n *node) {
 			n.readOnly = true
-		}
+		})
 	}
 	if d.Y == "q" {
 		expvars.Add("received queries", 1)
@@ -336,8 +335,7 @@ func (s *Server) AddNode(ni krpc.NodeInfo) error {
 	if id.IsZero() {
 		return s.Ping(ni.Addr.UDP(), nil)
 	}
-	_, err := s.getNode(NewAddr(ni.Addr.UDP()), int160FromByteArray(ni.ID), true)
-	return err
+	return s.updateNode(NewAddr(ni.Addr.UDP()), int160FromByteArray(ni.ID), true, func(*node) {})
 }
 
 func wantsContain(ws []krpc.Want, w krpc.Want) bool {
@@ -431,9 +429,9 @@ func (s *Server) handleQuery(source Addr, m krpc.Msg) {
 		}
 	}()
 	if m.SenderID() != nil {
-		if n, _ := s.getNode(source, int160FromByteArray(*m.SenderID()), !m.ReadOnly); n != nil {
+		s.updateNode(source, int160FromByteArray(*m.SenderID()), !m.ReadOnly, func(n *node) {
 			n.lastGotQuery = time.Now()
-		}
+		})
 	}
 	if s.config.OnQuery != nil {
 		propagate := s.config.OnQuery(&m, source.Raw())
@@ -558,25 +556,14 @@ func (s *Server) reply(addr Addr, t string, r krpc.Return) {
 	}
 }
 
-// Returns the node if it's in the routing table, adding it if appropriate.
-func (s *Server) getNode(addr Addr, id int160, tryAdd bool) (*node, error) {
-	if n := s.table.getNode(addr, id); n != nil {
-		return n, nil
-	}
-	n := &node{nodeKey: nodeKey{
-		id:   id,
-		addr: addr,
-	}}
-	// Check that the node would be good to begin with. (It might have a bad
-	// ID or banned address, or we fucked up the initial node field
-	// invariant.)
+// Adds a node if appropriate.
+func (s *Server) addNode(n *node) error {
+	// Check that the node would be good to begin with. (It might have a bad ID or banned address,
+	// or we fucked up the initial node field invariant.)
 	if err := s.nodeErr(n); err != nil {
-		return nil, err
+		return err
 	}
-	if !tryAdd {
-		return nil, errors.New("node not present and add flag false")
-	}
-	b := s.table.bucketForID(id)
+	b := s.table.bucketForID(n.id)
 	if b.Len() >= s.table.k {
 		if b.EachNode(func(n *node) bool {
 			if s.nodeIsBad(n) {
@@ -584,13 +571,33 @@ func (s *Server) getNode(addr Addr, id int160, tryAdd bool) (*node, error) {
 			}
 			return b.Len() >= s.table.k
 		}) {
-			return nil, errors.New("no room in bucket")
+			return errors.New("no room in bucket")
 		}
 	}
 	if err := s.table.addNode(n); err != nil {
 		panic(fmt.Sprintf("expected to add node: %s", err))
 	}
-	return n, nil
+	return nil
+}
+
+// Updates the node, adding it if appropriate.
+func (s *Server) updateNode(addr Addr, id int160, tryAdd bool, update func(*node)) error {
+	n := s.table.getNode(addr, id)
+	missing := n == nil
+	if missing {
+		if !tryAdd {
+			return errors.New("node not present and add flag false")
+		}
+		n = &node{nodeKey: nodeKey{
+			id:   id,
+			addr: addr,
+		}}
+	}
+	update(n)
+	if !missing {
+		return nil
+	}
+	return s.addNode(n)
 }
 
 func (s *Server) nodeIsBad(n *node) bool {
@@ -914,7 +921,7 @@ func (s *Server) addResponseNodes(d krpc.Msg) {
 		return
 	}
 	d.R.ForAllNodes(func(ni krpc.NodeInfo) {
-		s.getNode(NewAddr(ni.Addr.UDP()), int160FromByteArray(ni.ID), true)
+		s.updateNode(NewAddr(ni.Addr.UDP()), int160FromByteArray(ni.ID), true, func(*node) {})
 	})
 }
 
@@ -990,9 +997,9 @@ func (s *Server) GetPeers(ctx context.Context, addr Addr, infoHash int160, scrap
 			expvars.Add("get_peers responses with token", 1)
 		}
 		if m.SenderID() != nil && m.R.Token != nil {
-			if n, _ := s.getNode(addr, int160FromByteArray(*m.SenderID()), false); n != nil {
+			s.updateNode(addr, int160FromByteArray(*m.SenderID()), false, func(n *node) {
 				n.announceToken = m.R.Token
-			}
+			})
 		}
 	}
 	return

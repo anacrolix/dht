@@ -285,6 +285,7 @@ func (s *Server) processPacket(b []byte, addr Addr) {
 		n.lastGotResponse = time.Now()
 		n.consecutiveFailures = 0
 		n.readOnly = d.ReadOnly
+		n.numReceivesFrom++
 	})
 	// Ensure we don't provide more than one response to a transaction.
 	s.deleteTransaction(tk)
@@ -427,6 +428,7 @@ func (s *Server) handleQuery(source Addr, m krpc.Msg) {
 	s.updateNode(source, m.SenderID(), true, func(n *node) {
 		n.lastGotQuery = time.Now()
 		n.readOnly = m.ReadOnly
+		n.numReceivesFrom++
 	})
 	if s.config.OnQuery != nil {
 		propagate := s.config.OnQuery(&m, source.Raw())

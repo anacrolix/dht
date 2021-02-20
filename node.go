@@ -23,8 +23,8 @@ type node struct {
 	consecutiveFailures int
 }
 
-func (n *node) IsQuestionable() bool {
-	return n.consecutiveFailures < 3 && !n.IsGood()
+func (s *Server) IsQuestionable(n *node) bool {
+	return !s.IsGood(n) && !s.nodeIsBad(n)
 }
 
 func (n *node) hasAddrAndID(addr Addr, id int160) bool {
@@ -48,18 +48,10 @@ func (n *node) NodeInfo() (ret krpc.NodeInfo) {
 }
 
 // Per the spec in BEP 5.
-func (n *node) IsGood() bool {
-	if n.id.IsZero() {
+func (s *Server) IsGood(n *node) bool {
+	if s.nodeIsBad(n) {
 		return false
 	}
-	if n.readOnly {
-		return false
-	}
-	if time.Since(n.lastGotResponse) < 15*time.Minute {
-		return true
-	}
-	if !n.lastGotResponse.IsZero() && time.Since(n.lastGotQuery) < 15*time.Minute {
-		return true
-	}
-	return false
+	return time.Since(n.lastGotResponse) < 15*time.Minute ||
+		!n.lastGotResponse.IsZero() && time.Since(n.lastGotQuery) < 15*time.Minute
 }

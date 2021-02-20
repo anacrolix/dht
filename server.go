@@ -8,6 +8,7 @@ import (
 	"io"
 	"net"
 	"runtime/pprof"
+	"strings"
 	"text/tabwriter"
 	"time"
 
@@ -59,7 +60,7 @@ type sendLimiter interface {
 
 func (s *Server) numGoodNodes() (num int) {
 	s.table.forNodes(func(n *node) bool {
-		if n.IsGood() {
+		if s.IsGood(n) {
 			num++
 		}
 		return true
@@ -86,10 +87,23 @@ func (s *Server) WriteStatus(w io.Writer) {
 	fmt.Fprintf(w, "Server node ID: %x\n", s.id.Bytes())
 	fmt.Fprintln(w)
 	tw := tabwriter.NewWriter(w, 0, 0, 1, ' ', 0)
-	fmt.Fprintf(tw, "b#\tnode id\taddr\tanntok\tlast query\tlast response\tcf\tro\n")
+	fmt.Fprintf(tw, "b#\tnode id\taddr\tanntok\tlast query\tlast response\trecv\tcf\tflags\n")
 	for i, b := range s.table.buckets {
 		b.EachNode(func(n *node) bool {
-			fmt.Fprintf(tw, "%d\t%x\t%s\t%v\t%s\t%s\t%d\t%v\n",
+			var flags []string
+			if n.readOnly {
+				flags = append(flags, "ro")
+			}
+			if s.IsQuestionable(n) {
+				flags = append(flags, "q10e")
+			}
+			if s.nodeIsBad(n) {
+				flags = append(flags, "bad")
+			}
+			if s.IsGood(n) {
+				flags = append(flags, "good")
+			}
+			fmt.Fprintf(tw, "%d\t%x\t%s\t%v\t%s\t%s\t%d\t%v\t%v\n",
 				i,
 				n.id.Bytes(),
 				n.addr,
@@ -101,8 +115,9 @@ func (s *Server) WriteStatus(w io.Writer) {
 				}(),
 				prettySince(n.lastGotQuery),
 				prettySince(n.lastGotResponse),
+				n.numReceivesFrom,
 				n.consecutiveFailures,
-				n.readOnly,
+				strings.Join(flags, ","),
 			)
 			return true
 		})
@@ -616,9 +631,6 @@ func (s *Server) nodeErr(n *node) error {
 	if n.readOnly {
 		return errors.New("is read-only")
 	}
-	if n.lastGotQuery.IsZero() && n.lastGotResponse.IsZero() {
-		return errors.New("has never communicated")
-	}
 	if n.consecutiveFailures >= 3 {
 		return fmt.Errorf("has %d consecutive failures", n.consecutiveFailures)
 	}
@@ -841,6 +853,8 @@ func (s *Server) Query(ctx context.Context, addr Addr, q string, input QueryInpu
 	s.deleteTransaction(tk)
 	if ret.Err != nil {
 		for _, n := range s.table.addrNodes(addr) {
+			// TODO: What kind of failures? Failures to respond at all, or error responses, or
+			// context cancellations?
 			n.consecutiveFailures++
 		}
 	}
@@ -876,7 +890,6 @@ func (s *Server) transactionQuerySender(
 	case <-time.After(s.resendDelay()):
 		return errors.New("timed out")
 	}
-
 }
 
 // Sends a ping query to the address given.
@@ -1015,7 +1028,7 @@ func (s *Server) closestGoodNodeInfos(
 	ret []krpc.NodeInfo,
 ) {
 	for _, n := range s.closestNodes(k, targetID, func(n *node) bool {
-		return n.IsGood() && filter(n.NodeInfo().Addr)
+		return s.IsGood(n) && filter(n.NodeInfo().Addr)
 	}) {
 		ret = append(ret, n.NodeInfo())
 	}
@@ -1081,7 +1094,7 @@ func (s *Server) PeerStore() peer_store.Interface {
 
 func (s *Server) getQuestionableNode() (ret *node) {
 	s.table.forNodes(func(n *node) bool {
-		if n.IsQuestionable() {
+		if s.IsQuestionable(n) {
 			ret = n
 			return false
 		}

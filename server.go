@@ -89,7 +89,7 @@ func (s *Server) WriteStatus(w io.Writer) {
 	fmt.Fprintf(tw, "b#\tnode id\taddr\tanntok\tlast query\tlast response\tcf\tro\n")
 	for i, b := range s.table.buckets {
 		b.EachNode(func(n *node) bool {
-			fmt.Fprintf(tw, "%d\t%x\t%s\t%v\t%s\t%s\t%d\t%b\n",
+			fmt.Fprintf(tw, "%d\t%x\t%s\t%v\t%s\t%s\t%d\t%v\n",
 				i,
 				n.id.Bytes(),
 				n.addr,
@@ -192,6 +192,7 @@ func NewServer(c *ServerConfig) (s *Server, err error) {
 	if s.resendDelay == nil {
 		s.resendDelay = defaultQueryResendDelay
 	}
+	go s.questionableNodePinger()
 	go s.serveUntilClosed()
 	return
 }
@@ -1076,4 +1077,42 @@ func (s *Server) logger() log.Logger {
 
 func (s *Server) PeerStore() peer_store.Interface {
 	return s.config.PeerStore
+}
+
+func (s *Server) getQuestionableNode() (ret *node) {
+	s.table.forNodes(func(n *node) bool {
+		if n.IsQuestionable() {
+			ret = n
+			return false
+		}
+		return true
+	})
+	return
+}
+
+func (s *Server) questionableNodePinger() {
+tryPing:
+	for {
+		s.mu.RLock()
+		n := s.getQuestionableNode()
+		if n != nil {
+			addr := n.addr.Raw().(*net.UDPAddr)
+			s.mu.RUnlock()
+			done := make(chan struct{})
+			err := s.Ping(addr, func(krpc.Msg, error) {
+				close(done)
+			})
+			if err == nil {
+				<-done
+				goto tryPing
+			}
+			s.logger().Printf("error pinging questionable node: %v", err)
+		} else {
+			s.mu.RUnlock()
+		}
+		select {
+		case <-time.After(time.Second):
+		case <-s.closed.LockedChan(&s.mu):
+		}
+	}
 }

@@ -22,6 +22,10 @@ type node struct {
 	consecutiveFailures int
 }
 
+func (n *node) IsQuestionable() bool {
+	return n.consecutiveFailures < 3 && !n.IsGood()
+}
+
 func (n *node) hasAddrAndID(addr Addr, id int160) bool {
 	return id == n.id && n.addr.String() == addr.String()
 }

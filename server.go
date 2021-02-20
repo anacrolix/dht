@@ -424,12 +424,10 @@ func (s *Server) handleQuery(source Addr, m krpc.Msg) {
 			}
 		}
 	}()
-	if m.SenderID() != nil {
-		s.updateNode(source, m.SenderID(), true, func(n *node) {
-			n.lastGotQuery = time.Now()
-			n.readOnly = m.ReadOnly
-		})
-	}
+	s.updateNode(source, m.SenderID(), true, func(n *node) {
+		n.lastGotQuery = time.Now()
+		n.readOnly = m.ReadOnly
+	})
 	if s.config.OnQuery != nil {
 		propagate := s.config.OnQuery(&m, source.Raw())
 		if !propagate {
@@ -998,7 +996,7 @@ func (s *Server) GetPeers(ctx context.Context, addr Addr, infoHash int160, scrap
 		} else {
 			expvars.Add("get_peers responses with token", 1)
 		}
-		if m.SenderID() != nil && m.R.Token != nil {
+		if m.R.Token != nil {
 			s.updateNode(addr, m.SenderID(), false, func(n *node) {
 				n.announceToken = m.R.Token
 			})

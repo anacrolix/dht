@@ -105,8 +105,8 @@ func (s *Server) WriteStatus(w io.Writer) {
 			}
 			fmt.Fprintf(tw, "%d\t%x\t%s\t%v\t%s\t%s\t%d\t%v\t%v\n",
 				i,
-				n.id.Bytes(),
-				n.addr,
+				n.Id.Bytes(),
+				n.Addr,
 				func() int {
 					if n.announceToken == nil {
 						return -1
@@ -570,7 +570,7 @@ func (s *Server) reply(addr Addr, t string, r krpc.Return) {
 
 // Adds a node if appropriate.
 func (s *Server) addNode(n *node) error {
-	b := s.table.bucketForID(n.id)
+	b := s.table.bucketForID(n.Id)
 	if b.Len() >= s.table.k {
 		if b.EachNode(func(n *node) bool {
 			if s.nodeIsBad(n) {
@@ -603,8 +603,8 @@ func (s *Server) updateNode(addr Addr, id *krpc.ID, tryAdd bool, update func(*no
 			return errors.New("can't store own id in routing table")
 		}
 		n = &node{nodeKey: nodeKey{
-			id:   int160Id,
-			addr: addr,
+			Id:   int160Id,
+			Addr: addr,
 		}}
 	}
 	update(n)
@@ -619,10 +619,10 @@ func (s *Server) nodeIsBad(n *node) bool {
 }
 
 func (s *Server) nodeErr(n *node) error {
-	if n.id == s.id {
+	if n.Id == s.id {
 		return errors.New("is self")
 	}
-	if n.id.IsZero() {
+	if n.Id.IsZero() {
 		return errors.New("has zero id")
 	}
 	if !s.config.NoSecurity && !n.IsSecure() {
@@ -970,8 +970,8 @@ func (s *Server) Nodes() (nis []krpc.NodeInfo) {
 	defer s.mu.Unlock()
 	s.table.forNodes(func(n *node) bool {
 		nis = append(nis, krpc.NodeInfo{
-			Addr: n.addr.KRPC(),
-			ID:   n.id.AsByteArray(),
+			Addr: n.Addr.KRPC(),
+			ID:   n.Id.AsByteArray(),
 		})
 		return true
 	})
@@ -1042,7 +1042,7 @@ func (s *Server) closestNodes(k int, target int160, filter func(*node) bool) []*
 func (s *Server) traversalStartingNodes() (nodes []addrMaybeId, err error) {
 	s.mu.RLock()
 	s.table.forNodes(func(n *node) bool {
-		nodes = append(nodes, addrMaybeId{n.addr.KRPC(), &n.id})
+		nodes = append(nodes, addrMaybeId{n.Addr.KRPC(), &n.Id})
 		return true
 	})
 	s.mu.RUnlock()
@@ -1109,7 +1109,7 @@ tryPing:
 		s.mu.RLock()
 		n := s.getQuestionableNode()
 		if n != nil {
-			addr := n.addr.Raw().(*net.UDPAddr)
+			addr := n.Addr.Raw().(*net.UDPAddr)
 			s.mu.RUnlock()
 			done := make(chan struct{})
 			err := s.Ping(addr, func(krpc.Msg, error) {

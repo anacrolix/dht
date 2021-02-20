@@ -7,8 +7,8 @@ import (
 )
 
 type nodeKey struct {
-	addr Addr
-	id   int160
+	Addr Addr
+	Id   int160
 }
 
 type node struct {
@@ -28,19 +28,19 @@ func (s *Server) IsQuestionable(n *node) bool {
 }
 
 func (n *node) hasAddrAndID(addr Addr, id int160) bool {
-	return id == n.id && n.addr.String() == addr.String()
+	return id == n.Id && n.Addr.String() == addr.String()
 }
 
 func (n *node) IsSecure() bool {
-	return NodeIdSecure(n.id.AsByteArray(), n.addr.IP())
+	return NodeIdSecure(n.Id.AsByteArray(), n.Addr.IP())
 }
 
 func (n *node) idString() string {
-	return n.id.ByteString()
+	return n.Id.ByteString()
 }
 
 func (n *node) NodeInfo() (ret krpc.NodeInfo) {
-	ret.Addr = n.addr.KRPC()
+	ret.Addr = n.Addr.KRPC()
 	if n := copy(ret.ID[:], n.idString()); n != 20 {
 		panic(n)
 	}

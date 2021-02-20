@@ -20,12 +20,12 @@ func TestTable(t *testing.T) {
 	id0 := int160FromByteString("\x2f\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00")
 	id1 := int160FromByteString("\x2e\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00")
 	n0 := &node{nodeKey: nodeKey{
-		id:   id0,
-		addr: NewAddr(&net.UDPAddr{}),
+		Id:   id0,
+		Addr: NewAddr(&net.UDPAddr{}),
 	}}
 	n1 := &node{nodeKey: nodeKey{
-		id:   id1,
-		addr: NewAddr(&net.UDPAddr{}),
+		Id:   id1,
+		Addr: NewAddr(&net.UDPAddr{}),
 	}}
 
 	assert.NoError(t, tbl.addNode(n0))

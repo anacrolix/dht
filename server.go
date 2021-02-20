@@ -263,12 +263,6 @@ func (s *Server) processPacket(b []byte, addr Addr) {
 	if s.closed.IsSet() {
 		return
 	}
-	var n *node
-	if sid := d.SenderID(); sid != nil {
-		s.updateNode(addr, int160FromByteArray(*sid), !d.ReadOnly, func(n *node) {
-			n.readOnly = true
-		})
-	}
 	if d.Y == "q" {
 		expvars.Add("received queries", 1)
 		s.logger().Printf("received query %q from %v", d.Q, addr)
@@ -286,11 +280,12 @@ func (s *Server) processPacket(b []byte, addr Addr) {
 	}
 	//s.logger().Printf("received response for transaction %q from %v", d.T, addr)
 	go t.handleResponse(d)
-	if n != nil {
+	s.updateNode(addr, d.SenderID(), true, func(n *node) {
 		n.lastGotResponse = time.Now()
 		n.consecutiveFailures = 0
-	}
-	// Ensure we don't send more than one response.
+		n.readOnly = d.ReadOnly
+	})
+	// Ensure we don't provide more than one response to a transaction.
 	s.deleteTransaction(tk)
 }
 
@@ -335,7 +330,7 @@ func (s *Server) AddNode(ni krpc.NodeInfo) error {
 	if id.IsZero() {
 		return s.Ping(ni.Addr.UDP(), nil)
 	}
-	return s.updateNode(NewAddr(ni.Addr.UDP()), int160FromByteArray(ni.ID), true, func(*node) {})
+	return s.updateNode(NewAddr(ni.Addr.UDP()), (*krpc.ID)(&ni.ID), true, func(*node) {})
 }
 
 func wantsContain(ws []krpc.Want, w krpc.Want) bool {
@@ -429,8 +424,9 @@ func (s *Server) handleQuery(source Addr, m krpc.Msg) {
 		}
 	}()
 	if m.SenderID() != nil {
-		s.updateNode(source, int160FromByteArray(*m.SenderID()), !m.ReadOnly, func(n *node) {
+		s.updateNode(source, m.SenderID(), true, func(n *node) {
 			n.lastGotQuery = time.Now()
+			n.readOnly = m.ReadOnly
 		})
 	}
 	if s.config.OnQuery != nil {
@@ -558,11 +554,6 @@ func (s *Server) reply(addr Addr, t string, r krpc.Return) {
 
 // Adds a node if appropriate.
 func (s *Server) addNode(n *node) error {
-	// Check that the node would be good to begin with. (It might have a bad ID or banned address,
-	// or we fucked up the initial node field invariant.)
-	if err := s.nodeErr(n); err != nil {
-		return err
-	}
 	b := s.table.bucketForID(n.id)
 	if b.Len() >= s.table.k {
 		if b.EachNode(func(n *node) bool {
@@ -581,15 +572,22 @@ func (s *Server) addNode(n *node) error {
 }
 
 // Updates the node, adding it if appropriate.
-func (s *Server) updateNode(addr Addr, id int160, tryAdd bool, update func(*node)) error {
-	n := s.table.getNode(addr, id)
+func (s *Server) updateNode(addr Addr, id *krpc.ID, tryAdd bool, update func(*node)) error {
+	if id == nil {
+		return errors.New("id is nil")
+	}
+	int160Id := int160FromByteArray(*id)
+	n := s.table.getNode(addr, int160Id)
 	missing := n == nil
 	if missing {
 		if !tryAdd {
 			return errors.New("node not present and add flag false")
 		}
+		if int160Id == s.id {
+			return errors.New("can't store own id in routing table")
+		}
 		n = &node{nodeKey: nodeKey{
-			id:   id,
+			id:   int160Id,
 			addr: addr,
 		}}
 	}
@@ -614,8 +612,11 @@ func (s *Server) nodeErr(n *node) error {
 	if !s.config.NoSecurity && !n.IsSecure() {
 		return errors.New("not secure")
 	}
-	if n.IsGood() {
-		return nil
+	if n.readOnly {
+		return errors.New("is read-only")
+	}
+	if n.lastGotQuery.IsZero() && n.lastGotResponse.IsZero() {
+		return errors.New("has never communicated")
 	}
 	if n.consecutiveFailures >= 3 {
 		return fmt.Errorf("has %d consecutive failures", n.consecutiveFailures)
@@ -921,7 +922,7 @@ func (s *Server) addResponseNodes(d krpc.Msg) {
 		return
 	}
 	d.R.ForAllNodes(func(ni krpc.NodeInfo) {
-		s.updateNode(NewAddr(ni.Addr.UDP()), int160FromByteArray(ni.ID), true, func(*node) {})
+		s.updateNode(NewAddr(ni.Addr.UDP()), (*krpc.ID)(&ni.ID), true, func(*node) {})
 	})
 }
 
@@ -997,7 +998,7 @@ func (s *Server) GetPeers(ctx context.Context, addr Addr, infoHash int160, scrap
 			expvars.Add("get_peers responses with token", 1)
 		}
 		if m.SenderID() != nil && m.R.Token != nil {
-			s.updateNode(addr, int160FromByteArray(*m.SenderID()), false, func(n *node) {
+			s.updateNode(addr, m.SenderID(), false, func(n *node) {
 				n.announceToken = m.R.Token
 			})
 		}

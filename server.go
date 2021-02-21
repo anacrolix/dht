@@ -1141,3 +1141,7 @@ func (s *Server) newTraversal(targetId int160) (t traversal, err error) {
 	}
 	return
 }
+
+//func (s *Server) refreshBucket(bucketIndex int) {
+//	targetId := s.table.randomIdForBucket(bucketIndex)
+//}

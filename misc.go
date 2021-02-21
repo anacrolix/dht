@@ -6,6 +6,7 @@ import (
 	"net"
 
 	"github.com/anacrolix/missinggo/v2"
+	"github.com/anacrolix/missinggo/v2/iter"
 	"github.com/anacrolix/stm/stmutil"
 
 	"github.com/anacrolix/dht/v2/krpc"
@@ -65,4 +66,13 @@ func nodesByDistance(target int160) stmutil.Settish {
 	return stmutil.NewSortedSet(func(l, r interface{}) bool {
 		return l.(addrMaybeId).closerThan(r.(addrMaybeId), target)
 	})
+}
+
+func randomIdInBucket(rootId int160, bucketIndex int) int160 {
+	id := int160FromByteArray(RandomNodeID())
+	for i := range iter.N(bucketIndex) {
+		id.SetBit(i, rootId.GetBit(i))
+	}
+	id.SetBit(bucketIndex, !rootId.GetBit(bucketIndex))
+	return id
 }

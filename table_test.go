@@ -4,6 +4,7 @@ import (
 	"net"
 	"testing"
 
+	qt "github.com/frankban/quicktest"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -46,4 +47,16 @@ func TestTable(t *testing.T) {
 	tbl.dropNode(n1)
 	assert.Equal(t, 0, tbl.buckets[2].Len())
 	assert.Equal(t, 0, tbl.numNodes())
+}
+
+func TestRandomIdInBucket(t *testing.T) {
+	tbl := table{
+		rootID: int160FromByteArray(RandomNodeID()),
+	}
+	t.Logf("%v: table root id", tbl.rootID)
+	for i := range tbl.buckets {
+		id := tbl.randomIdForBucket(i)
+		t.Logf("%v: random id for bucket index %v", id, i)
+		qt.Assert(t, tbl.bucketIndex(id), qt.Equals, i)
+	}
 }

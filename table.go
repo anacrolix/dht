@@ -1,6 +1,9 @@
 package dht
 
-import "errors"
+import (
+	"errors"
+	"fmt"
+)
 
 // Node table, with indexes on distance from root ID to bucket, and node addr.
 type table struct {
@@ -8,6 +11,14 @@ type table struct {
 	k       int
 	buckets [160]bucket
 	addrs   map[string]map[int160]struct{}
+}
+
+func (tbl *table) randomIdForBucket(bucketIndex int) int160 {
+	randomId := randomIdInBucket(tbl.rootID, bucketIndex)
+	if randomIdBucketIndex := tbl.bucketIndex(randomId); randomIdBucketIndex != bucketIndex {
+		panic(fmt.Sprintf("bucket index for random id %v == %v not %v", randomId, randomIdBucketIndex, bucketIndex))
+	}
+	return randomId
 }
 
 func (tbl *table) addrNodes(addr Addr) []*node {

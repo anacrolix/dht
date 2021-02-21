@@ -4,9 +4,24 @@ import (
 	"sync/atomic"
 
 	"github.com/anacrolix/stm"
+	"github.com/bradfitz/iter"
 
 	"github.com/anacrolix/dht/v2/krpc"
 )
+
+func randomIdInBucket(rootId int160, bucketIndex int) int160 {
+	id := int160FromByteArray(RandomNodeID())
+	for i := range iter.N(bucketIndex) {
+		id.SetBit(i, rootId.GetBit(i))
+	}
+	id.SetBit(bucketIndex, !rootId.GetBit(bucketIndex))
+	return id
+}
+
+//
+//func (s *Server) refreshBucket(b *bucket) {
+//	targetId = RandomNodeID()
+//}
 
 // Populates the node table.
 func (s *Server) Bootstrap() (ts TraversalStats, err error) {

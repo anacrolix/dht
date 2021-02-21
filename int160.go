@@ -35,6 +35,19 @@ func (me *int160) SetBytes(b []byte) {
 	}
 }
 
+func (me *int160) SetBit(index int, val bool) {
+	var orVal uint8
+	if val {
+		orVal = 1 << (7 - index%8)
+	}
+	var mask uint8 = ^(1 << (7 - index%8))
+	me.bits[index/8] = me.bits[index/8]&mask | orVal
+}
+
+func (me *int160) GetBit(index int) bool {
+	return me.bits[index/8]>>(7-index%8)&1 == 1
+}
+
 func (me int160) Bytes() []byte {
 	return me.bits[:]
 }

@@ -1129,3 +1129,15 @@ tryPing:
 		}
 	}
 }
+
+func (s *Server) newTraversal(targetId int160) (t traversal, err error) {
+	startAddrs, err := s.traversalStartingNodes()
+	if err != nil {
+		return
+	}
+	t = newTraversal(targetId)
+	for _, addr := range startAddrs {
+		stm.Atomically(t.pendContact(addr))
+	}
+	return
+}

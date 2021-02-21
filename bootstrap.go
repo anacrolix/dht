@@ -25,13 +25,9 @@ func randomIdInBucket(rootId int160, bucketIndex int) int160 {
 
 // Populates the node table.
 func (s *Server) Bootstrap() (ts TraversalStats, err error) {
-	initialAddrs, err := s.traversalStartingNodes()
+	traversal, err := s.newTraversal(s.id)
 	if err != nil {
 		return
-	}
-	traversal := newTraversal(s.id)
-	for _, addr := range initialAddrs {
-		stm.Atomically(traversal.pendContact(addr))
 	}
 	outstanding := stm.NewVar(0)
 	for {

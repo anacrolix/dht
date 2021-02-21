@@ -72,11 +72,11 @@ func Scrape() AnnounceOpt { return scrape }
 // caller, and announcing the local node to each responding node if port is non-zero or impliedPort
 // is true.
 func (s *Server) Announce(infoHash [20]byte, port int, impliedPort bool, opts ...AnnounceOpt) (*Announce, error) {
-	startAddrs, err := s.traversalStartingNodes()
+	infoHashInt160 := int160FromByteArray(infoHash)
+	traversal, err := s.newTraversal(infoHashInt160)
 	if err != nil {
 		return nil, err
 	}
-	infoHashInt160 := int160FromByteArray(infoHash)
 	a := &Announce{
 		Peers:                make(chan PeersValues),
 		values:               make(chan PeersValues),
@@ -86,7 +86,7 @@ func (s *Server) Announce(infoHash [20]byte, port int, impliedPort bool, opts ..
 		announcePortImplied:  impliedPort,
 		pending:              stm.NewVar(0),
 		pendingAnnouncePeers: stm.NewVar(newPendingAnnouncePeers(infoHashInt160)),
-		traversal:            newTraversal(infoHashInt160),
+		traversal:            traversal,
 	}
 	for _, opt := range opts {
 		if opt == scrape {
@@ -113,9 +113,6 @@ func (s *Server) Announce(infoHash [20]byte, port int, impliedPort bool, opts ..
 			}
 		}
 	}()
-	for _, n := range startAddrs {
-		stm.Atomically(a.pendContact(n))
-	}
 	go a.run()
 	return a, nil
 }

@@ -12,6 +12,9 @@ import (
 func TestTraversal(t *testing.T) {
 	var target int160
 	traversal := newTraversal(target)
+	traversal.shouldContact = func(krpc.NodeAddr, *stm.Tx) bool {
+		return true
+	}
 	assert.False(t, stm.Atomically(func(tx *stm.Tx) interface{} { _, ok := traversal.popNextContact(tx); return ok }).(bool))
 	assert.False(t, stm.WouldBlock(stm.VoidOperation(traversal.waitFinished)))
 	stm.Atomically(stm.Compose(func() (ret []stm.Operation) {

@@ -3,6 +3,7 @@ package dht
 import (
 	"fmt"
 
+	"github.com/anacrolix/dht/v2/krpc"
 	"github.com/anacrolix/missinggo/v2/iter"
 	"github.com/anacrolix/stm"
 	"github.com/anacrolix/stm/stmutil"
@@ -23,6 +24,13 @@ type traversal struct {
 	triedAddrs          *stm.Var // Settish of krpc.NodeAddr.String
 	nodesPendingContact *stm.Var // Settish of addrMaybeId sorted by distance from the target
 	addrBestIds         *stm.Var // Mappish Addr to best
+	pending             *stm.Var
+	doneVar             *stm.Var
+	stopTraversal       func(_ *stm.Tx, next addrMaybeId) bool
+	reason              string
+	shouldContact       func(krpc.NodeAddr, *stm.Tx) bool
+	query               func(Addr) QueryResult
+	serverBeginQuery    func(Addr, string, func() numWrites) stm.Operation
 }
 
 func newTraversal(targetInfohash int160) traversal {
@@ -31,6 +39,7 @@ func newTraversal(targetInfohash int160) traversal {
 		triedAddrs:          stm.NewVar(stmutil.NewSet()),
 		nodesPendingContact: stm.NewVar(nodesByDistance(targetInfohash)),
 		addrBestIds:         stm.NewVar(stmutil.NewMap()),
+		pending:             stm.NewVar(0),
 	}
 }
 
@@ -40,6 +49,9 @@ func (t traversal) waitFinished(tx *stm.Tx) {
 
 func (t traversal) pendContact(node addrMaybeId) stm.Operation {
 	return stm.VoidOperation(func(tx *stm.Tx) {
+		if !t.shouldContact(node.Addr, tx) {
+			return
+		}
 		nodeAddrString := node.Addr.String()
 		if tx.Get(t.triedAddrs).(stmutil.Settish).Contains(nodeAddrString) {
 			return

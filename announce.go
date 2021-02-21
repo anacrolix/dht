@@ -25,9 +25,8 @@ type Announce struct {
 	values chan PeersValues // Responses are pushed to this channel.
 
 	// These only exist to support routines relying on channels for synchronization.
-	done    <-chan struct{}
-	doneVar *stm.Var
-	cancel  func()
+	done   <-chan struct{}
+	cancel func()
 
 	pending  *stm.Var // How many transactions are still ongoing (int).
 	server   *Server
@@ -77,6 +76,7 @@ func (s *Server) Announce(infoHash [20]byte, port int, impliedPort bool, opts ..
 	if err != nil {
 		return nil, err
 	}
+	traversal.reason = "dht announce get_peers"
 	a := &Announce{
 		Peers:                make(chan PeersValues),
 		values:               make(chan PeersValues),
@@ -88,6 +88,8 @@ func (s *Server) Announce(infoHash [20]byte, port int, impliedPort bool, opts ..
 		pendingAnnouncePeers: stm.NewVar(newPendingAnnouncePeers(infoHashInt160)),
 		traversal:            traversal,
 	}
+	a.traversal.query = a.getPeers
+	a.traversal.stopTraversal = a.stopTraversal
 	for _, opt := range opts {
 		if opt == scrape {
 			a.scrape = true
@@ -96,7 +98,7 @@ func (s *Server) Announce(infoHash [20]byte, port int, impliedPort bool, opts ..
 	var ctx context.Context
 	ctx, a.cancel = context.WithCancel(context.Background())
 	a.done = ctx.Done()
-	a.doneVar, _ = stmutil.ContextDoneVar(ctx)
+	a.traversal.doneVar, _ = stmutil.ContextDoneVar(ctx)
 	// Function ferries from values to Peers until discovery is halted.
 	go func() {
 		defer close(a.Peers)
@@ -130,17 +132,17 @@ func validNodeAddr(addr net.Addr) bool {
 	return true
 }
 
-func (a *Announce) shouldContact(addr krpc.NodeAddr, tx *stm.Tx) bool {
+func (a *Server) shouldContact(addr krpc.NodeAddr, tx *stm.Tx) bool {
 	if !validNodeAddr(addr.UDP()) {
 		return false
 	}
-	if a.server.ipBlocked(addr.IP) {
+	if a.ipBlocked(addr.IP) {
 		return false
 	}
 	return true
 }
 
-func (a *Announce) responseNode(node krpc.NodeInfo) {
+func (a *traversal) responseNode(node krpc.NodeInfo) {
 	i := int160FromByteArray(node.ID)
 	stm.Atomically(a.pendContact(addrMaybeId{node.Addr, &i}))
 }
@@ -177,7 +179,7 @@ func (a *Announce) beginAnnouncePeer(tx *stm.Tx) interface{} {
 	new, x := tx.Get(a.pendingAnnouncePeers).(pendingAnnouncePeers).Pop(tx)
 	tx.Set(a.pendingAnnouncePeers, new)
 
-	return a.beginQuery(NewAddr(x.Addr.UDP()), "dht announce announce_peer", func() numWrites {
+	return a.traversal.beginQuery(NewAddr(x.Addr.UDP()), "dht announce announce_peer", func() numWrites {
 		a.server.logger().Printf("announce_peer to %v", x)
 		return a.announcePeer(x)
 	})(tx).(func())
@@ -192,7 +194,7 @@ func finalizeCteh(cteh *conntrack.EntryHandle, writes numWrites) {
 	}
 }
 
-func (a *Announce) getPeers(addr Addr) numWrites {
+func (a *Announce) getPeers(addr Addr) QueryResult {
 	res := a.server.GetPeers(context.TODO(), addr, a.infoHash, a.scrape, QueryRateLimiting{
 		// This is paid for in earlier in a call to Server.beginQuery.
 		NotFirst: true,
@@ -201,9 +203,6 @@ func (a *Announce) getPeers(addr Addr) numWrites {
 	// Register suggested nodes closer to the target info-hash.
 	if r := m.R; r != nil {
 		id := &r.ID
-		expvars.Add("announce get_peers response nodes values", int64(len(r.Nodes)))
-		expvars.Add("announce get_peers response nodes6 values", int64(len(r.Nodes6)))
-		r.ForAllNodes(a.responseNode)
 		select {
 		case a.values <- PeersValues{
 			Peers: r.Values,
@@ -217,7 +216,19 @@ func (a *Announce) getPeers(addr Addr) numWrites {
 		}
 		a.maybeAnnouncePeer(addr, r.Token, id)
 	}
-	return res.writes
+	return res
+}
+
+func (a *traversal) doQuery(addr Addr) QueryResult {
+	res := a.query(addr)
+	m := res.Reply
+	// Register suggested nodes closer to the target info-hash.
+	if r := m.R; r != nil {
+		expvars.Add("traversal response nodes values", int64(len(r.Nodes)))
+		expvars.Add("traversal response nodes6 values", int64(len(r.Nodes6)))
+		r.ForAllNodes(a.responseNode)
+	}
+	return res
 }
 
 // Corresponds to the "values" key in a get_peers KRPC response. A list of
@@ -238,16 +249,6 @@ func (a *Announce) close() {
 	a.cancel()
 }
 
-func (a *Announce) pendContact(node addrMaybeId) stm.Operation {
-	return stm.VoidOperation(func(tx *stm.Tx) {
-		if !a.shouldContact(node.Addr, tx) {
-			// log.Printf("shouldn't contact (pend): %v", node)
-			return
-		}
-		a.traversal.pendContact(node)(tx)
-	})
-}
-
 type txResT struct {
 	done bool
 	run  func()
@@ -259,7 +260,7 @@ func wrapRun(f stm.Operation) stm.Operation {
 	}
 }
 
-func (a *Announce) getPending(tx *stm.Tx) int {
+func (a *traversal) getPending(tx *stm.Tx) int {
 	return tx.Get(a.pending).(int)
 }
 
@@ -276,31 +277,23 @@ func (a *Announce) getPendingAnnouncePeers(tx *stm.Tx) pendingAnnouncePeers {
 	return tx.Get(a.pendingAnnouncePeers).(pendingAnnouncePeers)
 }
 
-func (a *Announce) run() {
-	defer a.cancel()
+func (a *Announce) stopTraversal(tx *stm.Tx, next addrMaybeId) bool {
+	farthest, ok := a.farthestAnnouncePeer(tx)
+	return ok && farthest.closerThan(next, a.infoHash)
+}
+
+func (a *traversal) run() {
 	for {
 		txRes := stm.Atomically(func(tx *stm.Tx) interface{} {
 			if tx.Get(a.doneVar).(bool) {
 				return txResT{done: true}
 			}
-			p := a.getPendingAnnouncePeers(tx)
-			i := 0
-			p.Range(func(value interface{}) {
-				a.logger().Printf("pending %d: %v", i, value)
-				i++
-			})
-			if next, ok := a.traversal.popNextContact(tx); ok {
-				a.logger().Printf("next: %v", next)
-				farthest, ok := a.farthestAnnouncePeer(tx)
-				a.logger().Printf("farthest: %v %v", ok, farthest)
-				if !ok || !farthest.closerThan(next, a.infoHash) {
-					a.logger().Printf("farthest: %v %v", ok, farthest)
+			if next, ok := a.popNextContact(tx); ok {
+				if !a.stopTraversal(tx, next) {
 					tx.Assert(a.getPending(tx) < 3)
 					dhtAddr := NewAddr(next.Addr.UDP())
-					return wrapRun(a.beginQuery(dhtAddr, "dht announce get_peers", func() numWrites {
-						a.server.logger().Printf("doing get_peers to %v", next)
-						atomic.AddInt64(&a.numGetPeers, 1)
-						return a.getPeers(dhtAddr)
+					return wrapRun(a.beginQuery(dhtAddr, a.reason, func() numWrites {
+						return a.doQuery(dhtAddr).writes
 					}))(tx)
 				}
 			}
@@ -312,12 +305,18 @@ func (a *Announce) run() {
 		}
 		go txRes.run()
 	}
+
+}
+
+func (a *Announce) run() {
+	defer a.cancel()
+	a.traversal.run()
 	a.logger().Printf("finishing get peers step")
 	for {
 		txRes := stm.Atomically(stm.Select(
 			wrapRun(a.beginAnnouncePeer),
 			func(tx *stm.Tx) interface{} {
-				if tx.Get(a.doneVar).(bool) || a.getPending(tx) == 0 && a.getPendingAnnouncePeers(tx).Len() == 0 {
+				if tx.Get(a.traversal.doneVar).(bool) || a.traversal.getPending(tx) == 0 && a.getPendingAnnouncePeers(tx).Len() == 0 {
 					return txResT{done: true}
 				}
 				return tx.Retry()
@@ -334,11 +333,11 @@ func (a *Announce) run() {
 //func (a *Announce) beginGetPeers(tx *stm.Tx) interface{} {
 //}
 
-func (a *Announce) beginQuery(addr Addr, reason string, f func() numWrites) stm.Operation {
+func (a *traversal) beginQuery(addr Addr, reason string, f func() numWrites) stm.Operation {
 	return func(tx *stm.Tx) interface{} {
 		pending := tx.Get(a.pending).(int)
 		tx.Set(a.pending, pending+1)
-		return a.server.beginQuery(addr, reason, func() numWrites {
+		return a.serverBeginQuery(addr, reason, func() numWrites {
 			defer stm.Atomically(stm.VoidOperation(func(tx *stm.Tx) { tx.Set(a.pending, tx.Get(a.pending).(int)-1) }))
 			return f()
 		})(tx)

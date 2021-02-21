@@ -1136,6 +1136,8 @@ func (s *Server) newTraversal(targetId int160) (t traversal, err error) {
 		return
 	}
 	t = newTraversal(targetId)
+	t.shouldContact = s.shouldContact
+	t.serverBeginQuery = s.beginQuery
 	for _, addr := range startAddrs {
 		stm.Atomically(t.pendContact(addr))
 	}

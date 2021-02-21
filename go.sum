@@ -65,6 +65,8 @@ github.com/alexflint/go-scalar v1.0.0 h1:NGupf1XV/Xb04wXskDFzS0KWOLH632W/EO4fAFi
 github.com/alexflint/go-scalar v1.0.0/go.mod h1:GpHzbCOZXEKMEcygYQ5n/aa4Aq84zbxjy3MxYW0gjYw=
 github.com/anacrolix/confluence v1.7.0 h1:mwRTLzN1OcJPLg6q9kFY69M6oToH0cyNDAVTdqWJFSA=
 github.com/anacrolix/confluence v1.7.0/go.mod h1:FBehvZmhtlcqwMLa+oHVmcOzrdgnxxSNiqUtVxsp1Og=
+github.com/anacrolix/confluence v1.7.1-0.20210221224747-9cb14aa2c53a h1:KxUaqg76z/mk6rcieVUpVuocr0zue8RRQJXI+vXebc8=
+github.com/anacrolix/confluence v1.7.1-0.20210221224747-9cb14aa2c53a/go.mod h1:T0JHvSaf9UfoiUdCtCOUuRroHm/tauUJTbLc6/vd5YA=
 github.com/anacrolix/dht v0.0.0-20180412060941-24cbf25b72a4 h1:0yHJvFiGQhJ1gSHJOR8xzmnx45orEt7uiIB6guf0+zc=
 github.com/anacrolix/dht v0.0.0-20180412060941-24cbf25b72a4/go.mod h1:hQfX2BrtuQsLQMYQwsypFAab/GvHg8qxwVi4OJdR1WI=
 github.com/anacrolix/dht/v2 v2.0.1/go.mod h1:GbTT8BaEtfqab/LPd5tY41f3GvYeii3mmDUK300Ycyo=
@@ -173,6 +175,7 @@ github.com/anacrolix/torrent v1.15.0 h1:ZU20blbusnfN+hkhsa1nfdIg3NDQbyHqocbFUylP
 github.com/anacrolix/torrent v1.15.0/go.mod h1:MFc6KcbpAyfwGqOyRkdarUK9QnKA/FkVg0usFk1OQxU=
 github.com/anacrolix/torrent v1.18.1-0.20201210001345-de964db3c2eb h1:+k7Hx+quHPJOaF85CQCoEsVnnjcc2Pgx4mNE5m9vIIk=
 github.com/anacrolix/torrent v1.18.1-0.20201210001345-de964db3c2eb/go.mod h1:SrOl05SyLcl8kztnIeW/LNkV/dzVZ1OR2+BmamUibAo=
+github.com/anacrolix/torrent v1.22.0/go.mod h1:GWTwQkOAilf0LR3C6A74XEkWPg0ejfFD9GcEIe57ess=
 github.com/anacrolix/torrent v1.23.0 h1:uX2db8w5JzgPnUmvD17jtZG82u0BqLlBMG47o4E/frQ=
 github.com/anacrolix/torrent v1.23.0/go.mod h1:737rU+al1LBWEs3IHBystZvsbg24iSP+8Gb25Vc/s5U=
 github.com/anacrolix/upnp v0.1.1 h1:v5C+wBiku2zmwFR5B+pUfdNBL5TfPtyO+sWuw+/VEDg=

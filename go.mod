@@ -1,7 +1,7 @@
 module github.com/anacrolix/dht/v2
 
 require (
-	github.com/anacrolix/confluence v1.7.0
+	github.com/anacrolix/confluence v1.7.1-0.20210221224747-9cb14aa2c53a
 	github.com/anacrolix/envpprof v1.1.1
 	github.com/anacrolix/log v0.8.0
 	github.com/anacrolix/missinggo v1.2.1
@@ -23,7 +23,3 @@ require (
 )
 
 go 1.13
-
-replace github.com/anacrolix/confluence => ../confluence/
-
-replace github.com/anacrolix/log => ../log/

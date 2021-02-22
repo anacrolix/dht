@@ -14,6 +14,7 @@ import (
 	"github.com/anacrolix/stm/stmutil"
 	"github.com/benbjohnson/immutable"
 
+	"github.com/anacrolix/dht/v2/int160"
 	"github.com/anacrolix/dht/v2/krpc"
 )
 
@@ -30,7 +31,7 @@ type Announce struct {
 
 	pending  *stm.Var // How many transactions are still ongoing (int).
 	server   *Server
-	infoHash int160 // Target
+	infoHash int160.T // Target
 	// Count of (probably) distinct addresses we've sent get_peers requests to.
 	numGetPeers int64
 	// The torrent port that we're announcing.
@@ -71,7 +72,7 @@ func Scrape() AnnounceOpt { return scrape }
 // caller, and announcing the local node to each responding node if port is non-zero or impliedPort
 // is true.
 func (s *Server) Announce(infoHash [20]byte, port int, impliedPort bool, opts ...AnnounceOpt) (*Announce, error) {
-	infoHashInt160 := int160FromByteArray(infoHash)
+	infoHashInt160 := int160.FromByteArray(infoHash)
 	traversal, err := s.newTraversal(infoHashInt160)
 	if err != nil {
 		return nil, err
@@ -143,7 +144,7 @@ func (a *Server) shouldContact(addr krpc.NodeAddr, tx *stm.Tx) bool {
 }
 
 func (a *traversal) responseNode(node krpc.NodeInfo) {
-	i := int160FromByteArray(node.ID)
+	i := int160.FromByteArray(node.ID)
 	stm.Atomically(a.pendContact(addrMaybeId{node.Addr, &i}))
 }
 
@@ -161,7 +162,7 @@ func (a *Announce) maybeAnnouncePeer(to Addr, token *string, peerId *krpc.ID) {
 		}
 		x.Addr = to.KRPC()
 		if peerId != nil {
-			id := int160FromByteArray(*peerId)
+			id := int160.FromByteArray(*peerId)
 			x.Id = &id
 		}
 		tx.Set(a.pendingAnnouncePeers, tx.Get(a.pendingAnnouncePeers).(pendingAnnouncePeers).Push(x))
@@ -353,7 +354,7 @@ type pendingAnnouncePeers struct {
 	k     int
 }
 
-func newPendingAnnouncePeers(target int160) pendingAnnouncePeers {
+func newPendingAnnouncePeers(target int160.T) pendingAnnouncePeers {
 	return pendingAnnouncePeers{
 		k: 8,
 		inner: immutable.NewSortedMap(comparer{less: func(l, r interface{}) bool {

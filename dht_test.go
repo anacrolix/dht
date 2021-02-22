@@ -18,6 +18,7 @@ import (
 
 	"github.com/anacrolix/log"
 
+	"github.com/anacrolix/dht/v2/int160"
 	"github.com/anacrolix/dht/v2/krpc"
 )
 
@@ -44,7 +45,7 @@ func TestMarshalCompactNodeInfo(t *testing.T) {
 
 const zeroID = "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
 
-var testIDs []int160
+var testIDs []int160.T
 
 func init() {
 	for _, s := range []string{
@@ -54,24 +55,24 @@ func init() {
 		"\x55" + zeroID[1:17] + "\xff\x55\x0f",
 		"\x54" + zeroID[1:18] + "\x50\x0f",
 	} {
-		testIDs = append(testIDs, int160FromByteString(s))
+		testIDs = append(testIDs, int160.FromByteString(s))
 	}
-	testIDs = append(testIDs, int160{})
+	testIDs = append(testIDs, int160.T{})
 }
 
 func TestDistances(t *testing.T) {
-	expectBitcount := func(i int160, count int) {
+	expectBitcount := func(i int160.T, count int) {
 		if bitCount(i.Bytes()) != count {
 			t.Fatalf("expected bitcount of %d: got %d", count, bitCount(i.Bytes()))
 		}
 	}
-	expectBitcount(distance(testIDs[3], testIDs[0]), 4+8+4+4)
-	expectBitcount(distance(testIDs[3], testIDs[1]), 4+8+4+4)
-	expectBitcount(distance(testIDs[3], testIDs[2]), 4+8+8)
+	expectBitcount(int160.Distance(testIDs[3], testIDs[0]), 4+8+4+4)
+	expectBitcount(int160.Distance(testIDs[3], testIDs[1]), 4+8+4+4)
+	expectBitcount(int160.Distance(testIDs[3], testIDs[2]), 4+8+8)
 }
 
 func TestMaxDistanceString(t *testing.T) {
-	var max int160
+	var max int160.T
 	max.SetMax()
 	require.EqualValues(t, "\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff", max.Bytes())
 }

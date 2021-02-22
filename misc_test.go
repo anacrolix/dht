@@ -6,18 +6,19 @@ import (
 	"github.com/anacrolix/missinggo/v2/iter"
 	"github.com/stretchr/testify/assert"
 
+	"github.com/anacrolix/dht/v2/int160"
 	"github.com/anacrolix/dht/v2/krpc"
 )
 
-func int160WithBitSet(bit int) *int160 {
-	var i int160
-	i.bits[bit] = 1
+func int160WithBitSet(bit int) *int160.T {
+	var i int160.T
+	i.SetBit(7+bit*8, true)
 	return &i
 }
 
 var sampleAddrMaybeIds = []addrMaybeId{
 	addrMaybeId{},
-	addrMaybeId{Id: new(int160)},
+	addrMaybeId{Id: new(int160.T)},
 	addrMaybeId{Id: int160WithBitSet(13)},
 	addrMaybeId{Id: int160WithBitSet(12)},
 	addrMaybeId{Addr: krpc.NodeAddr{Port: 1}},
@@ -27,7 +28,7 @@ var sampleAddrMaybeIds = []addrMaybeId{
 }
 
 func TestNodesByDistance(t *testing.T) {
-	a := nodesByDistance(int160{})
+	a := nodesByDistance(int160.T{})
 	push := func(i int) {
 		a = a.Add(sampleAddrMaybeIds[i])
 	}

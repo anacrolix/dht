@@ -4,13 +4,14 @@ import (
 	"net"
 	"testing"
 
+	"github.com/anacrolix/dht/v2/int160"
 	qt "github.com/frankban/quicktest"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestTable(t *testing.T) {
 	tbl := table{k: 8}
-	var maxFar int160
+	var maxFar int160.T
 	maxFar.SetMax()
 	assert.Equal(t, 0, tbl.bucketIndex(maxFar))
 	assert.Panics(t, func() { tbl.bucketIndex(tbl.rootID) })
@@ -18,8 +19,8 @@ func TestTable(t *testing.T) {
 	assert.Error(t, tbl.addNode(&node{}))
 	assert.Equal(t, 0, tbl.buckets[0].Len())
 
-	id0 := int160FromByteString("\x2f\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00")
-	id1 := int160FromByteString("\x2e\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00")
+	id0 := int160.FromByteString("\x2f\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00")
+	id1 := int160.FromByteString("\x2e\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00")
 	n0 := &node{nodeKey: nodeKey{
 		Id:   id0,
 		Addr: NewAddr(&net.UDPAddr{}),
@@ -51,7 +52,7 @@ func TestTable(t *testing.T) {
 
 func TestRandomIdInBucket(t *testing.T) {
 	tbl := table{
-		rootID: int160FromByteArray(RandomNodeID()),
+		rootID: int160.FromByteArray(RandomNodeID()),
 	}
 	t.Logf("%v: table root id", tbl.rootID)
 	for i := range tbl.buckets {

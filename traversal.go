@@ -3,6 +3,7 @@ package dht
 import (
 	"fmt"
 
+	"github.com/anacrolix/dht/v2/int160"
 	"github.com/anacrolix/dht/v2/krpc"
 	"github.com/anacrolix/missinggo/v2/iter"
 	"github.com/anacrolix/stm"
@@ -20,7 +21,7 @@ func (me TraversalStats) String() string {
 
 // Prioritizes addrs to try by distance from target, disallowing repeat contacts.
 type traversal struct {
-	targetInfohash      int160
+	targetInfohash      int160.T
 	triedAddrs          *stm.Var // Settish of krpc.NodeAddr.String
 	nodesPendingContact *stm.Var // Settish of addrMaybeId sorted by distance from the target
 	addrBestIds         *stm.Var // Mappish Addr to best
@@ -33,7 +34,7 @@ type traversal struct {
 	serverBeginQuery    func(Addr, string, func() numWrites) stm.Operation
 }
 
-func newTraversal(targetInfohash int160) traversal {
+func newTraversal(targetInfohash int160.T) traversal {
 	return traversal{
 		targetInfohash:      targetInfohash,
 		triedAddrs:          stm.NewVar(stmutil.NewSet()),
@@ -62,8 +63,8 @@ func (t traversal) pendContact(node addrMaybeId) stm.Operation {
 			if node.Id == nil {
 				return
 			}
-			best := _best.(*int160)
-			if best != nil && distance(*best, t.targetInfohash).Cmp(distance(*node.Id, t.targetInfohash)) <= 0 {
+			best := _best.(*int160.T)
+			if best != nil && int160.Distance(*best, t.targetInfohash).Cmp(int160.Distance(*node.Id, t.targetInfohash)) <= 0 {
 				return
 			}
 			nodesPendingContact = nodesPendingContact.Delete(addrMaybeId{

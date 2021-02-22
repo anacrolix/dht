@@ -3,12 +3,13 @@ package dht
 import (
 	"time"
 
+	"github.com/anacrolix/dht/v2/int160"
 	"github.com/anacrolix/dht/v2/krpc"
 )
 
 type nodeKey struct {
 	Addr Addr
-	Id   int160
+	Id   int160.T
 }
 
 type node struct {
@@ -27,7 +28,7 @@ func (s *Server) IsQuestionable(n *node) bool {
 	return !s.IsGood(n) && !s.nodeIsBad(n)
 }
 
-func (n *node) hasAddrAndID(addr Addr, id int160) bool {
+func (n *node) hasAddrAndID(addr Addr, id int160.T) bool {
 	return id == n.Id && n.Addr.String() == addr.String()
 }
 

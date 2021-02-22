@@ -9,6 +9,7 @@ import (
 	"github.com/anacrolix/missinggo/v2/iter"
 	"github.com/anacrolix/stm/stmutil"
 
+	"github.com/anacrolix/dht/v2/int160"
 	"github.com/anacrolix/dht/v2/krpc"
 )
 
@@ -29,7 +30,7 @@ func addrResolver(addr string) func() ([]Addr, error) {
 
 type addrMaybeId struct {
 	Addr krpc.NodeAddr
-	Id   *int160
+	Id   *int160.T
 }
 
 func (me addrMaybeId) String() string {
@@ -40,11 +41,11 @@ func (me addrMaybeId) String() string {
 	}
 }
 
-func (l addrMaybeId) closerThan(r addrMaybeId, target int160) bool {
+func (l addrMaybeId) closerThan(r addrMaybeId, target int160.T) bool {
 	var ml missinggo.MultiLess
 	ml.NextBool(r.Id == nil, l.Id == nil)
 	if l.Id != nil && r.Id != nil {
-		d := distance(*l.Id, target).Cmp(distance(*r.Id, target))
+		d := int160.Distance(*l.Id, target).Cmp(int160.Distance(*r.Id, target))
 		ml.StrictNext(d == 0, d < 0)
 	}
 	// TODO: Use bytes/hash when it's available (go1.14?), and have a unique seed for each
@@ -62,14 +63,14 @@ func (l addrMaybeId) closerThan(r addrMaybeId, target int160) bool {
 
 }
 
-func nodesByDistance(target int160) stmutil.Settish {
+func nodesByDistance(target int160.T) stmutil.Settish {
 	return stmutil.NewSortedSet(func(l, r interface{}) bool {
 		return l.(addrMaybeId).closerThan(r.(addrMaybeId), target)
 	})
 }
 
-func randomIdInBucket(rootId int160, bucketIndex int) int160 {
-	id := int160FromByteArray(RandomNodeID())
+func randomIdInBucket(rootId int160.T, bucketIndex int) int160.T {
+	id := int160.FromByteArray(RandomNodeID())
 	for i := range iter.N(bucketIndex) {
 		id.SetBit(i, rootId.GetBit(i))
 	}

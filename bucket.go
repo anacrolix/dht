@@ -1,5 +1,7 @@
 package dht
 
+import "github.com/anacrolix/dht/v2/int160"
+
 type bucket struct {
 	nodes map[*node]struct{}
 }
@@ -27,7 +29,7 @@ func (b *bucket) AddNode(n *node, k int) {
 	b.nodes[n] = struct{}{}
 }
 
-func (b *bucket) GetNode(addr Addr, id int160) *node {
+func (b *bucket) GetNode(addr Addr, id int160.T) *node {
 	for n := range b.nodes {
 		if n.hasAddrAndID(addr, id) {
 			return n

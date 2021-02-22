@@ -6,11 +6,12 @@ import (
 	"github.com/anacrolix/stm"
 	"github.com/stretchr/testify/assert"
 
+	"github.com/anacrolix/dht/v2/int160"
 	"github.com/anacrolix/dht/v2/krpc"
 )
 
 func TestTraversal(t *testing.T) {
-	var target int160
+	var target int160.T
 	traversal := newTraversal(target)
 	traversal.shouldContact = func(krpc.NodeAddr, *stm.Tx) bool {
 		return true

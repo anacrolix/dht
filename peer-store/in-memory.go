@@ -21,8 +21,8 @@ type InMemory struct {
 	index  map[InfoHash]indexValue
 }
 
-// Binary encoded krpc.NodeAddr to time of last add.
-type indexValue = map[string]time.Time
+// A uniqueness key for entries to the entry details
+type indexValue = map[string]NodeAndTime
 
 var _ interface {
 	debug_writer.Interface
@@ -43,11 +43,7 @@ func (me *InMemory) GetPeers(ih InfoHash) (ret []krpc.NodeAddr) {
 }
 
 func (me *InMemory) AddPeer(ih InfoHash, na krpc.NodeAddr) {
-	b, err := na.MarshalBinary()
-	if err != nil {
-		panic(err)
-	}
-	s := string(b)
+	key := string(na.IP)
 	me.mu.Lock()
 	defer me.mu.Unlock()
 	if me.index == nil {
@@ -58,7 +54,7 @@ func (me *InMemory) AddPeer(ih InfoHash, na krpc.NodeAddr) {
 		nodes = make(indexValue)
 		me.index[ih] = nodes
 	}
-	nodes[s] = time.Now()
+	nodes[key] = NodeAndTime{na, time.Now()}
 }
 
 type NodeAndTime struct {
@@ -71,10 +67,8 @@ func (me *InMemory) GetAll() (ret map[InfoHash][]NodeAndTime) {
 	defer me.mu.RUnlock()
 	ret = make(map[InfoHash][]NodeAndTime, len(me.index))
 	for ih, nodes := range me.index {
-		for b, t := range nodes {
-			var r krpc.NodeAddr
-			r.UnmarshalBinary([]byte(b))
-			ret[ih] = append(ret[ih], NodeAndTime{r, t})
+		for _, v := range nodes {
+			ret[ih] = append(ret[ih], v)
 		}
 	}
 	return
@@ -102,7 +96,8 @@ func (me *InMemory) WriteDebug(w io.Writer) {
 		fmt.Fprintf(w, "%v (count %v):\n", elem.InfoHash, len(addrs))
 		sort.Slice(addrs, func(i, j int) bool {
 			return multiless.New().Cmp(
-				bytes.Compare(addrs[i].IP, addrs[j].IP)).Int(
+				bytes.Compare(addrs[i].IP, addrs[j].IP)).Int64(
+				addrs[j].Time.UnixNano(), addrs[i].Time.UnixNano()).Int(
 				addrs[i].Port, addrs[j].Port,
 			).MustLess()
 		})

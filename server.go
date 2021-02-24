@@ -513,6 +513,7 @@ func (s *Server) handleQuery(source Addr, m krpc.Msg) {
 			portOk = true
 		}
 		if args.ImpliedPort {
+			expvars.Add("received announce_peer with implied_port", 1)
 			port = source.Port()
 			portOk = true
 		}

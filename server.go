@@ -104,6 +104,9 @@ func (s *Server) WriteStatus(w io.Writer) {
 			if s.IsGood(n) {
 				flags = append(flags, "good")
 			}
+			if n.IsSecure() {
+				flags = append(flags, "sec")
+			}
 			fmt.Fprintf(tw, "%d\t%x\t%s\t%v\t%s\t%s\t%d\t%v\t%v\n",
 				i,
 				n.Id.Bytes(),

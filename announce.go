@@ -47,11 +47,6 @@ func (a *Announce) String() string {
 	return fmt.Sprintf("%[1]T %[1]p of %v on %v", a, a.infoHash, a.server)
 }
 
-type pendingAnnouncePeer struct {
-	addrMaybeId
-	token string
-}
-
 // Returns the number of distinct remote addresses the announce has queried.
 func (a *Announce) NumContacted() int64 {
 	return atomic.LoadInt64(&a.traversal.stats.NumAddrsTried)

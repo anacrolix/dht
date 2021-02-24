@@ -6,6 +6,11 @@ import (
 	"github.com/benbjohnson/immutable"
 )
 
+type pendingAnnouncePeer struct {
+	addrMaybeId
+	token string
+}
+
 type pendingAnnouncePeers struct {
 	inner *immutable.SortedMap
 	k     int

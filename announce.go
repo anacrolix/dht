@@ -32,8 +32,6 @@ type Announce struct {
 	pending  *stm.Var // How many transactions are still ongoing (int).
 	server   *Server
 	infoHash int160.T // Target
-	// Count of (probably) distinct addresses we've sent get_peers requests to.
-	numGetPeers int64
 	// The torrent port that we're announcing.
 	announcePort int
 	// The torrent port should be determined by the receiver in case we're
@@ -59,7 +57,7 @@ type pendingAnnouncePeer struct {
 
 // Returns the number of distinct remote addresses the announce has queried.
 func (a *Announce) NumContacted() int64 {
-	return atomic.LoadInt64(&a.numGetPeers)
+	return atomic.LoadInt64(&a.traversal.traversalQueriesSent)
 }
 
 type AnnounceOpt *struct{}

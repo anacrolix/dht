@@ -30,8 +30,12 @@ type traversal struct {
 	stopTraversal       func(_ *stm.Tx, next addrMaybeId) bool
 	reason              string
 	shouldContact       func(krpc.NodeAddr, *stm.Tx) bool
-	query               func(Addr) QueryResult
-	serverBeginQuery    func(Addr, string, func() numWrites) stm.Operation
+	// User-specified traversal query
+	query func(Addr) QueryResult
+	// A hook to a begin a query on the server, that expects to receive the number of writes back.
+	serverBeginQuery func(Addr, string, func() numWrites) stm.Operation
+	// Count of (probably) distinct addresses we've sent traversal queries to.
+	traversalQueriesSent int64
 }
 
 func newTraversal(targetInfohash int160.T) traversal {

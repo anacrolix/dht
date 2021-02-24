@@ -747,6 +747,15 @@ func (s *Server) beginQuery(addr Addr, reason string, f func() numWrites) stm.Op
 	}
 }
 
+func finalizeCteh(cteh *conntrack.EntryHandle, writes numWrites) {
+	if writes == 0 {
+		cteh.Forget()
+		// TODO: panic("how to reverse rate limit?")
+	} else {
+		cteh.Done()
+	}
+}
+
 func (s *Server) query(addr Addr, q string, a krpc.MsgArgs, callback func(krpc.Msg, error)) error {
 	if callback == nil {
 		callback = func(krpc.Msg, error) {}
@@ -1153,6 +1162,29 @@ func (s *Server) newTraversal(targetId int160.T) (t traversal, err error) {
 		stm.Atomically(t.pendContact(addr))
 	}
 	return
+}
+
+func (a *Server) shouldContact(addr krpc.NodeAddr, tx *stm.Tx) bool {
+	if !validNodeAddr(addr.UDP()) {
+		return false
+	}
+	if a.ipBlocked(addr.IP) {
+		return false
+	}
+	return true
+}
+
+func validNodeAddr(addr net.Addr) bool {
+	// At least for UDP addresses, we know what doesn't work.
+	ua := addr.(*net.UDPAddr)
+	if ua.Port == 0 {
+		return false
+	}
+	if ip4 := ua.IP.To4(); ip4 != nil && ip4[0] == 0 {
+		// Why?
+		return false
+	}
+	return true
 }
 
 //func (s *Server) refreshBucket(bucketIndex int) {

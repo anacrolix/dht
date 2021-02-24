@@ -2,6 +2,7 @@ package dht
 
 import (
 	"fmt"
+	"sync/atomic"
 
 	"github.com/anacrolix/dht/v2/int160"
 	"github.com/anacrolix/dht/v2/krpc"
@@ -103,4 +104,79 @@ func (a *traversal) popNextContact(tx *stm.Tx) (ret addrMaybeId, ok bool) {
 	tx.Set(a.addrBestIds, tx.Get(a.addrBestIds).(stmutil.Mappish).Delete(addrString))
 	tx.Set(a.triedAddrs, tx.Get(a.triedAddrs).(stmutil.Settish).Add(addrString))
 	return
+}
+
+func (a *traversal) responseNode(node krpc.NodeInfo) {
+	i := int160.FromByteArray(node.ID)
+	stm.Atomically(a.pendContact(addrMaybeId{node.Addr, &i}))
+}
+
+func (a *traversal) wrapQuery(addr Addr) QueryResult {
+	atomic.AddInt64(&a.stats.NumAddrsTried, 1)
+	res := a.query(addr)
+	if res.Err == nil {
+		atomic.AddInt64(&a.stats.NumResponses, 1)
+	}
+	m := res.Reply
+	// Register suggested nodes closer to the target info-hash.
+	if r := m.R; r != nil {
+		expvars.Add("traversal response nodes values", int64(len(r.Nodes)))
+		expvars.Add("traversal response nodes6 values", int64(len(r.Nodes6)))
+		r.ForAllNodes(a.responseNode)
+	}
+	return res
+}
+
+type txResT struct {
+	done bool
+	run  func()
+}
+
+func wrapRun(f stm.Operation) stm.Operation {
+	return func(tx *stm.Tx) interface{} {
+		return txResT{run: f(tx).(func())}
+	}
+}
+
+func (a *traversal) getPending(tx *stm.Tx) int {
+	return tx.Get(a.pending).(int)
+}
+
+func (a *traversal) run() {
+	for {
+		txRes := stm.Atomically(func(tx *stm.Tx) interface{} {
+			if tx.Get(a.doneVar).(bool) {
+				return txResT{done: true}
+			}
+			if next, ok := a.popNextContact(tx); ok {
+				if !a.stopTraversal(tx, next) {
+					tx.Assert(a.getPending(tx) < 3)
+					dhtAddr := NewAddr(next.Addr.UDP())
+					return wrapRun(a.beginQuery(dhtAddr, a.reason, func() numWrites {
+						return a.wrapQuery(dhtAddr).writes
+					}))(tx)
+				}
+			}
+			tx.Assert(a.getPending(tx) == 0)
+			return txResT{done: true}
+		}).(txResT)
+		if !txRes.done || txRes.run != nil {
+			go txRes.run()
+		}
+		if txRes.done {
+			break
+		}
+	}
+
+}
+
+func (a *traversal) beginQuery(addr Addr, reason string, f func() numWrites) stm.Operation {
+	return func(tx *stm.Tx) interface{} {
+		pending := tx.Get(a.pending).(int)
+		tx.Set(a.pending, pending+1)
+		return a.serverBeginQuery(addr, reason, func() numWrites {
+			defer stm.Atomically(stm.VoidOperation(func(tx *stm.Tx) { tx.Set(a.pending, tx.Get(a.pending).(int)-1) }))
+			return f()
+		})(tx)
+	}
 }

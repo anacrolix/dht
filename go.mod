@@ -6,6 +6,7 @@ require (
 	github.com/anacrolix/log v0.8.0
 	github.com/anacrolix/missinggo v1.2.1
 	github.com/anacrolix/missinggo/v2 v2.5.0
+	github.com/anacrolix/multiless v0.0.0-20200413040533-acfd16f65d5d
 	github.com/anacrolix/stm v0.2.1-0.20201002073511-c35a2c748c6a
 	github.com/anacrolix/sync v0.2.0
 	github.com/anacrolix/tagflag v1.2.0
@@ -14,7 +15,7 @@ require (
 	github.com/bradfitz/iter v0.0.0-20191230175014-e8f45d346db8
 	github.com/davecgh/go-spew v1.1.1
 	github.com/docopt/docopt-go v0.0.0-20180111231733-ee0de3bc6815
-	github.com/frankban/quicktest v1.11.3 // indirect
+	github.com/frankban/quicktest v1.11.3
 	github.com/pkg/errors v0.9.1
 	github.com/rs/dnscache v0.0.0-20210201191234-295bba877686
 	github.com/stretchr/testify v1.6.1

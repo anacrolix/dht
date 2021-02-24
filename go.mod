@@ -6,7 +6,7 @@ require (
 	github.com/anacrolix/log v0.8.0
 	github.com/anacrolix/missinggo v1.2.1
 	github.com/anacrolix/missinggo/v2 v2.5.0
-	github.com/anacrolix/multiless v0.0.0-20200413040533-acfd16f65d5d
+	github.com/anacrolix/multiless v0.0.0-20210222022749-ef43011a77ec
 	github.com/anacrolix/stm v0.2.1-0.20201002073511-c35a2c748c6a
 	github.com/anacrolix/sync v0.2.0
 	github.com/anacrolix/tagflag v1.2.0

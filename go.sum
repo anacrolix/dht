@@ -138,6 +138,8 @@ github.com/anacrolix/multiless v0.0.0-20191223025854-070b7994e841 h1:AIQdjlpS6GL
 github.com/anacrolix/multiless v0.0.0-20191223025854-070b7994e841/go.mod h1:TrCLEZfIDbMVfLoQt5tOoiBS/uq4y8+ojuEVVvTNPX4=
 github.com/anacrolix/multiless v0.0.0-20200413040533-acfd16f65d5d h1:Vg2zfJt8ZRyaOSXfDmgwqAuFTj0zQ8UF1hTw7X12WmY=
 github.com/anacrolix/multiless v0.0.0-20200413040533-acfd16f65d5d/go.mod h1:TrCLEZfIDbMVfLoQt5tOoiBS/uq4y8+ojuEVVvTNPX4=
+github.com/anacrolix/multiless v0.0.0-20210222022749-ef43011a77ec h1:nZ2XULpGY7vSZIOVcreOWHXq4TS9n3L25Bh9Jx8kf68=
+github.com/anacrolix/multiless v0.0.0-20210222022749-ef43011a77ec/go.mod h1:TrCLEZfIDbMVfLoQt5tOoiBS/uq4y8+ojuEVVvTNPX4=
 github.com/anacrolix/stm v0.1.0/go.mod h1:ZKz7e7ERWvP0KgL7WXfRjBXHNRhlVRlbBQecqFtPq+A=
 github.com/anacrolix/stm v0.1.1-0.20191106051447-e749ba3531cf/go.mod h1:zoVQRvSiGjGoTmbM0vSLIiaKjWtNPeTvXUSdJQA4hsg=
 github.com/anacrolix/stm v0.2.0 h1:q4IrMj/PPQM2OgHkQcWEVmiOXcuf0Kkil2rWasQeGkU=

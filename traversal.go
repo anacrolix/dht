@@ -49,11 +49,11 @@ func newTraversal(targetInfohash int160.T) traversal {
 	}
 }
 
-func (t traversal) waitFinished(tx *stm.Tx) {
+func (t *traversal) waitFinished(tx *stm.Tx) {
 	tx.Assert(tx.Get(t.nodesPendingContact).(stmutil.Lenner).Len() == 0)
 }
 
-func (t traversal) pendContact(node addrMaybeId) stm.Operation {
+func (t *traversal) pendContact(node addrMaybeId) stm.Operation {
 	return stm.VoidOperation(func(tx *stm.Tx) {
 		if !t.shouldContact(node.Addr, tx) {
 			return
@@ -83,7 +83,7 @@ func (t traversal) pendContact(node addrMaybeId) stm.Operation {
 	})
 }
 
-func (a traversal) nextContact(tx *stm.Tx) (ret addrMaybeId, ok bool) {
+func (a *traversal) nextContact(tx *stm.Tx) (ret addrMaybeId, ok bool) {
 	npc := tx.Get(a.nodesPendingContact).(stmutil.Settish)
 	first, ok := iter.First(npc.Iter)
 	if !ok {
@@ -93,7 +93,7 @@ func (a traversal) nextContact(tx *stm.Tx) (ret addrMaybeId, ok bool) {
 	return
 }
 
-func (a traversal) popNextContact(tx *stm.Tx) (ret addrMaybeId, ok bool) {
+func (a *traversal) popNextContact(tx *stm.Tx) (ret addrMaybeId, ok bool) {
 	ret, ok = a.nextContact(tx)
 	if !ok {
 		return

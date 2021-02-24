@@ -1,6 +1,7 @@
 package krpc
 
 import (
+	"encoding/hex"
 	"fmt"
 
 	"github.com/anacrolix/torrent/bencode"
@@ -35,4 +36,8 @@ func (id *ID) UnmarshalBencode(b []byte) error {
 		return fmt.Errorf("string has wrong length: %d", n)
 	}
 	return nil
+}
+
+func (id ID) String() string {
+	return hex.EncodeToString(id[:])
 }

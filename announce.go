@@ -300,10 +300,12 @@ func (a *traversal) run() {
 			tx.Assert(a.getPending(tx) == 0)
 			return txResT{done: true}
 		}).(txResT)
+		if !txRes.done || txRes.run != nil {
+			go txRes.run()
+		}
 		if txRes.done {
 			break
 		}
-		go txRes.run()
 	}
 
 }

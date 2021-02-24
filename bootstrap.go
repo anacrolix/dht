@@ -12,11 +12,20 @@ func (s *Server) Bootstrap() (_ TraversalStats, err error) {
 	}
 	t.reason = "dht bootstrap find_node"
 	t.doneVar = stm.NewVar(false)
-	t.stopTraversal = func(*stm.Tx, addrMaybeId) bool {
-		return false
+	// Track number of responses, for STM use. (It's available via atomic in TraversalStats but that
+	// won't let wake up STM transactions that are observing the value.)
+	numResponseStm := stm.NewBuiltinEqVar(0)
+	t.stopTraversal = func(tx *stm.Tx, _ addrMaybeId) bool {
+		return tx.Get(numResponseStm).(int) >= 100
 	}
 	t.query = func(addr Addr) QueryResult {
-		return s.FindNode(addr, s.id, QueryRateLimiting{NotFirst: true})
+		res := s.FindNode(addr, s.id, QueryRateLimiting{NotFirst: true})
+		if res.Err == nil {
+			stm.Atomically(stm.VoidOperation(func(tx *stm.Tx) {
+				tx.Set(numResponseStm, tx.Get(numResponseStm).(int)+1)
+			}))
+		}
+		return res
 	}
 	t.run()
 	return t.stats, nil

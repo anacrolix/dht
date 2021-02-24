@@ -11,8 +11,10 @@ import (
 )
 
 type TraversalStats struct {
+	// Count of (probably) distinct addresses we've sent traversal queries to. Accessed with atomic.
 	NumAddrsTried int64
-	NumResponses  int64
+	// Number of responses we received to queries related to this traversal. Accessed with atomic.
+	NumResponses int64
 }
 
 func (me TraversalStats) String() string {
@@ -34,8 +36,7 @@ type traversal struct {
 	query func(Addr) QueryResult
 	// A hook to a begin a query on the server, that expects to receive the number of writes back.
 	serverBeginQuery func(Addr, string, func() numWrites) stm.Operation
-	// Count of (probably) distinct addresses we've sent traversal queries to.
-	traversalQueriesSent int64
+	stats            TraversalStats
 }
 
 func newTraversal(targetInfohash int160.T) traversal {

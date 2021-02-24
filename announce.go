@@ -57,7 +57,7 @@ type pendingAnnouncePeer struct {
 
 // Returns the number of distinct remote addresses the announce has queried.
 func (a *Announce) NumContacted() int64 {
-	return atomic.LoadInt64(&a.traversal.traversalQueriesSent)
+	return atomic.LoadInt64(&a.traversal.stats.NumAddrsTried)
 }
 
 type AnnounceOpt *struct{}
@@ -219,8 +219,11 @@ func (a *Announce) getPeers(addr Addr) QueryResult {
 }
 
 func (a *traversal) wrapQuery(addr Addr) QueryResult {
-
+	atomic.AddInt64(&a.stats.NumAddrsTried, 1)
 	res := a.query(addr)
+	if res.Err == nil {
+		atomic.AddInt64(&a.stats.NumResponses, 1)
+	}
 	m := res.Reply
 	// Register suggested nodes closer to the target info-hash.
 	if r := m.R; r != nil {

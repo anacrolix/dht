@@ -218,7 +218,8 @@ func (a *Announce) getPeers(addr Addr) QueryResult {
 	return res
 }
 
-func (a *traversal) doQuery(addr Addr) QueryResult {
+func (a *traversal) wrapQuery(addr Addr) QueryResult {
+
 	res := a.query(addr)
 	m := res.Reply
 	// Register suggested nodes closer to the target info-hash.
@@ -292,7 +293,7 @@ func (a *traversal) run() {
 					tx.Assert(a.getPending(tx) < 3)
 					dhtAddr := NewAddr(next.Addr.UDP())
 					return wrapRun(a.beginQuery(dhtAddr, a.reason, func() numWrites {
-						return a.doQuery(dhtAddr).writes
+						return a.wrapQuery(dhtAddr).writes
 					}))(tx)
 				}
 			}
@@ -327,10 +328,6 @@ func (a *Announce) run() {
 		go txRes.run()
 	}
 }
-
-//
-//func (a *Announce) beginGetPeers(tx *stm.Tx) interface{} {
-//}
 
 func (a *traversal) beginQuery(addr Addr, reason string, f func() numWrites) stm.Operation {
 	return func(tx *stm.Tx) interface{} {

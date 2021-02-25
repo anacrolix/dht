@@ -1102,21 +1102,32 @@ func (s *Server) getQuestionableNode() (ret *node) {
 
 func (s *Server) questionableNodePinger() {
 tryPing:
+	logger := s.logger().WithDefaultLevel(log.Info)
 	for {
 		s.mu.RLock()
 		n := s.getQuestionableNode()
 		if n != nil {
-			addr := n.Addr.Raw().(*net.UDPAddr)
+			target := n.nodeKey
 			s.mu.RUnlock()
-			done := make(chan struct{})
-			err := s.Ping(addr, func(krpc.Msg, error) {
-				close(done)
-			})
-			if err == nil {
-				<-done
+			n = nil // We should not touch this anymore, it belongs to the Server.
+			expvars.Add("questionable node pings", 1)
+			logger.Printf("pinging questionable node %v", target)
+			addr := target.Addr.Raw().(*net.UDPAddr)
+			res := s.Ping(addr)
+			if res.Err == nil {
+				if psid := res.Reply.SenderID(); psid == nil || int160.FromByteArray(*psid) != target.Id {
+					logger.Printf("questionable node %v responded with different id: %v", target, psid)
+					s.mu.Lock()
+					if n := s.table.getNode(target.Addr, target.Id); n != nil {
+						n.consecutiveFailures++
+					} else {
+						logger.Printf("questionable node %v no longer in routing table", target)
+					}
+					s.mu.Unlock()
+				}
 				goto tryPing
 			}
-			s.logger().Printf("error pinging questionable node: %v", err)
+			logger.Printf("questionable node %v failed to respond: %v", target, res.Err)
 		} else {
 			s.mu.RUnlock()
 		}

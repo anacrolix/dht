@@ -26,7 +26,6 @@ type Announce struct {
 	done   <-chan struct{}
 	cancel func()
 
-	pending  *stm.Var // How many transactions are still ongoing (int).
 	server   *Server
 	infoHash int160.T // Target
 	// The torrent port that we're announcing.
@@ -75,7 +74,6 @@ func (s *Server) Announce(infoHash [20]byte, port int, impliedPort bool, opts ..
 		infoHash:             infoHashInt160,
 		announcePort:         port,
 		announcePortImplied:  impliedPort,
-		pending:              stm.NewVar(0),
 		pendingAnnouncePeers: stm.NewVar(newPendingAnnouncePeers(infoHashInt160)),
 		traversal:            traversal,
 	}

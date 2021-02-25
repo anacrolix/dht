@@ -355,7 +355,8 @@ func (s *Server) ipBlocked(ip net.IP) (blocked bool) {
 func (s *Server) AddNode(ni krpc.NodeInfo) error {
 	id := int160.FromByteArray(ni.ID)
 	if id.IsZero() {
-		return s.Ping(ni.Addr.UDP(), nil)
+		go s.Ping(ni.Addr.UDP())
+		return nil
 	}
 	return s.updateNode(NewAddr(ni.Addr.UDP()), (*krpc.ID)(&ni.ID), true, func(*node) {})
 }
@@ -756,25 +757,6 @@ func finalizeCteh(cteh *conntrack.EntryHandle, writes numWrites) {
 	}
 }
 
-func (s *Server) query(addr Addr, q string, a krpc.MsgArgs, callback func(krpc.Msg, error)) error {
-	if callback == nil {
-		callback = func(krpc.Msg, error) {}
-	}
-	go func() {
-		stm.Atomically(
-			s.beginQuery(addr, fmt.Sprintf("send dht query %q", q),
-				func() numWrites {
-					res := s.Query(context.Background(), addr, q, QueryInput{
-						MsgArgs: a, RateLimiting: QueryRateLimiting{NotFirst: true}})
-					callback(res.Reply, res.Err)
-					return res.writes
-				},
-			),
-		).(func())()
-	}()
-	return nil
-}
-
 func (s *Server) makeQueryBytes(q string, a krpc.MsgArgs, t string) []byte {
 	a.ID = s.ID()
 	m := krpc.Msg{
@@ -913,13 +895,8 @@ func (s *Server) transactionQuerySender(
 }
 
 // Sends a ping query to the address given.
-func (s *Server) Ping(node *net.UDPAddr, callback func(krpc.Msg, error)) error {
-	return s.ping(node, callback)
-}
-
-// This method is old, and probably needs a new signature.
-func (s *Server) ping(node *net.UDPAddr, callback func(krpc.Msg, error)) error {
-	return s.query(NewAddr(node), "ping", krpc.MsgArgs{}, callback)
+func (s *Server) Ping(node *net.UDPAddr) QueryResult {
+	return s.Query(context.TODO(), NewAddr(node), "ping", QueryInput{})
 }
 
 func (s *Server) announcePeer(node Addr, infoHash int160.T, port int, token string, impliedPort bool, rl QueryRateLimiting) (ret QueryResult) {

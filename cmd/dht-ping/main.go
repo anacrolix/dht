@@ -11,7 +11,6 @@ import (
 	"github.com/anacrolix/tagflag"
 
 	"github.com/anacrolix/dht/v2"
-	"github.com/anacrolix/dht/v2/krpc"
 )
 
 func main() {
@@ -36,13 +35,15 @@ func main() {
 			}
 			started := time.Now()
 			wg.Add(1)
-			s.Ping(ua, func(m krpc.Msg, err error) {
+			go func() {
 				defer wg.Done()
+				res := s.Ping(ua)
+				err := res.Err
 				if err != nil {
 					fmt.Printf("%s: %s: %s\n", a, time.Since(started), err)
 					return
 				}
-				id := *m.SenderID()
+				id := *res.Reply.SenderID()
 				fmt.Printf("%s: %x %c: %s\n", a, id, func() rune {
 					if dht.NodeIdSecure(id, ua.IP) {
 						return '✔'
@@ -50,7 +51,7 @@ func main() {
 						return '✘'
 					}
 				}(), time.Since(started))
-			})
+			}()
 		}(a)
 	}
 	done := make(chan struct{})

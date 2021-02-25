@@ -115,18 +115,12 @@ func TestPing(t *testing.T) {
 	})
 	require.NoError(t, err)
 	defer srv0.Close()
-	ok := make(chan bool)
-	err = srv.Ping(&net.UDPAddr{
+	res := srv.Ping(&net.UDPAddr{
 		IP:   []byte{127, 0, 0, 1},
 		Port: srv0.Addr().(*net.UDPAddr).Port,
-	}, func(m krpc.Msg, err error) {
-		if err != nil {
-			panic(err)
-		}
-		ok <- *m.SenderID() == srv0.ID()
 	})
-	require.NoError(t, err)
-	require.True(t, <-ok)
+	require.NoError(t, res.Err)
+	require.EqualValues(t, srv0.ID(), *res.Reply.SenderID())
 }
 
 func TestServerCustomNodeId(t *testing.T) {
@@ -197,21 +191,17 @@ func TestHook(t *testing.T) {
 	defer receiver.Close()
 	// Ping receiver from pinger to trigger hook. Should also receive a response.
 	t.Log("TestHook: Servers created, hook for ping established. Calling Ping.")
-	pingCallbackHit := make(chan struct{})
-	err = pinger.Ping(&net.UDPAddr{
+	res := pinger.Ping(&net.UDPAddr{
 		IP:   []byte{127, 0, 0, 1},
 		Port: receiver.Addr().(*net.UDPAddr).Port,
-	}, func(m krpc.Msg, err error) {
-		close(pingCallbackHit)
 	})
-	assert.NoError(t, err)
+	assert.NoError(t, res.Err)
 	// Await signal that hook has been called.
 	select {
 	case <-hookCalled:
 		// Success, hook was triggered. TODO: Ensure that "ok" channel
 		// receives, also, indicating normal handling proceeded also.
 		t.Log("TestHook: Received ping, hook called and returned to normal execution!")
-		<-pingCallbackHit
 		t.Log("TestHook: Sender received response from pinged hook server, so normal execution resumed.")
 	case <-time.After(time.Second * 1):
 		t.Error("Failed to see evidence of ping hook being called after 2 seconds.")

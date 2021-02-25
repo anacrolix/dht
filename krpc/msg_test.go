@@ -83,6 +83,18 @@ func TestMarshalUnmarshalMsg(t *testing.T) {
 	}, "d2:ip6:|\xa8\xb4\b\xf5|1:rd2:id20:\xeb\xff6isQ\xffJ\xec)ͺ\xab\xf2\xfb\xe3F|\xc2ge1:t1:\x031:y1:re")
 }
 
+func TestMsgReadOnly(t *testing.T) {
+	testMarshalUnmarshalMsg(t, Msg{ReadOnly: true}, "d2:roi1e1:t0:1:y0:e")
+	testMarshalUnmarshalMsg(t, Msg{ReadOnly: false}, "d1:t0:1:y0:e")
+	var m Msg
+	require.NoError(t, bencode.Unmarshal([]byte("de"), &m))
+	require.EqualValues(t, Msg{}, m)
+	require.NoError(t, bencode.Unmarshal([]byte("d2:roi1ee"), &m))
+	require.EqualValues(t, Msg{ReadOnly: true}, m)
+	require.NoError(t, bencode.Unmarshal([]byte("d2:roi0ee"), &m))
+	require.EqualValues(t, Msg{}, m)
+}
+
 func TestUnmarshalGetPeersResponse(t *testing.T) {
 	var msg Msg
 	err := bencode.Unmarshal([]byte("d1:rd6:valuesl6:\x01\x02\x03\x04\x05\x066:\x07\x08\x09\x0a\x0b\x0ce5:nodes52:\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x02\x03\x04\x05\x06\x07\x08\x09\x02\x03\x04\x05\x06\x07\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x02\x03\x04\x05\x06\x07\x08\x09\x02\x03\x04\x05\x06\x07ee"), &msg)

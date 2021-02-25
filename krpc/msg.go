@@ -47,13 +47,14 @@ const (
 )
 
 type Return struct {
+	// All returns are supposed to contain an ID, but what if they don't?
 	ID     ID                  `bencode:"id"`               // ID of the queried node
 	Nodes  CompactIPv4NodeInfo `bencode:"nodes,omitempty"`  // K closest nodes to the requested target
 	Nodes6 CompactIPv6NodeInfo `bencode:"nodes6,omitempty"` // K closest nodes to the requested target
 	Token  *string             `bencode:"token,omitempty"`  // Token for future announce_peer
 	Values []NodeAddr          `bencode:"values,omitempty"` // Torrent peers
 
-	// BEP 33
+	// BEP 33 (scrapes)
 	BFsd *ScrapeBloomFilter `bencode:"BFsd,omitempty"`
 	BFpe *ScrapeBloomFilter `bencode:"BFpe,omitempty"`
 }

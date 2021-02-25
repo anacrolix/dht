@@ -110,7 +110,8 @@ func (s *Server) Announce(infoHash [20]byte, port int, impliedPort bool, opts ..
 	return a, nil
 }
 
-// Store a potential peer announce.
+// Store a potential peer announce. I think it's okay to have no peer ID here, as any next contact
+// candidate will be closer than the "farthest" potential announce peer.
 func (a *Announce) maybeAnnouncePeer(to Addr, token *string, peerId *krpc.ID) {
 	if token == nil {
 		return
@@ -118,17 +119,17 @@ func (a *Announce) maybeAnnouncePeer(to Addr, token *string, peerId *krpc.ID) {
 	if !a.server.config.NoSecurity && (peerId == nil || !NodeIdSecure(*peerId, to.IP())) {
 		return
 	}
-	stm.Atomically(stm.VoidOperation(func(tx *stm.Tx) {
-		x := pendingAnnouncePeer{
-			token: *token,
-		}
-		x.Addr = to.KRPC()
-		if peerId != nil {
-			id := int160.FromByteArray(*peerId)
-			x.Id = &id
-		}
-		tx.Set(a.pendingAnnouncePeers, tx.Get(a.pendingAnnouncePeers).(pendingAnnouncePeers).Push(x))
-	}))
+	x := pendingAnnouncePeer{
+		token: *token,
+	}
+	x.Addr = to.KRPC()
+	if peerId != nil {
+		id := int160.FromByteArray(*peerId)
+		x.Id = &id
+	}
+	stm.AtomicModify(a.pendingAnnouncePeers, func(v pendingAnnouncePeers) pendingAnnouncePeers {
+		return v.Push(x)
+	})
 }
 
 func (a *Announce) announcePeer(peer pendingAnnouncePeer) numWrites {
@@ -156,19 +157,19 @@ func (a *Announce) getPeers(addr Addr) QueryResult {
 	m := res.Reply
 	// Register suggested nodes closer to the target info-hash.
 	if r := m.R; r != nil {
-		id := &r.ID
 		select {
 		case a.values <- PeersValues{
 			Peers: r.Values,
 			NodeInfo: krpc.NodeInfo{
 				Addr: addr.KRPC(),
-				ID:   *id,
+				ID:   r.ID,
 			},
 			Return: *r,
 		}:
 		case <-a.done:
 		}
-		a.maybeAnnouncePeer(addr, r.Token, id)
+		// TODO: We're not distinguishing here for missing IDs. Those would be zero values?
+		a.maybeAnnouncePeer(addr, r.Token, &r.ID)
 	}
 	return res
 }

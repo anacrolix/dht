@@ -90,8 +90,8 @@ github.com/anacrolix/stm v0.1.0/go.mod h1:ZKz7e7ERWvP0KgL7WXfRjBXHNRhlVRlbBQecqF
 github.com/anacrolix/stm v0.1.1-0.20191106051447-e749ba3531cf/go.mod h1:zoVQRvSiGjGoTmbM0vSLIiaKjWtNPeTvXUSdJQA4hsg=
 github.com/anacrolix/stm v0.2.0/go.mod h1:zoVQRvSiGjGoTmbM0vSLIiaKjWtNPeTvXUSdJQA4hsg=
 github.com/anacrolix/stm v0.2.1-0.20201002073511-c35a2c748c6a/go.mod h1:spImf/rXwiAUoYYJK1YCZeWkpaHZ3kzjGFjwK5OStfU=
-github.com/anacrolix/stm v0.2.1-0.20210310231625-45c211559de6 h1:qv/kx7wfGENS9EbL+ufYO65nexgAqnFHHiRMjUO1QBQ=
-github.com/anacrolix/stm v0.2.1-0.20210310231625-45c211559de6/go.mod h1:spImf/rXwiAUoYYJK1YCZeWkpaHZ3kzjGFjwK5OStfU=
+github.com/anacrolix/stm v0.3.0-alpha h1:yhOHk1NPkpGKqCAOB4XkgFXwB5Eh2KU/WVMksNnxr2Y=
+github.com/anacrolix/stm v0.3.0-alpha/go.mod h1:spImf/rXwiAUoYYJK1YCZeWkpaHZ3kzjGFjwK5OStfU=
 github.com/anacrolix/sync v0.0.0-20171108081538-eee974e4f8c1/go.mod h1:+u91KiUuf0lyILI6x3n/XrW7iFROCZCG+TjgK8nW52w=
 github.com/anacrolix/sync v0.0.0-20180611022320-3c4cb11f5a01/go.mod h1:+u91KiUuf0lyILI6x3n/XrW7iFROCZCG+TjgK8nW52w=
 github.com/anacrolix/sync v0.0.0-20180808010631-44578de4e778/go.mod h1:s735Etp3joe/voe2sdaXLcqDdJSay1O0OPnM0ystjqk=

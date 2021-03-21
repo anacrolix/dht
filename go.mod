@@ -7,7 +7,7 @@ require (
 	github.com/anacrolix/missinggo v1.2.1
 	github.com/anacrolix/missinggo/v2 v2.5.0
 	github.com/anacrolix/multiless v0.0.0-20210222022749-ef43011a77ec
-	github.com/anacrolix/stm v0.2.1-0.20210310231625-45c211559de6
+	github.com/anacrolix/stm v0.3.0-alpha
 	github.com/anacrolix/sync v0.2.0
 	github.com/anacrolix/tagflag v1.2.0
 	github.com/anacrolix/torrent v1.25.1-0.20210224024805-693c30dd889e

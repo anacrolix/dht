@@ -1102,7 +1102,7 @@ func (s *Server) getQuestionableNode() (ret *node) {
 
 func (s *Server) questionableNodePinger() {
 tryPing:
-	logger := s.logger().WithDefaultLevel(log.Info)
+	logger := s.logger().WithDefaultLevel(log.Debug)
 	for {
 		s.mu.RLock()
 		n := s.getQuestionableNode()

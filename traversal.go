@@ -24,6 +24,7 @@ func (me TraversalStats) String() string {
 
 // Prioritizes addrs to try by distance from target, disallowing repeat contacts.
 type traversal struct {
+	stats               TraversalStats
 	targetInfohash      int160.T
 	triedAddrs          *stm.Var // Settish of krpc.NodeAddr.String
 	nodesPendingContact *stm.Var // Settish of addrMaybeId sorted by distance from the target
@@ -37,7 +38,6 @@ type traversal struct {
 	query func(Addr) QueryResult
 	// A hook to a begin a query on the server, that expects to receive the number of writes back.
 	serverBeginQuery func(Addr, string, func() numWrites) stm.Operation
-	stats            TraversalStats
 }
 
 func newTraversal(targetInfohash int160.T) traversal {

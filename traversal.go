@@ -3,6 +3,7 @@ package dht
 import (
 	"fmt"
 	"sync/atomic"
+	"unsafe"
 
 	"github.com/anacrolix/dht/v2/int160"
 	"github.com/anacrolix/dht/v2/krpc"
@@ -13,9 +14,19 @@ import (
 
 type TraversalStats struct {
 	// Count of (probably) distinct addresses we've sent traversal queries to. Accessed with atomic.
-	NumAddrsTried int64
+	NumAddrsTried [15]byte
 	// Number of responses we received to queries related to this traversal. Accessed with atomic.
-	NumResponses int64
+	NumResponses [15]byte
+}
+
+func (stats *TraversalStats) NumAddrsTriedAddress() *int64 {
+	// The return must be 8-byte aligned.
+	return (*int64)(unsafe.Pointer((uintptr(unsafe.Pointer(&stats.NumAddrsTried)) + 7)/8*8))
+}
+
+func (stats *TraversalStats) NumResponsesAddress() *int64 {
+	// The return must be 8-byte aligned.
+	return (*int64)(unsafe.Pointer((uintptr(unsafe.Pointer(&stats.NumResponses)) + 7)/8*8))
 }
 
 func (me TraversalStats) String() string {
@@ -24,7 +35,6 @@ func (me TraversalStats) String() string {
 
 // Prioritizes addrs to try by distance from target, disallowing repeat contacts.
 type traversal struct {
-	stats               TraversalStats
 	targetInfohash      int160.T
 	triedAddrs          *stm.Var // Settish of krpc.NodeAddr.String
 	nodesPendingContact *stm.Var // Settish of addrMaybeId sorted by distance from the target
@@ -38,6 +48,7 @@ type traversal struct {
 	query func(Addr) QueryResult
 	// A hook to a begin a query on the server, that expects to receive the number of writes back.
 	serverBeginQuery func(Addr, string, func() numWrites) stm.Operation
+	stats            TraversalStats
 }
 
 func newTraversal(targetInfohash int160.T) traversal {
@@ -112,10 +123,10 @@ func (a *traversal) responseNode(node krpc.NodeInfo) {
 }
 
 func (a *traversal) wrapQuery(addr Addr) QueryResult {
-	atomic.AddInt64(&a.stats.NumAddrsTried, 1)
+	atomic.AddInt64(a.stats.NumAddrsTriedAddress(), 1)
 	res := a.query(addr)
 	if res.Err == nil {
-		atomic.AddInt64(&a.stats.NumResponses, 1)
+		atomic.AddInt64(a.stats.NumResponsesAddress(), 1)
 	}
 	m := res.Reply
 	// Register suggested nodes closer to the target info-hash.

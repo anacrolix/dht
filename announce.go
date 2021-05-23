@@ -48,7 +48,7 @@ func (a *Announce) String() string {
 
 // Returns the number of distinct remote addresses the announce has queried.
 func (a *Announce) NumContacted() int64 {
-	return atomic.LoadInt64(&a.traversal.stats.NumAddrsTried)
+	return atomic.LoadInt64(a.traversal.stats.NumAddrsTriedAddress())
 }
 
 type AnnounceOpt *struct{}

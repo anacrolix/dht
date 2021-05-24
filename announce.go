@@ -13,6 +13,7 @@ import (
 
 	"github.com/anacrolix/dht/v2/int160"
 	"github.com/anacrolix/dht/v2/krpc"
+	dhtutil "github.com/anacrolix/dht/v2/util"
 )
 
 // Maintains state for an ongoing Announce operation. An Announce is started by calling
@@ -35,7 +36,7 @@ type Announce struct {
 	announcePortImplied bool
 	scrape              bool
 
-	// List of pendingAnnouncePeer. TODO: Perhaps this should be sorted by distance to the target,
+	// List of KNearestNodesElem. TODO: Perhaps this should be sorted by distance to the target,
 	// so we can do that sloppy hash stuff ;).
 	pendingAnnouncePeers *stm.Var
 
@@ -60,13 +61,8 @@ func Scrape() AnnounceOpt { return scrape }
 // Traverses the DHT graph toward nodes that store peers for the infohash, streaming them to the
 // caller, and announcing the local node to each responding node if port is non-zero or impliedPort
 // is true.
-func (s *Server) Announce(infoHash [20]byte, port int, impliedPort bool, opts ...AnnounceOpt) (*Announce, error) {
+func (s *Server) Announce(infoHash [20]byte, port int, impliedPort bool, opts ...AnnounceOpt) (_ *Announce, err error) {
 	infoHashInt160 := int160.FromByteArray(infoHash)
-	traversal, err := s.newTraversal(infoHashInt160)
-	if err != nil {
-		return nil, err
-	}
-	traversal.reason = "dht announce get_peers"
 	a := &Announce{
 		Peers:                make(chan PeersValues),
 		values:               make(chan PeersValues),
@@ -74,11 +70,8 @@ func (s *Server) Announce(infoHash [20]byte, port int, impliedPort bool, opts ..
 		infoHash:             infoHashInt160,
 		announcePort:         port,
 		announcePortImplied:  impliedPort,
-		pendingAnnouncePeers: stm.NewVar(newPendingAnnouncePeers(infoHashInt160)),
-		traversal:            traversal,
+		pendingAnnouncePeers: stm.NewVar(dhtutil.NewKNearestNodes(infoHashInt160)),
 	}
-	a.traversal.query = a.getPeers
-	a.traversal.stopTraversal = a.stopTraversal
 	for _, opt := range opts {
 		if opt == scrape {
 			a.scrape = true
@@ -87,7 +80,17 @@ func (s *Server) Announce(infoHash [20]byte, port int, impliedPort bool, opts ..
 	var ctx context.Context
 	ctx, a.cancel = context.WithCancel(context.Background())
 	a.done = ctx.Done()
-	a.traversal.doneVar, _ = stmutil.ContextDoneVar(ctx)
+	doneVar, _ := stmutil.ContextDoneVar(ctx)
+	a.traversal, err = s.NewTraversal(NewTraversalInput{
+		Target:                        infoHash,
+		Query:                         a.getPeers,
+		QueryConnectionTrackingReason: "dht announce get_peers",
+		StopTraversal:                 a.stopTraversal,
+		Done:                          doneVar,
+	})
+	if err != nil {
+		return nil, err
+	}
 	// Function ferries from values to Peers until discovery is halted.
 	go func() {
 		defer close(a.Peers)
@@ -117,28 +120,28 @@ func (a *Announce) maybeAnnouncePeer(to Addr, token *string, peerId *krpc.ID) {
 	if !a.server.config.NoSecurity && (peerId == nil || !NodeIdSecure(*peerId, to.IP())) {
 		return
 	}
-	x := pendingAnnouncePeer{
-		token: *token,
+	x := dhtutil.KNearestNodesElem{
+		Data: *token,
 	}
 	x.Addr = to.KRPC()
 	if peerId != nil {
 		id := int160.FromByteArray(*peerId)
 		x.Id = &id
 	}
-	stm.AtomicModify(a.pendingAnnouncePeers, func(v pendingAnnouncePeers) pendingAnnouncePeers {
+	stm.AtomicModify(a.pendingAnnouncePeers, func(v dhtutil.KNearestNodes) dhtutil.KNearestNodes {
 		return v.Push(x)
 	})
 }
 
-func (a *Announce) announcePeer(peer pendingAnnouncePeer) numWrites {
-	res := a.server.announcePeer(NewAddr(peer.Addr.UDP()), a.infoHash, a.announcePort, peer.token, a.announcePortImplied,
+func (a *Announce) announcePeer(peer dhtutil.KNearestNodesElem) numWrites {
+	res := a.server.announcePeer(NewAddr(peer.Addr.UDP()), a.infoHash, a.announcePort, peer.Data.(string), a.announcePortImplied,
 		QueryRateLimiting{NotFirst: true})
-	return res.writes
+	return res.Writes
 }
 
 func (a *Announce) beginAnnouncePeer(tx *stm.Tx) interface{} {
 	tx.Assert(a.getPendingAnnouncePeers(tx).Len() != 0)
-	new, x := tx.Get(a.pendingAnnouncePeers).(pendingAnnouncePeers).Pop(tx)
+	new, x := tx.Get(a.pendingAnnouncePeers).(dhtutil.KNearestNodes).Pop(tx)
 	tx.Set(a.pendingAnnouncePeers, new)
 
 	return a.traversal.beginQuery(NewAddr(x.Addr.UDP()), "dht announce announce_peer", func() numWrites {
@@ -190,27 +193,27 @@ func (a *Announce) close() {
 	a.cancel()
 }
 
-func (a *Announce) farthestAnnouncePeer(tx *stm.Tx) (pendingAnnouncePeer, bool) {
+func (a *Announce) farthestAnnouncePeer(tx *stm.Tx) (dhtutil.KNearestNodesElem, bool) {
 	pending := a.getPendingAnnouncePeers(tx)
-	if pending.Len() < pending.k {
-		return pendingAnnouncePeer{}, false
+	if !pending.Full() {
+		return dhtutil.KNearestNodesElem{}, false
 	} else {
 		return pending.Farthest()
 	}
 }
 
-func (a *Announce) getPendingAnnouncePeers(tx *stm.Tx) pendingAnnouncePeers {
-	return tx.Get(a.pendingAnnouncePeers).(pendingAnnouncePeers)
+func (a *Announce) getPendingAnnouncePeers(tx *stm.Tx) dhtutil.KNearestNodes {
+	return tx.Get(a.pendingAnnouncePeers).(dhtutil.KNearestNodes)
 }
 
 func (a *Announce) stopTraversal(tx *stm.Tx, next addrMaybeId) bool {
 	farthest, ok := a.farthestAnnouncePeer(tx)
-	return ok && farthest.closerThan(next, a.infoHash)
+	return ok && farthest.CloserThan(next, a.infoHash)
 }
 
 func (a *Announce) run() {
 	defer a.cancel()
-	a.traversal.run()
+	a.traversal.Run()
 	a.logger().Printf("finishing get peers step")
 	for {
 		txRes := stm.Atomically(stm.Select(

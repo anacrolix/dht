@@ -4,11 +4,12 @@ import (
 	"fmt"
 	"sync/atomic"
 
-	"github.com/anacrolix/dht/v2/int160"
-	"github.com/anacrolix/dht/v2/krpc"
 	"github.com/anacrolix/missinggo/v2/iter"
 	"github.com/anacrolix/stm"
 	"github.com/anacrolix/stm/stmutil"
+
+	"github.com/anacrolix/dht/v2/int160"
+	"github.com/anacrolix/dht/v2/krpc"
 )
 
 type TraversalStats struct {
@@ -22,15 +23,25 @@ func (me TraversalStats) String() string {
 	return fmt.Sprintf("%#v", me)
 }
 
+type NewTraversalInput struct {
+	Target                        [20]byte
+	Query                         func(Addr) QueryResult
+	QueryConnectionTrackingReason string
+	StopTraversal                 func(_ *stm.Tx, next addrMaybeId) bool
+	Done                          *stm.Var // bool
+	Alpha                         int
+}
+
 // Prioritizes addrs to try by distance from target, disallowing repeat contacts.
 type traversal struct {
 	stats               TraversalStats
 	targetInfohash      int160.T
 	triedAddrs          *stm.Var // Settish of krpc.NodeAddr.String
-	nodesPendingContact *stm.Var // Settish of addrMaybeId sorted by distance from the target
+	nodesPendingContact *stm.Var // Settish of AddrMaybeId sorted by distance from the target
 	addrBestIds         *stm.Var // Mappish Addr to best
 	pending             *stm.Var
 	doneVar             *stm.Var
+	alpha               int
 	stopTraversal       func(_ *stm.Tx, next addrMaybeId) bool
 	reason              string
 	shouldContact       func(krpc.NodeAddr, *stm.Tx) bool
@@ -40,14 +51,25 @@ type traversal struct {
 	serverBeginQuery func(Addr, string, func() numWrites) stm.Operation
 }
 
-func newTraversal(targetInfohash int160.T) traversal {
-	return traversal{
+func newTraversal(input NewTraversalInput) traversal {
+	targetInfohash := int160.FromByteArray(input.Target)
+	t := traversal{
 		targetInfohash:      targetInfohash,
 		triedAddrs:          stm.NewVar(stmutil.NewSet()),
 		nodesPendingContact: stm.NewVar(nodesByDistance(targetInfohash)),
 		addrBestIds:         stm.NewVar(stmutil.NewMap()),
 		pending:             stm.NewVar(0),
 	}
+	t.reason = input.QueryConnectionTrackingReason
+	t.query = input.Query
+	t.doneVar = input.Done
+	t.stopTraversal = input.StopTraversal
+	if input.Alpha == 0 {
+		t.alpha = 3
+	} else {
+		t.alpha = input.Alpha
+	}
+	return t
 }
 
 func (t *traversal) waitFinished(tx *stm.Tx) {
@@ -79,6 +101,9 @@ func (t *traversal) pendContact(node addrMaybeId) stm.Operation {
 			})
 		}
 		tx.Set(t.addrBestIds, addrBestIds.Set(nodeAddrString, node.Id))
+		if !nodesPendingContact.Contains(node) {
+			//log.Printf("added pending contact %v", node)
+		}
 		nodesPendingContact = nodesPendingContact.Add(node)
 		tx.Set(t.nodesPendingContact, nodesPendingContact)
 	})
@@ -142,7 +167,7 @@ func (a *traversal) getPending(tx *stm.Tx) int {
 	return tx.Get(a.pending).(int)
 }
 
-func (a *traversal) run() {
+func (a *traversal) Run() {
 	for {
 		txRes := stm.Atomically(func(tx *stm.Tx) interface{} {
 			if tx.Get(a.doneVar).(bool) {
@@ -150,10 +175,12 @@ func (a *traversal) run() {
 			}
 			if next, ok := a.popNextContact(tx); ok {
 				if !a.stopTraversal(tx, next) {
-					tx.Assert(a.getPending(tx) < 3)
+					if a.alpha > 0 {
+						tx.Assert(a.getPending(tx) < a.alpha)
+					}
 					dhtAddr := NewAddr(next.Addr.UDP())
 					return wrapRun(a.beginQuery(dhtAddr, a.reason, func() numWrites {
-						return a.wrapQuery(dhtAddr).writes
+						return a.wrapQuery(dhtAddr).Writes
 					}))(tx)
 				}
 			}

@@ -12,7 +12,7 @@ import (
 
 func TestTraversal(t *testing.T) {
 	var target int160.T
-	traversal := newTraversal(target)
+	traversal := newTraversal(NewTraversalInput{Target: target.AsByteArray()})
 	traversal.shouldContact = func(krpc.NodeAddr, *stm.Tx) bool {
 		return true
 	}

@@ -12,21 +12,22 @@ import (
 	"text/tabwriter"
 	"time"
 
-	"github.com/anacrolix/dht/v2/int160"
-	peer_store "github.com/anacrolix/dht/v2/peer-store"
 	"github.com/anacrolix/log"
 	"github.com/anacrolix/missinggo"
 	"github.com/anacrolix/missinggo/v2/conntrack"
+	"github.com/anacrolix/stm"
 	"github.com/anacrolix/sync"
-	"github.com/anacrolix/torrent/bencode"
+	"github.com/pkg/errors"
+
 	"github.com/anacrolix/torrent/iplist"
 	"github.com/anacrolix/torrent/logonce"
 	"github.com/anacrolix/torrent/metainfo"
-	"github.com/pkg/errors"
 
-	"github.com/anacrolix/stm"
+	"github.com/anacrolix/torrent/bencode"
 
+	"github.com/anacrolix/dht/v2/int160"
 	"github.com/anacrolix/dht/v2/krpc"
+	peer_store "github.com/anacrolix/dht/v2/peer-store"
 )
 
 // A Server defines parameters for a DHT node server that is able to send
@@ -1138,12 +1139,12 @@ tryPing:
 	}
 }
 
-func (s *Server) newTraversal(targetId int160.T) (t traversal, err error) {
+func (s *Server) NewTraversal(input NewTraversalInput) (t traversal, err error) {
 	startAddrs, err := s.traversalStartingNodes()
 	if err != nil {
 		return
 	}
-	t = newTraversal(targetId)
+	t = newTraversal(input)
 	t.shouldContact = s.shouldContact
 	t.serverBeginQuery = s.beginQuery
 	for _, addr := range startAddrs {

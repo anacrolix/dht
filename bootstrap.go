@@ -2,31 +2,53 @@ package dht
 
 import (
 	"github.com/anacrolix/stm"
+
+	"github.com/anacrolix/dht/v2/int160"
+	"github.com/anacrolix/dht/v2/types"
+	dhtutil "github.com/anacrolix/dht/v2/util"
 )
 
 // Populates the node table.
 func (s *Server) Bootstrap() (_ TraversalStats, err error) {
-	t, err := s.newTraversal(s.id)
+	// Track number of responses, for STM use. (It's available via atomic in TraversalStats but that
+	// won't let wake up STM transactions that are observing the value.)
+	nearestNodes := stm.NewVar(dhtutil.NewKNearestNodes(s.id))
+	numResponses := stm.NewBuiltinEqVar(0)
+	t, err := s.NewTraversal(NewTraversalInput{
+		Target: s.id.AsByteArray(),
+		Query: func(addr Addr) QueryResult {
+			res := s.FindNode(addr, s.id, QueryRateLimiting{NotFirst: true})
+			if res.Err == nil && res.Reply.R != nil {
+				stm.AtomicModify(numResponses, func(i int) int { return i + 1 })
+				senderId := int160.FromByteArray([20]byte(res.Reply.R.ID))
+				stm.AtomicModify(nearestNodes, func(in dhtutil.KNearestNodes) dhtutil.KNearestNodes {
+					return in.Push(dhtutil.KNearestNodesElem{
+						AddrMaybeId: types.AddrMaybeId{
+							Addr: addr.KRPC(),
+							Id:   &senderId,
+						},
+					})
+				})
+			}
+			return res
+		},
+		QueryConnectionTrackingReason: "dht bootstrap find_node",
+		StopTraversal: func(tx *stm.Tx, next addrMaybeId) bool {
+			nn := tx.Get(nearestNodes).(dhtutil.KNearestNodes)
+			if !nn.Full() {
+				return false
+			}
+			f, ok := nn.Farthest()
+			if !ok {
+				panic("k is zero?")
+			}
+			return f.CloserThan(next, s.id)
+		},
+	})
 	if err != nil {
 		return
 	}
-	t.reason = "dht bootstrap find_node"
 	t.doneVar = stm.NewVar(false)
-	// Track number of responses, for STM use. (It's available via atomic in TraversalStats but that
-	// won't let wake up STM transactions that are observing the value.)
-	numResponseStm := stm.NewBuiltinEqVar(0)
-	t.stopTraversal = func(tx *stm.Tx, _ addrMaybeId) bool {
-		return tx.Get(numResponseStm).(int) >= 100
-	}
-	t.query = func(addr Addr) QueryResult {
-		res := s.FindNode(addr, s.id, QueryRateLimiting{NotFirst: true})
-		if res.Err == nil {
-			stm.Atomically(stm.VoidOperation(func(tx *stm.Tx) {
-				tx.Set(numResponseStm, tx.Get(numResponseStm).(int)+1)
-			}))
-		}
-		return res
-	}
-	t.run()
+	t.Run()
 	return t.stats, nil
 }

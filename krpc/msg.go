@@ -46,6 +46,13 @@ const (
 	WantNodes6 Want = "n6"
 )
 
+// BEP 51 (DHT Infohash Indexing)
+type Bep51Return struct {
+	Interval *int64             `bencode:"interval,omitempty"`
+	Num      *int64             `bencode:"num,omitempty"`
+	Samples  *CompactInfohashes `bencode:"samples,omitempty"`
+}
+
 type Return struct {
 	// All returns are supposed to contain an ID, but what if they don't?
 	ID     ID                  `bencode:"id"`               // ID of the queried node
@@ -57,6 +64,8 @@ type Return struct {
 	// BEP 33 (scrapes)
 	BFsd *ScrapeBloomFilter `bencode:"BFsd,omitempty"`
 	BFpe *ScrapeBloomFilter `bencode:"BFpe,omitempty"`
+
+	Bep51Return
 }
 
 func (r Return) ForAllNodes(f func(NodeInfo)) {

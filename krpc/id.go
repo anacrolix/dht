@@ -5,6 +5,8 @@ import (
 	"fmt"
 
 	"github.com/anacrolix/torrent/bencode"
+
+	"github.com/anacrolix/dht/v2/int160"
 )
 
 type ID [20]byte
@@ -40,4 +42,8 @@ func (id *ID) UnmarshalBencode(b []byte) error {
 
 func (id ID) String() string {
 	return hex.EncodeToString(id[:])
+}
+
+func (id ID) Int160() int160.T {
+	return int160.FromByteArray(id)
 }

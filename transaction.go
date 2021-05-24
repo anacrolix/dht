@@ -2,10 +2,14 @@ package dht
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"time"
 
 	"github.com/anacrolix/dht/v2/krpc"
 )
+
+var TransactionTimeout = errors.New("transaction timed out")
 
 // Transaction keeps track of a message exchange between nodes, such as a
 // query message and a response message.
@@ -31,10 +35,10 @@ func transactionSender(
 		select {
 		case <-time.After(delay):
 			err := send()
-			if err != nil {
-				return err
-			}
 			sends++
+			if err != nil {
+				return fmt.Errorf("send %d: %w", sends, err)
+			}
 			delay = resendDelay()
 		case <-ctx.Done():
 			return ctx.Err()

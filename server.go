@@ -891,7 +891,7 @@ func (s *Server) transactionQuerySender(
 	case <-sendCtx.Done():
 		return sendCtx.Err()
 	case <-time.After(s.resendDelay()):
-		return errors.New("timed out")
+		return TransactionTimeout
 	}
 }
 

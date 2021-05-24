@@ -944,7 +944,7 @@ func (s *Server) FindNode(addr Addr, targetID int160.T, rl QueryRateLimiting) (r
 	ret = s.Query(context.TODO(), addr, "find_node", QueryInput{
 		MsgArgs: krpc.MsgArgs{
 			Target: targetID.AsByteArray(),
-			Want:   []krpc.Want{krpc.WantNodes, krpc.WantNodes6},
+			Want:   s.config.DefaultWant,
 		},
 		RateLimiting: rl})
 	// Scrape peers from the response to put in the server's table before
@@ -988,7 +988,7 @@ func (s *Server) GetPeers(ctx context.Context, addr Addr, infoHash int160.T, scr
 	args := krpc.MsgArgs{
 		InfoHash: infoHash.AsByteArray(),
 		// TODO: Maybe IPv4-only Servers won't want IPv6 nodes?
-		Want: []krpc.Want{krpc.WantNodes, krpc.WantNodes6},
+		Want: s.config.DefaultWant,
 	}
 	if scrape {
 		args.Scrape = 1

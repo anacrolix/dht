@@ -162,6 +162,7 @@ func NewDefaultServerConfig() *ServerConfig {
 		NoSecurity:         true,
 		StartingNodes:      func() ([]Addr, error) { return GlobalBootstrapAddrs("udp") },
 		ConnectionTracking: conntrack.NewInstance(),
+		DefaultWant:        []krpc.Want{krpc.WantNodes, krpc.WantNodes6},
 	}
 }
 

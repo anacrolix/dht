@@ -781,7 +781,7 @@ func (s *Server) makeQueryBytes(q string, a krpc.MsgArgs, t string) []byte {
 
 type QueryResult struct {
 	Reply  krpc.Msg
-	writes numWrites
+	Writes numWrites
 	Err    error
 }
 
@@ -809,7 +809,7 @@ func (s *Server) Query(ctx context.Context, addr Addr, q string, input QueryInpu
 	defer func(started time.Time) {
 		s.logger().WithDefaultLevel(log.Debug).WithValues(q).Printf(
 			"Query(%v) returned after %v (err=%v, reply.Y=%v, reply.E=%v, writes=%v)",
-			q, time.Since(started), ret.Err, ret.Reply.Y, ret.Reply.E, ret.writes)
+			q, time.Since(started), ret.Err, ret.Reply.Y, ret.Reply.E, ret.Writes)
 	}(time.Now())
 	replyChan := make(chan krpc.Msg, 1)
 	t := &Transaction{
@@ -833,7 +833,7 @@ func (s *Server) Query(ctx context.Context, addr Addr, q string, input QueryInpu
 		err := s.transactionQuerySender(
 			sendCtx,
 			s.makeQueryBytes(q, input.MsgArgs, tid),
-			&ret.writes,
+			&ret.Writes,
 			addr,
 			input.RateLimiting)
 		if err != nil {

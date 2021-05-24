@@ -1,9 +1,5 @@
 package krpc
 
-import (
-	"fmt"
-)
-
 // Msg represents messages that nodes in the network send to each other as specified by the protocol.
 // They are also referred to as the KRPC messages.
 // There are three types of messages: QUERY, RESPONSE, ERROR
@@ -75,12 +71,6 @@ func (r Return) ForAllNodes(f func(NodeInfo)) {
 	for _, n := range r.Nodes6 {
 		f(n)
 	}
-}
-
-var _ fmt.Stringer = Msg{}
-
-func (m Msg) String() string {
-	return fmt.Sprintf("%#v", m)
 }
 
 // The node ID of the source of this Msg. Returns nil if it isn't present.

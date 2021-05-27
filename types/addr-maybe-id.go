@@ -10,6 +10,18 @@ import (
 	"github.com/anacrolix/dht/v2/krpc"
 )
 
+func AddrMaybeIdSliceFromNodeInfoSlice(nis []krpc.NodeInfo) (ret []AddrMaybeId) {
+	ret = make([]AddrMaybeId, 0, len(nis))
+	for _, ni := range nis {
+		id := int160.FromByteArray(ni.ID)
+		ret = append(ret, AddrMaybeId{
+			Addr: ni.Addr,
+			Id:   &id,
+		})
+	}
+	return
+}
+
 type AddrMaybeId struct {
 	Addr krpc.NodeAddr
 	Id   *int160.T

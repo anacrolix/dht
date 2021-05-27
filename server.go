@@ -28,6 +28,8 @@ import (
 	"github.com/anacrolix/dht/v2/int160"
 	"github.com/anacrolix/dht/v2/krpc"
 	peer_store "github.com/anacrolix/dht/v2/peer-store"
+	"github.com/anacrolix/dht/v2/traversal"
+	"github.com/anacrolix/dht/v2/types"
 )
 
 // A Server defines parameters for a DHT node server that is able to send
@@ -803,6 +805,22 @@ type QueryResult struct {
 	Reply  krpc.Msg
 	Writes numWrites
 	Err    error
+}
+
+// Converts a Server QueryResult to a traversal.QueryResult.
+func (me QueryResult) TraversalQueryResult(addr krpc.NodeAddr) (_ traversal.QueryResult) {
+	r := me.Reply.R
+	if r == nil {
+		return
+	}
+	id := r.ID.Int160()
+	return traversal.QueryResult{
+		ResponseFrom: &types.AddrMaybeId{
+			Addr: addr,
+			Id:   &id,
+		},
+		Nodes: append(append([]krpc.NodeInfo(nil), r.Nodes...), r.Nodes6...),
+	}
 }
 
 // Rate-limiting to be applied to writes for a given query. Queries occur inside transactions that

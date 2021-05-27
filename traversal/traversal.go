@@ -14,17 +14,13 @@ import (
 )
 
 type QueryResult struct {
-	ResponseFrom       *types.AddrMaybeId
-	Nodes              []krpc.NodeInfo
-	UsedRateLimitToken bool
+	ResponseFrom *types.AddrMaybeId
+	Nodes        []krpc.NodeInfo
 }
 
 type OperationInput struct {
-	Target      [20]byte
-	Alpha       int
-	RateLimiter interface {
-		Wait(context.Context) error
-	}
+	Target  [20]byte
+	Alpha   int
 	K       int
 	DoQuery func(context.Context, krpc.NodeAddr) QueryResult
 }
@@ -170,12 +166,8 @@ func (op *Operation) startQuery() {
 			op.outstanding--
 			op.cond.Broadcast()
 		}()
-		op.input.RateLimiter.Wait(context.TODO())
 		//log.Printf("traversal querying %v", a)
 		res := op.input.DoQuery(context.TODO(), a.Addr)
-		if !res.UsedRateLimitToken {
-			//r.Cancel()
-		}
 		if res.ResponseFrom != nil && res.ResponseFrom.Id != nil {
 			func() {
 				op.mu.Lock()

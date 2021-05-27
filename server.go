@@ -1168,7 +1168,7 @@ tryPing:
 	}
 }
 
-func (s *Server) NewTraversal(input NewTraversalInput) (t traversal, err error) {
+func (s *Server) NewTraversal(input NewTraversalInput) (t stmTraversal, err error) {
 	startAddrs, err := s.traversalStartingNodes()
 	if err != nil {
 		return

@@ -18,6 +18,8 @@ import (
 // Maintains state for an ongoing Announce operation. An Announce is started by calling
 // Server.Announce.
 type Announce struct {
+	traversal traversal
+
 	Peers chan PeersValues
 
 	values chan PeersValues // Responses are pushed to this channel.
@@ -38,8 +40,6 @@ type Announce struct {
 	// List of pendingAnnouncePeer. TODO: Perhaps this should be sorted by distance to the target,
 	// so we can do that sloppy hash stuff ;).
 	pendingAnnouncePeers *stm.Var
-
-	traversal traversal
 }
 
 func (a *Announce) String() string {

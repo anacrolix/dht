@@ -40,7 +40,7 @@ type Announce struct {
 	// so we can do that sloppy hash stuff ;).
 	pendingAnnouncePeers *stm.Var
 
-	traversal traversal
+	traversal stmTraversal
 }
 
 func (a *Announce) String() string {

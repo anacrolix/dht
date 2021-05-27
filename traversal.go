@@ -33,7 +33,7 @@ type NewTraversalInput struct {
 }
 
 // Prioritizes addrs to try by distance from target, disallowing repeat contacts.
-type traversal struct {
+type stmTraversal struct {
 	stats               TraversalStats
 	targetInfohash      int160.T
 	triedAddrs          *stm.Var // Settish of krpc.NodeAddr.String
@@ -51,9 +51,9 @@ type traversal struct {
 	serverBeginQuery func(Addr, string, func() numWrites) stm.Operation
 }
 
-func newTraversal(input NewTraversalInput) traversal {
+func newTraversal(input NewTraversalInput) stmTraversal {
 	targetInfohash := int160.FromByteArray(input.Target)
-	t := traversal{
+	t := stmTraversal{
 		targetInfohash:      targetInfohash,
 		triedAddrs:          stm.NewVar(stmutil.NewSet()),
 		nodesPendingContact: stm.NewVar(nodesByDistance(targetInfohash)),
@@ -72,11 +72,11 @@ func newTraversal(input NewTraversalInput) traversal {
 	return t
 }
 
-func (t *traversal) waitFinished(tx *stm.Tx) {
+func (t *stmTraversal) waitFinished(tx *stm.Tx) {
 	tx.Assert(tx.Get(t.nodesPendingContact).(stmutil.Lenner).Len() == 0)
 }
 
-func (t *traversal) pendContact(node addrMaybeId) stm.Operation {
+func (t *stmTraversal) pendContact(node addrMaybeId) stm.Operation {
 	return stm.VoidOperation(func(tx *stm.Tx) {
 		if !t.shouldContact(node.Addr, tx) {
 			return
@@ -109,7 +109,7 @@ func (t *traversal) pendContact(node addrMaybeId) stm.Operation {
 	})
 }
 
-func (a *traversal) nextContact(tx *stm.Tx) (ret addrMaybeId, ok bool) {
+func (a *stmTraversal) nextContact(tx *stm.Tx) (ret addrMaybeId, ok bool) {
 	npc := tx.Get(a.nodesPendingContact).(stmutil.Settish)
 	first, ok := iter.First(npc.Iter)
 	if !ok {
@@ -119,7 +119,7 @@ func (a *traversal) nextContact(tx *stm.Tx) (ret addrMaybeId, ok bool) {
 	return
 }
 
-func (a *traversal) popNextContact(tx *stm.Tx) (ret addrMaybeId, ok bool) {
+func (a *stmTraversal) popNextContact(tx *stm.Tx) (ret addrMaybeId, ok bool) {
 	ret, ok = a.nextContact(tx)
 	if !ok {
 		return
@@ -131,12 +131,12 @@ func (a *traversal) popNextContact(tx *stm.Tx) (ret addrMaybeId, ok bool) {
 	return
 }
 
-func (a *traversal) responseNode(node krpc.NodeInfo) {
+func (a *stmTraversal) responseNode(node krpc.NodeInfo) {
 	i := int160.FromByteArray(node.ID)
 	stm.Atomically(a.pendContact(addrMaybeId{node.Addr, &i}))
 }
 
-func (a *traversal) wrapQuery(addr Addr) QueryResult {
+func (a *stmTraversal) wrapQuery(addr Addr) QueryResult {
 	atomic.AddInt64(&a.stats.NumAddrsTried, 1)
 	res := a.query(addr)
 	if res.Err == nil {
@@ -163,11 +163,11 @@ func wrapRun(f stm.Operation) stm.Operation {
 	}
 }
 
-func (a *traversal) getPending(tx *stm.Tx) int {
+func (a *stmTraversal) getPending(tx *stm.Tx) int {
 	return tx.Get(a.pending).(int)
 }
 
-func (a *traversal) Run() {
+func (a *stmTraversal) Run() {
 	for {
 		txRes := stm.Atomically(func(tx *stm.Tx) interface{} {
 			if tx.Get(a.doneVar).(bool) {
@@ -197,7 +197,7 @@ func (a *traversal) Run() {
 
 }
 
-func (a *traversal) beginQuery(addr Addr, reason string, f func() numWrites) stm.Operation {
+func (a *stmTraversal) beginQuery(addr Addr, reason string, f func() numWrites) stm.Operation {
 	return func(tx *stm.Tx) interface{} {
 		pending := tx.Get(a.pending).(int)
 		tx.Set(a.pending, pending+1)

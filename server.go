@@ -170,7 +170,6 @@ func (s *Server) Addr() net.Addr {
 
 func NewDefaultServerConfig() *ServerConfig {
 	return &ServerConfig{
-		Conn:               mustListen(":0"),
 		NoSecurity:         true,
 		StartingNodes:      func() ([]Addr, error) { return GlobalBootstrapAddrs("udp") },
 		ConnectionTracking: conntrack.NewInstance(),
@@ -195,7 +194,10 @@ func NewServer(c *ServerConfig) (s *Server, err error) {
 		c = NewDefaultServerConfig()
 	}
 	if c.Conn == nil {
-		return nil, errors.New("non-nil Conn required")
+		c.Conn, err = net.ListenPacket("udp", ":0")
+		if err != nil {
+			return
+		}
 	}
 	c.InitNodeId()
 	// If Logger is empty, emulate the old behaviour: Everything is logged to the default location,

@@ -2,13 +2,14 @@ package main
 
 import (
 	"context"
-	"log"
+	stdLog "log"
 	"net"
 	"net/http"
 	"os"
 	"os/signal"
 
 	_ "github.com/anacrolix/envpprof"
+	"github.com/anacrolix/log"
 	"github.com/anacrolix/tagflag"
 
 	"github.com/anacrolix/dht/v2"
@@ -36,19 +37,28 @@ func saveTable() error {
 }
 
 func main() {
-	log.SetFlags(log.LstdFlags | log.Lshortfile)
+	stdLog.SetFlags(stdLog.LstdFlags | stdLog.Lshortfile)
+	err := mainErr()
+	if err != nil {
+		log.Printf("error in main: %v", err)
+		os.Exit(1)
+	}
+}
+
+func mainErr() error {
 	tagflag.Parse(&flags)
 	conn, err := net.ListenPacket("udp", flags.Addr)
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 	defer conn.Close()
-	s, err = dht.NewServer(&dht.ServerConfig{
-		Conn:          conn,
-		StartingNodes: func() ([]dht.Addr, error) { return dht.GlobalBootstrapAddrs("udp") },
-	})
+	cfg := dht.NewDefaultServerConfig()
+	cfg.Conn = conn
+	cfg.Logger = log.Default.FilterLevel(log.Info)
+	cfg.NoSecurity = false
+	s, err = dht.NewServer(cfg)
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 	http.HandleFunc("/debug/dht", func(w http.ResponseWriter, r *http.Request) {
 		s.WriteStatus(w)
@@ -56,7 +66,7 @@ func main() {
 	if flags.TableFile != "" {
 		err = loadTable()
 		if err != nil {
-			log.Fatalf("error loading table: %s", err)
+			return err
 		}
 	}
 	log.Printf("dht server on %s, ID is %x", s.Addr(), s.ID())
@@ -64,8 +74,8 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	go func() {
 		ch := make(chan os.Signal, 1)
-		signal.Notify(ch)
-		<-ch
+		signal.Notify(ch, os.Interrupt)
+		log.Printf("got signal: %v", <-ch)
 		cancel()
 	}()
 	if !flags.NoBootstrap {
@@ -73,7 +83,7 @@ func main() {
 			if tried, err := s.Bootstrap(); err != nil {
 				log.Printf("error bootstrapping: %s", err)
 			} else {
-				log.Printf("finished bootstrapping: crawled %#v addrs", tried)
+				log.Printf("finished bootstrapping: %#v", tried)
 			}
 		}()
 	}
@@ -85,4 +95,5 @@ func main() {
 			log.Printf("error saving node table: %s", err)
 		}
 	}
+	return nil
 }

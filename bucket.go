@@ -1,9 +1,18 @@
 package dht
 
-import "github.com/anacrolix/dht/v2/int160"
+import (
+	"time"
+
+	"github.com/anacrolix/chansync"
+
+	"github.com/anacrolix/dht/v2/int160"
+)
 
 type bucket struct {
-	nodes map[*node]struct{}
+	// Per the "Routing Table" section of BEP 5.
+	changed     chansync.BroadcastCond
+	lastChanged time.Time
+	nodes       map[*node]struct{}
 }
 
 func (b *bucket) Len() int {
@@ -27,6 +36,8 @@ func (b *bucket) AddNode(n *node, k int) {
 		b.nodes = make(map[*node]struct{}, k)
 	}
 	b.nodes[n] = struct{}{}
+	b.lastChanged = time.Now()
+	b.changed.Broadcast()
 }
 
 func (b *bucket) GetNode(addr Addr, id int160.T) *node {

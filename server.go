@@ -91,47 +91,53 @@ func (s *Server) WriteStatus(w io.Writer) {
 	fmt.Fprintf(w, "Nodes in table: %d good, %d total\n", s.numGoodNodes(), s.numNodes())
 	fmt.Fprintf(w, "Ongoing transactions: %d\n", len(s.transactions))
 	fmt.Fprintf(w, "Server node ID: %x\n", s.id.Bytes())
-	fmt.Fprintln(w)
-	tw := tabwriter.NewWriter(w, 0, 0, 1, ' ', 0)
-	fmt.Fprintf(tw, "b#\tnode id\taddr\tanntok\tlast query\tlast response\trecv\tcf\tflags\n")
 	for i, b := range s.table.buckets {
-		b.EachNode(func(n *node) bool {
-			var flags []string
-			if n.readOnly {
-				flags = append(flags, "ro")
-			}
-			if s.IsQuestionable(n) {
-				flags = append(flags, "q10e")
-			}
-			if s.nodeIsBad(n) {
-				flags = append(flags, "bad")
-			}
-			if s.IsGood(n) {
-				flags = append(flags, "good")
-			}
-			if n.IsSecure() {
-				flags = append(flags, "sec")
-			}
-			fmt.Fprintf(tw, "%d\t%x\t%s\t%v\t%s\t%s\t%d\t%v\t%v\n",
-				i,
-				n.Id.Bytes(),
-				n.Addr,
-				func() int {
-					if n.announceToken == nil {
-						return -1
-					}
-					return len(*n.announceToken)
-				}(),
-				prettySince(n.lastGotQuery),
-				prettySince(n.lastGotResponse),
-				n.numReceivesFrom,
-				n.consecutiveFailures,
-				strings.Join(flags, ","),
-			)
-			return true
-		})
+		if b.Len() == 0 && b.lastChanged.IsZero() {
+			continue
+		}
+		fmt.Fprintf(w,
+			"b# %3v: %v nodes, last updated: %v\n",
+			i, b.Len(), prettySince(b.lastChanged))
+		if b.Len() > 0 {
+			tw := tabwriter.NewWriter(w, 0, 0, 1, ' ', 0)
+			fmt.Fprintf(tw, "  node id\taddr\tanntok\tlast query\tlast response\trecv\tcf\tflags\n")
+			b.EachNode(func(n *node) bool {
+				var flags []string
+				if n.readOnly {
+					flags = append(flags, "ro")
+				}
+				if s.IsQuestionable(n) {
+					flags = append(flags, "q10e")
+				}
+				if s.nodeIsBad(n) {
+					flags = append(flags, "bad")
+				}
+				if s.IsGood(n) {
+					flags = append(flags, "good")
+				}
+				if n.IsSecure() {
+					flags = append(flags, "sec")
+				}
+				fmt.Fprintf(tw, "  %x\t%s\t%v\t%s\t%s\t%d\t%v\t%v\n",
+					n.Id.Bytes(),
+					n.Addr,
+					func() int {
+						if n.announceToken == nil {
+							return -1
+						}
+						return len(*n.announceToken)
+					}(),
+					prettySince(n.lastGotQuery),
+					prettySince(n.lastGotResponse),
+					n.numReceivesFrom,
+					n.consecutiveFailures,
+					strings.Join(flags, ","),
+				)
+				return true
+			})
+			tw.Flush()
+		}
 	}
-	tw.Flush()
 	fmt.Fprintln(w)
 }
 
@@ -605,6 +611,16 @@ func (s *Server) addNode(n *node) error {
 	return nil
 }
 
+func (s *Server) NodeRespondedToPing(addr Addr, id int160.T) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	b := s.table.bucketForID(id)
+	if b.GetNode(addr, id) == nil {
+		return
+	}
+	b.lastChanged = time.Now()
+}
+
 // Updates the node, adding it if appropriate.
 func (s *Server) updateNode(addr Addr, id *krpc.ID, tryAdd bool, update func(*node)) error {
 	if id == nil {
@@ -902,7 +918,15 @@ func (s *Server) transactionQuerySender(
 
 // Sends a ping query to the address given.
 func (s *Server) Ping(node *net.UDPAddr) QueryResult {
-	return s.Query(context.TODO(), NewAddr(node), "ping", QueryInput{})
+	addr := NewAddr(node)
+	res := s.Query(context.TODO(), addr, "ping", QueryInput{})
+	if res.Err == nil {
+		id := res.Reply.SenderID()
+		if id != nil {
+			s.NodeRespondedToPing(addr, id.Int160())
+		}
+	}
+	return res
 }
 
 func (s *Server) announcePeer(node Addr, infoHash int160.T, port int, token string, impliedPort bool, rl QueryRateLimiting) (ret QueryResult) {

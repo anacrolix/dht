@@ -374,6 +374,8 @@ func (s *Server) AddNode(ni krpc.NodeInfo) error {
 		go s.Ping(ni.Addr.UDP())
 		return nil
 	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	return s.updateNode(NewAddr(ni.Addr.UDP()), (*krpc.ID)(&ni.ID), true, func(*node) {})
 }
 
@@ -600,9 +602,10 @@ func (s *Server) reply(addr Addr, t string, r krpc.Return) {
 func (s *Server) addNode(n *node) error {
 	b := s.table.bucketForID(n.Id)
 	if b.Len() >= s.table.k {
-		if b.EachNode(func(n *node) bool {
-			if s.nodeIsBad(n) {
-				s.table.dropNode(n)
+		if b.EachNode(func(bn *node) bool {
+			// Replace bad and untested nodes with a good one.
+			if s.nodeIsBad(bn) || (s.IsGood(n) && bn.lastGotResponse.IsZero()) {
+				s.table.dropNode(bn)
 			}
 			return b.Len() >= s.table.k
 		}) {
@@ -618,6 +621,9 @@ func (s *Server) addNode(n *node) error {
 func (s *Server) NodeRespondedToPing(addr Addr, id int160.T) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if id == s.id {
+		return
+	}
 	b := s.table.bucketForID(id)
 	if b.GetNode(addr, id) == nil {
 		return
@@ -663,7 +669,7 @@ func (s *Server) nodeErr(n *node) error {
 	if n.Id.IsZero() {
 		return errors.New("has zero id")
 	}
-	if !s.config.NoSecurity && !n.IsSecure() {
+	if !(s.config.NoSecurity || n.IsSecure()) {
 		return errors.New("not secure")
 	}
 	if n.readOnly {
@@ -1011,11 +1017,19 @@ func (s *Server) NumNodes() int {
 	return s.numNodes()
 }
 
-// Exports the current node table.
+// Returns non-bad nodes from the routing table.
 func (s *Server) Nodes() (nis []krpc.NodeInfo) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	return s.notBadNodes()
+}
+
+// Returns non-bad nodes from the routing table.
+func (s *Server) notBadNodes() (nis []krpc.NodeInfo) {
 	s.table.forNodes(func(n *node) bool {
+		if s.nodeIsBad(n) {
+			return true
+		}
 		nis = append(nis, krpc.NodeInfo{
 			Addr: n.Addr.KRPC(),
 			ID:   n.Id.AsByteArray(),

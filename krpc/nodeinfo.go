@@ -11,7 +11,7 @@ import (
 )
 
 type NodeInfo struct {
-	ID   [20]byte
+	ID   ID
 	Addr NodeAddr
 }
 

@@ -1,7 +1,6 @@
 package dht
 
 import (
-	"fmt"
 	"sync/atomic"
 
 	"github.com/anacrolix/missinggo/v2/iter"
@@ -10,18 +9,10 @@ import (
 
 	"github.com/anacrolix/dht/v2/int160"
 	"github.com/anacrolix/dht/v2/krpc"
+	"github.com/anacrolix/dht/v2/traversal"
 )
 
-type TraversalStats struct {
-	// Count of (probably) distinct addresses we've sent traversal queries to. Accessed with atomic.
-	NumAddrsTried int64
-	// Number of responses we received to queries related to this traversal. Accessed with atomic.
-	NumResponses int64
-}
-
-func (me TraversalStats) String() string {
-	return fmt.Sprintf("%#v", me)
-}
+type TraversalStats = traversal.Stats
 
 type NewTraversalInput struct {
 	Target                        [20]byte

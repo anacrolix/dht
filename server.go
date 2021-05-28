@@ -98,16 +98,13 @@ func (s *Server) WriteStatus(w io.Writer) {
 			continue
 		}
 		fmt.Fprintf(w,
-			"b# %3v: %v nodes, last updated: %v\n",
+			"b# %v: %v nodes, last updated: %v\n",
 			i, b.Len(), prettySince(b.lastChanged))
 		if b.Len() > 0 {
 			tw := tabwriter.NewWriter(w, 0, 0, 1, ' ', 0)
 			fmt.Fprintf(tw, "  node id\taddr\tanntok\tlast query\tlast response\trecv\tcf\tflags\n")
 			b.EachNode(func(n *node) bool {
 				var flags []string
-				if n.readOnly {
-					flags = append(flags, "ro")
-				}
 				if s.IsQuestionable(n) {
 					flags = append(flags, "q10e")
 				}
@@ -120,15 +117,9 @@ func (s *Server) WriteStatus(w io.Writer) {
 				if n.IsSecure() {
 					flags = append(flags, "sec")
 				}
-				fmt.Fprintf(tw, "  %x\t%s\t%v\t%s\t%s\t%d\t%v\t%v\n",
+				fmt.Fprintf(tw, "  %x\t%s\t%s\t%s\t%d\t%v\t%v\n",
 					n.Id.Bytes(),
 					n.Addr,
-					func() int {
-						if n.announceToken == nil {
-							return -1
-						}
-						return len(*n.announceToken)
-					}(),
 					prettySince(n.lastGotQuery),
 					prettySince(n.lastGotResponse),
 					n.numReceivesFrom,
@@ -322,10 +313,9 @@ func (s *Server) processPacket(b []byte, addr Addr) {
 	}
 	//s.logger().Printf("received response for transaction %q from %v", d.T, addr)
 	go t.handleResponse(d)
-	s.updateNode(addr, d.SenderID(), true, func(n *node) {
+	s.updateNode(addr, d.SenderID(), !d.ReadOnly, func(n *node) {
 		n.lastGotResponse = time.Now()
 		n.consecutiveFailures = 0
-		n.readOnly = d.ReadOnly
 		n.numReceivesFrom++
 	})
 	// Ensure we don't provide more than one response to a transaction.
@@ -469,9 +459,8 @@ func (s *Server) handleQuery(source Addr, m krpc.Msg) {
 			}
 		}
 	}()
-	s.updateNode(source, m.SenderID(), true, func(n *node) {
+	s.updateNode(source, m.SenderID(), !m.ReadOnly, func(n *node) {
 		n.lastGotQuery = time.Now()
-		n.readOnly = m.ReadOnly
 		n.numReceivesFrom++
 	})
 	if s.config.OnQuery != nil {
@@ -671,9 +660,6 @@ func (s *Server) nodeErr(n *node) error {
 	}
 	if !(s.config.NoSecurity || n.IsSecure()) {
 		return errors.New("not secure")
-	}
-	if n.readOnly {
-		return errors.New("is read-only")
 	}
 	if n.consecutiveFailures >= 3 {
 		return fmt.Errorf("has %d consecutive failures", n.consecutiveFailures)
@@ -983,16 +969,6 @@ func (s *Server) announcePeer(node Addr, infoHash int160.T, port int, token stri
 	return
 }
 
-// Add response nodes to node table.
-func (s *Server) addResponseNodes(d krpc.Msg) {
-	if d.R == nil {
-		return
-	}
-	d.R.ForAllNodes(func(ni krpc.NodeInfo) {
-		s.updateNode(NewAddr(ni.Addr.UDP()), (*krpc.ID)(&ni.ID), true, func(*node) {})
-	})
-}
-
 // Sends a find_node query to addr. targetID is the node we're looking for. The Server makes use of
 // some of the response fields.
 func (s *Server) FindNode(addr Addr, targetID int160.T, rl QueryRateLimiting) (ret QueryResult) {
@@ -1002,11 +978,6 @@ func (s *Server) FindNode(addr Addr, targetID int160.T, rl QueryRateLimiting) (r
 			Want:   s.config.DefaultWant,
 		},
 		RateLimiting: rl})
-	// Scrape peers from the response to put in the server's table before
-	// handing the response back to the caller.
-	s.mu.Lock()
-	s.addResponseNodes(ret.Reply)
-	s.mu.Unlock()
 	return
 }
 
@@ -1060,10 +1031,7 @@ func (s *Server) GetPeers(ctx context.Context, addr Addr, infoHash int160.T, scr
 		MsgArgs:      args,
 		RateLimiting: rl,
 	})
-	s.mu.Lock()
-	defer s.mu.Unlock()
 	m := ret.Reply
-	s.addResponseNodes(m)
 	if m.R != nil {
 		if m.R.Token == nil {
 			expvars.Add("get_peers responses with no token", 1)
@@ -1071,11 +1039,6 @@ func (s *Server) GetPeers(ctx context.Context, addr Addr, infoHash int160.T, scr
 			expvars.Add("get_peers responses with empty token", 1)
 		} else {
 			expvars.Add("get_peers responses with token", 1)
-		}
-		if m.R.Token != nil {
-			s.updateNode(addr, m.SenderID(), false, func(n *node) {
-				n.announceToken = m.R.Token
-			})
 		}
 	}
 	return

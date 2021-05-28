@@ -592,9 +592,12 @@ func (s *Server) reply(addr Addr, t string, r krpc.Return) {
 
 // Adds a node if appropriate.
 func (s *Server) addNode(n *node) error {
+	if s.nodeIsBad(n) {
+		return errors.New("node is bad")
+	}
 	b := s.table.bucketForID(n.Id)
 	if b.Len() >= s.table.k {
-		if s.nodeIsBad(n) || b.EachNode(func(bn *node) bool {
+		if b.EachNode(func(bn *node) bool {
 			// Replace bad and untested nodes with a good one.
 			if s.nodeIsBad(bn) || (s.IsGood(n) && bn.lastGotResponse.IsZero()) {
 				s.table.dropNode(bn)

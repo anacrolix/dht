@@ -3,7 +3,9 @@ package traversal
 import (
 	"context"
 	"sort"
+	"sync/atomic"
 
+	"github.com/anacrolix/multiless"
 	"github.com/anacrolix/sync"
 
 	"github.com/anacrolix/chansync"
@@ -14,21 +16,33 @@ import (
 )
 
 type QueryResult struct {
-	ResponseFrom *types.AddrMaybeId
+	ResponseFrom *krpc.NodeInfo
 	Nodes        []krpc.NodeInfo
 }
 
 type OperationInput struct {
-	Target  [20]byte
-	Alpha   int
-	K       int
-	DoQuery func(context.Context, krpc.NodeAddr) QueryResult
+	Target     [20]byte
+	Alpha      int
+	K          int
+	DoQuery    func(context.Context, krpc.NodeAddr) QueryResult
+	NodeFilter func(krpc.NodeInfo) bool
 }
 
+type defaultsAppliedOperationInput OperationInput
+
 func Start(input OperationInput) *Operation {
+	herp := defaultsAppliedOperationInput(input)
+	if herp.Alpha == 0 {
+		herp.Alpha = 3
+	}
+	if herp.NodeFilter == nil {
+		herp.NodeFilter = func(krpc.NodeInfo) bool {
+			return true
+		}
+	}
 	op := &Operation{
 		targetInt160: int160.FromByteArray(input.Target),
-		input:        input,
+		input:        herp,
 		queried:      make(map[string]struct{}),
 	}
 	go op.run()
@@ -36,16 +50,21 @@ func Start(input OperationInput) *Operation {
 }
 
 type Operation struct {
+	stats        Stats
 	mu           sync.Mutex
 	unqueried    []types.AddrMaybeId
 	queried      map[string]struct{}
-	closest      []types.AddrMaybeId
+	closest      []krpc.NodeInfo
 	targetInt160 int160.T
-	input        OperationInput
+	input        defaultsAppliedOperationInput
 	outstanding  int
 	cond         chansync.BroadcastCond
 	stalled      chansync.LevelTrigger
 	stopped      chansync.SetOnce
+}
+
+func (op *Operation) Stats() Stats {
+	return op.stats
 }
 
 func (op *Operation) Stop() {
@@ -61,6 +80,9 @@ func (op *Operation) AddNodes(nodes []types.AddrMaybeId) {
 	defer op.mu.Unlock()
 	for _, n := range nodes {
 		if _, ok := op.queried[n.Addr.String()]; ok {
+			continue
+		}
+		if ni := n.TryIntoNodeInfo(); ni != nil && !op.input.NodeFilter(*ni) {
 			continue
 		}
 		op.unqueried = append(op.unqueried, n)
@@ -97,8 +119,9 @@ func (op *Operation) popClosestUnqueried() types.AddrMaybeId {
 	return ret
 }
 
-func (op *Operation) farthestClosest() types.AddrMaybeId {
-	return op.closest[len(op.closest)-1]
+func (op *Operation) farthestClosest() (ret types.AddrMaybeId) {
+	ret.FromNodeInfo(op.closest[len(op.closest)-1])
+	return
 }
 
 func (op *Operation) haveQuery() bool {
@@ -140,19 +163,24 @@ func (op *Operation) run() {
 	}
 }
 
-func (op *Operation) sortNodesByClosest(nodes []types.AddrMaybeId) {
+func (op *Operation) sortNodesByClosest(nodes []krpc.NodeInfo) {
 	sort.Slice(nodes, func(i, j int) bool {
-		return nodes[i].CloserThan(nodes[j], op.targetInt160)
+		return multiless.New().Cmp(
+			int160.Distance(int160.FromByteArray(nodes[i].ID), op.targetInt160).Cmp(
+				int160.Distance(int160.FromByteArray(nodes[j].ID), op.targetInt160)),
+		).Less()
 	})
 }
 
-func (op *Operation) addClosest(node types.AddrMaybeId) {
+func (op *Operation) addClosest(node krpc.NodeInfo) {
+	if !op.input.NodeFilter(node) {
+		return
+	}
 	op.closest = append(op.closest, node)
 	op.sortNodesByClosest(op.closest)
 	if len(op.closest) > op.input.K {
 		op.closest = op.closest[:op.input.K]
 	}
-	//spew.Dump("closest", op.closest)
 }
 
 func (op *Operation) startQuery() {
@@ -167,11 +195,13 @@ func (op *Operation) startQuery() {
 			op.cond.Broadcast()
 		}()
 		//log.Printf("traversal querying %v", a)
+		atomic.AddInt64(&op.stats.NumAddrsTried, 1)
 		res := op.input.DoQuery(context.TODO(), a.Addr)
-		if res.ResponseFrom != nil && res.ResponseFrom.Id != nil {
+		if res.ResponseFrom != nil {
 			func() {
 				op.mu.Lock()
 				defer op.mu.Unlock()
+				atomic.AddInt64(&op.stats.NumResponses, 1)
 				op.addClosest(*res.ResponseFrom)
 			}()
 		}

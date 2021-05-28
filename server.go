@@ -810,11 +810,10 @@ func (me QueryResult) TraversalQueryResult(addr krpc.NodeAddr) (_ traversal.Quer
 	if r == nil {
 		return
 	}
-	id := r.ID.Int160()
 	return traversal.QueryResult{
-		ResponseFrom: &types.AddrMaybeId{
+		ResponseFrom: &krpc.NodeInfo{
 			Addr: addr,
-			Id:   &id,
+			ID:   r.ID,
 		},
 		Nodes: append(append([]krpc.NodeInfo(nil), r.Nodes...), r.Nodes6...),
 	}

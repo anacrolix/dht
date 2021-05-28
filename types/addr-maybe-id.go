@@ -27,6 +27,24 @@ type AddrMaybeId struct {
 	Id   *int160.T
 }
 
+func (me AddrMaybeId) TryIntoNodeInfo() *krpc.NodeInfo {
+	if me.Id == nil {
+		return nil
+	}
+	return &krpc.NodeInfo{
+		ID:   me.Id.AsByteArray(),
+		Addr: me.Addr,
+	}
+}
+
+func (me *AddrMaybeId) FromNodeInfo(ni krpc.NodeInfo) {
+	id := int160.FromByteArray(ni.ID)
+	*me = AddrMaybeId{
+		Addr: ni.Addr,
+		Id:   &id,
+	}
+}
+
 func (me AddrMaybeId) String() string {
 	if me.Id == nil {
 		return fmt.Sprintf("unknown id at %s", me.Addr)
@@ -54,5 +72,4 @@ func (l AddrMaybeId) CloserThan(r AddrMaybeId, target int160.T) bool {
 	ml.StrictNext(lh == rh, lh < rh)
 	//ml.StrictNext(l.Addr.String() == r.Addr.String(), l.Addr.String() < r.Addr.String())
 	return ml.Less()
-
 }

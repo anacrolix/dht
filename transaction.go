@@ -21,7 +21,7 @@ func (t *Transaction) handleResponse(m krpc.Msg) {
 	t.onResponse(m)
 }
 
-const maxTransactionSends = 3
+const defaultMaxQuerySends = 3
 
 func transactionSender(
 	ctx context.Context,

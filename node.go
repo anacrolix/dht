@@ -18,8 +18,8 @@ type node struct {
 	lastGotQuery    time.Time // From the remote node
 	lastGotResponse time.Time // From the remote node
 
-	numReceivesFrom     int
-	consecutiveFailures int
+	numReceivesFrom            int
+	failedLastQuestionablePing bool
 }
 
 func (s *Server) IsQuestionable(n *node) bool {

@@ -15,6 +15,10 @@ type table struct {
 	addrs   map[string]map[int160.T]struct{}
 }
 
+func (tbl *table) K() int {
+	return tbl.k
+}
+
 func (tbl *table) randomIdForBucket(bucketIndex int) int160.T {
 	randomId := randomIdInBucket(tbl.rootID, bucketIndex)
 	if randomIdBucketIndex := tbl.bucketIndex(randomId); randomIdBucketIndex != bucketIndex {

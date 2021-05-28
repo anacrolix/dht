@@ -105,7 +105,7 @@ func (s *Server) WriteStatus(w io.Writer) {
 			i, b.Len(), prettySince(b.lastChanged))
 		if b.Len() > 0 {
 			tw := tabwriter.NewWriter(w, 0, 0, 1, ' ', 0)
-			fmt.Fprintf(tw, "  node id\taddr\tanntok\tlast query\tlast response\trecv\tcf\tflags\n")
+			fmt.Fprintf(tw, "  node id\taddr\tlast query\tlast response\trecv\tdiscard\tflags\n")
 			b.EachNode(func(n *node) bool {
 				var flags []string
 				if s.IsQuestionable(n) {
@@ -126,7 +126,7 @@ func (s *Server) WriteStatus(w io.Writer) {
 					prettySince(n.lastGotQuery),
 					prettySince(n.lastGotResponse),
 					n.numReceivesFrom,
-					n.consecutiveFailures,
+					n.failedLastQuestionablePing,
 					strings.Join(flags, ","),
 				)
 				return true
@@ -227,7 +227,7 @@ func NewServer(c *ServerConfig) (s *Server, err error) {
 	if s.resendDelay == nil {
 		s.resendDelay = defaultQueryResendDelay
 	}
-	go s.questionableNodePinger()
+	go s.tableMaintainer()
 	go s.serveUntilClosed()
 	return
 }
@@ -318,7 +318,7 @@ func (s *Server) processPacket(b []byte, addr Addr) {
 	go t.handleResponse(d)
 	s.updateNode(addr, d.SenderID(), !d.ReadOnly, func(n *node) {
 		n.lastGotResponse = time.Now()
-		n.consecutiveFailures = 0
+		n.failedLastQuestionablePing = false
 		n.numReceivesFrom++
 	})
 	// Ensure we don't provide more than one response to a transaction.
@@ -667,8 +667,8 @@ func (s *Server) nodeErr(n *node) error {
 	if !(s.config.NoSecurity || n.IsSecure()) {
 		return errors.New("not secure")
 	}
-	if n.consecutiveFailures >= 3 {
-		return fmt.Errorf("has %d consecutive failures", n.consecutiveFailures)
+	if n.failedLastQuestionablePing {
+		return errors.New("didn't respond to last questionable node ping")
 	}
 	return nil
 }
@@ -685,6 +685,7 @@ func (s *Server) writeToNode(ctx context.Context, b []byte, node Addr, wait, rat
 		if wait {
 			err = s.sendLimit.Wait(ctx)
 			if err != nil {
+				err = fmt.Errorf("waiting for rate-limit token: %w", err)
 				return false, err
 			}
 		} else {
@@ -830,12 +831,14 @@ type QueryRateLimiting struct {
 	// Don't rate-limit the first send for a query.
 	NotFirst bool
 	// Don't rate-limit any sends for a query. Note that there's still built-in waits before retries.
-	NotAny bool
+	NotAny        bool
+	WaitOnRetries bool
 }
 
 type QueryInput struct {
 	MsgArgs      krpc.MsgArgs
 	RateLimiting QueryRateLimiting
+	NumTries     int
 }
 
 // Performs an arbitrary query. `q` is the query value, defined by the DHT BEP. `a` should contain
@@ -843,6 +846,9 @@ type QueryInput struct {
 // made this way are not interpreted by the Server. More specific methods like FindNode and GetPeers
 // may make use of the response internally before passing it back to the caller.
 func (s *Server) Query(ctx context.Context, addr Addr, q string, input QueryInput) (ret QueryResult) {
+	if input.NumTries == 0 {
+		input.NumTries = defaultMaxQuerySends
+	}
 	defer func(started time.Time) {
 		s.logger().WithDefaultLevel(log.Debug).WithValues(q).Printf(
 			"Query(%v) returned after %v (err=%v, reply.Y=%v, reply.E=%v, writes=%v)",
@@ -872,7 +878,8 @@ func (s *Server) Query(ctx context.Context, addr Addr, q string, input QueryInpu
 			s.makeQueryBytes(q, input.MsgArgs, tid),
 			&ret.Writes,
 			addr,
-			input.RateLimiting)
+			input.RateLimiting,
+			input.NumTries)
 		if err != nil {
 			sendErr <- err
 		}
@@ -892,27 +899,25 @@ func (s *Server) Query(ctx context.Context, addr Addr, q string, input QueryInpu
 	<-sendErr
 	s.mu.Lock()
 	s.deleteTransaction(tk)
-	if ret.Err != nil {
-		for _, n := range s.table.addrNodes(addr) {
-			// TODO: What kind of failures? Failures to respond at all, or error responses, or
-			// context cancellations?
-			n.consecutiveFailures++
-		}
-	}
 	s.mu.Unlock()
 	return
 }
 
 func (s *Server) transactionQuerySender(
-	sendCtx context.Context, b []byte, writes *numWrites, addr Addr, rateLimiting QueryRateLimiting,
+	sendCtx context.Context,
+	b []byte,
+	writes *numWrites,
+	addr Addr,
+	rateLimiting QueryRateLimiting,
+	numTries int,
 ) error {
 	err := transactionSender(
 		sendCtx,
 		func() error {
 			wrote, err := s.writeToNode(sendCtx, b, addr,
-				// We only wait for the first write if rate-limiting is enabled for this query.
-				// Retries will defer to other queries.
-				*writes == 0,
+				// We only wait for the first write by default if rate-limiting is enabled for this
+				// query.
+				*writes == 0 || rateLimiting.WaitOnRetries,
 				!rateLimiting.NotAny && !(rateLimiting.NotFirst && *writes == 0))
 			if wrote {
 				*writes++
@@ -920,7 +925,7 @@ func (s *Server) transactionQuerySender(
 			return err
 		},
 		s.resendDelay,
-		maxTransactionSends,
+		numTries,
 	)
 	if err != nil {
 		return err
@@ -1132,42 +1137,140 @@ func (s *Server) getQuestionableNode() (ret *node) {
 	return
 }
 
-func (s *Server) questionableNodePinger() {
-tryPing:
-	logger := s.logger().WithDefaultLevel(log.Debug)
+func (s *Server) shouldStopRefreshingBucket(bucketIndex int) bool {
+	b := &s.table.buckets[bucketIndex]
+	// Stop if the bucket is full, and none of the nodes are bad.
+	return b.Len() == s.table.K() && b.EachNode(func(n *node) bool {
+		return !s.nodeIsBad(n)
+	})
+}
+
+func (s *Server) refreshBucket(bucketIndex int) traversal.Stats {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	id := s.table.randomIdForBucket(bucketIndex)
+	op := traversal.Start(traversal.OperationInput{
+		Target: id.AsByteArray(),
+		Alpha:  3,
+		// Running this to completion with K matching the full-bucket size should result in a good,
+		// full bucket, since the Server will add nodes that respond to its table to replace the bad
+		// ones we're presumably refreshing. It might be possible to terminate the traversal early
+		// as soon as the bucket is good.
+		K: s.table.K(),
+		DoQuery: func(ctx context.Context, addr krpc.NodeAddr) traversal.QueryResult {
+			res := s.FindNode(NewAddr(addr.UDP()), id, QueryRateLimiting{})
+			return res.TraversalQueryResult(addr)
+		},
+		NodeFilter: func(info krpc.NodeInfo) bool {
+			return s.config.NoSecurity || NodeIdSecure(info.ID, info.Addr.IP)
+		},
+	})
+	defer op.Stop()
+	b := &s.table.buckets[bucketIndex]
+wait:
 	for {
-		s.mu.RLock()
-		n := s.getQuestionableNode()
-		if n != nil {
-			target := n.nodeKey
-			s.mu.RUnlock()
-			n = nil // We should not touch this anymore, it belongs to the Server.
-			expvars.Add("questionable node pings", 1)
-			logger.Printf("pinging questionable node %v", target)
-			addr := target.Addr.Raw().(*net.UDPAddr)
-			res := s.Ping(addr)
-			if res.Err == nil {
-				if psid := res.Reply.SenderID(); psid == nil || int160.FromByteArray(*psid) != target.Id {
-					logger.Printf("questionable node %v responded with different id: %v", target, psid)
-					s.mu.Lock()
-					if n := s.table.getNode(target.Addr, target.Id); n != nil {
-						n.consecutiveFailures++
-					} else {
-						logger.Printf("questionable node %v no longer in routing table", target)
-					}
-					s.mu.Unlock()
-				}
-				goto tryPing
-			}
-			logger.Printf("questionable node %v failed to respond: %v", target, res.Err)
-		} else {
-			s.mu.RUnlock()
+		if s.shouldStopRefreshingBucket(bucketIndex) {
+			break wait
 		}
+		op.AddNodes(types.AddrMaybeIdSliceFromNodeInfoSlice(s.notBadNodes()))
+		bucketChanged := b.changed.Signaled()
+		s.mu.RUnlock()
 		select {
-		case <-time.After(time.Second):
+		case <-op.Stalled():
+			s.mu.RLock()
+			break wait
+		case <-bucketChanged:
+		}
+		s.mu.RLock()
+	}
+	return op.Stats()
+}
+
+func (s *Server) shouldBootstrap() bool {
+	return s.lastBootstrap.IsZero() || time.Since(s.lastBootstrap) > 30*time.Minute
+}
+
+func (s *Server) shouldBootstrapUnlocked() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.shouldBootstrap()
+}
+
+func (s *Server) pingQuestionableNodesInBucket(b *bucket) {
+	var wg sync.WaitGroup
+	b.EachNode(func(n *node) bool {
+		if s.IsQuestionable(n) {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				err := s.questionableNodePing(context.TODO(), n.Addr, n.Id.AsByteArray()).Err
+				if err != nil {
+					log.Printf("error pinging questionable node: %v", err)
+				}
+			}()
+		}
+		return true
+	})
+	wg.Wait()
+}
+
+func (s *Server) tableMaintainer() {
+	for {
+		if s.shouldBootstrapUnlocked() {
+			stats, err := s.Bootstrap()
+			if err != nil {
+				log.Printf("error bootstrapping during bucket refresh: %v", err)
+			}
+			log.Printf("bucket refresh bootstrap stats: %v", stats)
+		}
+		s.mu.RLock()
+		for i := range s.table.buckets {
+			b := &s.table.buckets[i]
+			s.pingQuestionableNodesInBucket(b)
+			if time.Since(b.lastChanged) < 15*time.Minute {
+				continue
+			}
+			if s.shouldStopRefreshingBucket(i) {
+				continue
+			}
+			s.logger().WithLevel(log.Info).Printf("refreshing bucket %v", i)
+			s.mu.RUnlock()
+			stats := s.refreshBucket(i)
+			s.logger().WithLevel(log.Info).Printf("finished refreshing bucket %v: %v", i, stats)
+			s.mu.RLock()
+			if !s.shouldStopRefreshingBucket(i) {
+				// Presumably we couldn't fill the bucket anymore, so assume we're as deep in the
+				// available node space as we can go.
+				break
+			}
+		}
+		s.mu.RUnlock()
+		select {
 		case <-s.closed.LockedChan(&s.mu):
+			return
+		case <-time.After(time.Minute):
 		}
 	}
+}
+
+func (s *Server) questionableNodePing(ctx context.Context, addr Addr, id krpc.ID) QueryResult {
+	// A ping query that will be certain to try at least 3 times.
+	res := s.Query(ctx, addr, "ping", QueryInput{
+		RateLimiting: QueryRateLimiting{
+			WaitOnRetries: true,
+		},
+		NumTries: 3,
+	})
+	if res.Err == nil && res.Reply.R != nil {
+		s.NodeRespondedToPing(addr, res.Reply.R.ID.Int160())
+	} else {
+		s.mu.Lock()
+		s.updateNode(addr, &id, false, func(n *node) {
+			n.failedLastQuestionablePing = false
+		})
+		s.mu.Unlock()
+	}
+	return res
 }
 
 func (s *Server) NewTraversal(input NewTraversalInput) (t stmTraversal, err error) {

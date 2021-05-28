@@ -54,6 +54,9 @@ type Server struct {
 	config       ServerConfig
 	stats        ServerStats
 	sendLimit    SendLimiter
+
+	lastBootstrap    time.Time
+	bootstrappingNow bool
 }
 
 type SendLimiter interface {

@@ -1,6 +1,9 @@
 package dht
 
 import (
+	"errors"
+	"time"
+
 	"github.com/anacrolix/stm"
 
 	"github.com/anacrolix/dht/v2/int160"
@@ -10,6 +13,19 @@ import (
 
 // Populates the node table.
 func (s *Server) Bootstrap() (_ TraversalStats, err error) {
+	s.mu.Lock()
+	if s.bootstrappingNow {
+		s.mu.Unlock()
+		err = errors.New("already bootstrapping")
+		return
+	}
+	s.bootstrappingNow = true
+	s.mu.Unlock()
+	defer func() {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		s.bootstrappingNow = false
+	}()
 	// Track number of responses, for STM use. (It's available via atomic in TraversalStats but that
 	// won't let wake up STM transactions that are observing the value.)
 	nearestNodes := stm.NewVar(dhtutil.NewKNearestNodes(s.id))
@@ -48,6 +64,9 @@ func (s *Server) Bootstrap() (_ TraversalStats, err error) {
 	if err != nil {
 		return
 	}
+	s.mu.Lock()
+	s.lastBootstrap = time.Now()
+	s.mu.Unlock()
 	t.doneVar = stm.NewVar(false)
 	t.Run()
 	return t.stats, nil

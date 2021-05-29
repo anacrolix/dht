@@ -490,6 +490,10 @@ func (s *Server) handleQuery(source Addr, m krpc.Msg) {
 		var r krpc.Return
 		if ps := s.config.PeerStore; ps != nil {
 			r.Values = filterPeers(source.IP(), m.A.Want, ps.GetPeers(peer_store.InfoHash(args.InfoHash)))
+			r.Token = func() *string {
+				t := s.createToken(source)
+				return &t
+			}()
 		}
 		if len(r.Values) == 0 {
 			if err := s.setReturnNodes(&r, m, source); err != nil {
@@ -497,12 +501,6 @@ func (s *Server) handleQuery(source Addr, m krpc.Msg) {
 				break
 			}
 		}
-		// I wonder if we could choose not to return a token here, if we don't want an announce_peer
-		// from the querier.
-		r.Token = func() *string {
-			t := s.createToken(source)
-			return &t
-		}()
 		s.reply(source, m.T, r)
 	case "find_node":
 		var r krpc.Return
@@ -512,8 +510,6 @@ func (s *Server) handleQuery(source Addr, m krpc.Msg) {
 		}
 		s.reply(source, m.T, r)
 	case "announce_peer":
-		readAnnouncePeer.Add(1)
-
 		if !s.validToken(args.Token, source) {
 			expvars.Add("received announce_peer with invalid token", 1)
 			return

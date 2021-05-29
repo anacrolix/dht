@@ -1,6 +1,7 @@
 package krpc
 
 import (
+	crand "crypto/rand"
 	"encoding/hex"
 	"fmt"
 
@@ -8,6 +9,11 @@ import (
 
 	"github.com/anacrolix/dht/v2/int160"
 )
+
+func RandomNodeID() (id ID) {
+	crand.Read(id[:])
+	return
+}
 
 type ID [20]byte
 

@@ -12,8 +12,8 @@ import (
 	"github.com/anacrolix/stm/stmutil"
 
 	"github.com/anacrolix/dht/v2/int160"
+	dhtutil "github.com/anacrolix/dht/v2/k-nearest-nodes"
 	"github.com/anacrolix/dht/v2/krpc"
-	dhtutil "github.com/anacrolix/dht/v2/util"
 )
 
 // Maintains state for an ongoing Announce operation. An Announce is started by calling
@@ -36,7 +36,7 @@ type Announce struct {
 	announcePortImplied bool
 	scrape              bool
 
-	// List of KNearestNodesElem. TODO: Perhaps this should be sorted by distance to the target,
+	// List of Elem. TODO: Perhaps this should be sorted by distance to the target,
 	// so we can do that sloppy hash stuff ;).
 	pendingAnnouncePeers *stm.Var
 
@@ -70,7 +70,7 @@ func (s *Server) Announce(infoHash [20]byte, port int, impliedPort bool, opts ..
 		infoHash:             infoHashInt160,
 		announcePort:         port,
 		announcePortImplied:  impliedPort,
-		pendingAnnouncePeers: stm.NewVar(dhtutil.NewKNearestNodes(infoHashInt160)),
+		pendingAnnouncePeers: stm.NewVar(dhtutil.New(infoHashInt160, 8)),
 	}
 	for _, opt := range opts {
 		if opt == scrape {
@@ -120,20 +120,19 @@ func (a *Announce) maybeAnnouncePeer(to Addr, token *string, peerId *krpc.ID) {
 	if !a.server.config.NoSecurity && (peerId == nil || !NodeIdSecure(*peerId, to.IP())) {
 		return
 	}
-	x := dhtutil.KNearestNodesElem{
+	x := dhtutil.Elem{
 		Data: *token,
 	}
 	x.Addr = to.KRPC()
 	if peerId != nil {
-		id := int160.FromByteArray(*peerId)
-		x.Id = &id
+		x.ID = *peerId
 	}
-	stm.AtomicModify(a.pendingAnnouncePeers, func(v dhtutil.KNearestNodes) dhtutil.KNearestNodes {
+	stm.AtomicModify(a.pendingAnnouncePeers, func(v dhtutil.Type) dhtutil.Type {
 		return v.Push(x)
 	})
 }
 
-func (a *Announce) announcePeer(peer dhtutil.KNearestNodesElem) numWrites {
+func (a *Announce) announcePeer(peer dhtutil.Elem) numWrites {
 	res := a.server.announcePeer(NewAddr(peer.Addr.UDP()), a.infoHash, a.announcePort, peer.Data.(string), a.announcePortImplied,
 		QueryRateLimiting{NotFirst: true})
 	return res.Writes
@@ -141,7 +140,7 @@ func (a *Announce) announcePeer(peer dhtutil.KNearestNodesElem) numWrites {
 
 func (a *Announce) beginAnnouncePeer(tx *stm.Tx) interface{} {
 	tx.Assert(a.getPendingAnnouncePeers(tx).Len() != 0)
-	new, x := tx.Get(a.pendingAnnouncePeers).(dhtutil.KNearestNodes).Pop(tx)
+	new, x := tx.Get(a.pendingAnnouncePeers).(dhtutil.Type).Pop(tx)
 	tx.Set(a.pendingAnnouncePeers, new)
 
 	return a.traversal.beginQuery(NewAddr(x.Addr.UDP()), "dht announce announce_peer", func() numWrites {
@@ -193,22 +192,13 @@ func (a *Announce) close() {
 	a.cancel()
 }
 
-func (a *Announce) farthestAnnouncePeer(tx *stm.Tx) (dhtutil.KNearestNodesElem, bool) {
-	pending := a.getPendingAnnouncePeers(tx)
-	if !pending.Full() {
-		return dhtutil.KNearestNodesElem{}, false
-	} else {
-		return pending.Farthest()
-	}
-}
-
-func (a *Announce) getPendingAnnouncePeers(tx *stm.Tx) dhtutil.KNearestNodes {
-	return tx.Get(a.pendingAnnouncePeers).(dhtutil.KNearestNodes)
+func (a *Announce) getPendingAnnouncePeers(tx *stm.Tx) dhtutil.Type {
+	return tx.Get(a.pendingAnnouncePeers).(dhtutil.Type)
 }
 
 func (a *Announce) stopTraversal(tx *stm.Tx, next addrMaybeId) bool {
-	farthest, ok := a.farthestAnnouncePeer(tx)
-	return ok && farthest.CloserThan(next, a.infoHash)
+	paps := a.getPendingAnnouncePeers(tx)
+	return paps.Full() && (next.Id == nil || paps.Farthest().ID.Int160().Distance(a.infoHash).Cmp(next.Id.Distance(a.infoHash)) < 0)
 }
 
 func (a *Announce) run() {

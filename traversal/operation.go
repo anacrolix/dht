@@ -11,6 +11,7 @@ import (
 	"github.com/anacrolix/chansync"
 
 	"github.com/anacrolix/dht/v2/int160"
+	k_nearest_nodes "github.com/anacrolix/dht/v2/k-nearest-nodes"
 	"github.com/anacrolix/dht/v2/krpc"
 	"github.com/anacrolix/dht/v2/types"
 )
@@ -21,7 +22,7 @@ type QueryResult struct {
 }
 
 type OperationInput struct {
-	Target     [20]byte
+	Target     krpc.ID
 	Alpha      int
 	K          int
 	DoQuery    func(context.Context, krpc.NodeAddr) QueryResult
@@ -41,20 +42,23 @@ func Start(input OperationInput) *Operation {
 		}
 	}
 	op := &Operation{
-		targetInt160: int160.FromByteArray(input.Target),
+		targetInt160: input.Target.Int160(),
 		input:        herp,
-		queried:      make(map[string]struct{}),
+		queried:      make(map[addrString]struct{}),
+		closest:      k_nearest_nodes.New(input.Target.Int160(), input.K),
 	}
 	go op.run()
 	return op
 }
 
+type addrString string
+
 type Operation struct {
 	stats        Stats
 	mu           sync.Mutex
 	unqueried    []types.AddrMaybeId
-	queried      map[string]struct{}
-	closest      []krpc.NodeInfo
+	queried      map[addrString]struct{}
+	closest      k_nearest_nodes.Type
 	targetInt160 int160.T
 	input        defaultsAppliedOperationInput
 	outstanding  int
@@ -99,7 +103,7 @@ func (op *Operation) AddNodes(nodes []types.AddrMaybeId) {
 	op.mu.Lock()
 	defer op.mu.Unlock()
 	for _, n := range nodes {
-		if _, ok := op.queried[n.Addr.String()]; ok {
+		if _, ok := op.queried[addrString(n.Addr.String())]; ok {
 			continue
 		}
 		if ni := n.TryIntoNodeInfo(); ni != nil && !op.input.NodeFilter(*ni) {
@@ -111,7 +115,7 @@ func (op *Operation) AddNodes(nodes []types.AddrMaybeId) {
 }
 
 func (op *Operation) markQueried(addr krpc.NodeAddr) {
-	op.queried[addr.String()] = struct{}{}
+	op.queried[addrString(addr.String())] = struct{}{}
 }
 
 func (op *Operation) closestUnqueriedIndex() int {
@@ -139,23 +143,18 @@ func (op *Operation) popClosestUnqueried() types.AddrMaybeId {
 	return ret
 }
 
-func (op *Operation) farthestClosest() (ret types.AddrMaybeId) {
-	ret.FromNodeInfo(op.closest[len(op.closest)-1])
-	return
-}
-
 func (op *Operation) haveQuery() bool {
 	if len(op.unqueried) == 0 {
 		return false
 	}
-	if len(op.closest) < op.input.K {
+	if !op.closest.Full() {
 		return true
 	}
-	closestUnqueried := op.closestUnqueried()
-	if closestUnqueried.Id == nil {
-		return true
+	cu := op.closestUnqueried()
+	if cu.Id == nil {
+		return false
 	}
-	return closestUnqueried.CloserThan(op.farthestClosest(), op.targetInt160)
+	return cu.Id.Distance(op.targetInt160).Cmp(op.closest.Farthest().ID.Int160().Distance(op.targetInt160)) < 0
 }
 
 func (op *Operation) run() {
@@ -196,11 +195,10 @@ func (op *Operation) addClosest(node krpc.NodeInfo) {
 	if !op.input.NodeFilter(node) {
 		return
 	}
-	op.closest = append(op.closest, node)
-	op.sortNodesByClosest(op.closest)
-	if len(op.closest) > op.input.K {
-		op.closest = op.closest[:op.input.K]
-	}
+	op.closest = op.closest.Push(k_nearest_nodes.Elem{
+		Key:  node,
+		Data: nil,
+	})
 }
 
 func (op *Operation) startQuery() {

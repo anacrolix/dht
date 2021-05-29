@@ -103,3 +103,8 @@ func Distance(a, b T) (ret T) {
 	ret.Xor(&a, &b)
 	return
 }
+
+func (a T) Distance(b T) (ret T) {
+	ret.Xor(&a, &b)
+	return
+}

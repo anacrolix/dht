@@ -3,7 +3,6 @@ package dht
 import (
 	"context"
 	"crypto"
-	crand "crypto/rand"
 	_ "crypto/sha1"
 	"errors"
 	"math/rand"
@@ -41,7 +40,7 @@ type StartingNodesGetter func() ([]Addr, error)
 type ServerConfig struct {
 	// Set NodeId Manually. Caller must ensure that if NodeId does not conform
 	// to DHT Security Extensions, that NoSecurity is also set.
-	NodeId [20]byte
+	NodeId krpc.ID
 	Conn   net.PacketConn
 	// Don't respond to queries from other nodes.
 	Passive       bool
@@ -145,12 +144,12 @@ func GlobalBootstrapAddrs(network string) (addrs []Addr, err error) {
 	return
 }
 
-func RandomNodeID() (id [20]byte) {
-	crand.Read(id[:])
-	return
+// Deprecated: Use function from krpc.
+func RandomNodeID() (id krpc.ID) {
+	return krpc.RandomNodeID()
 }
 
-func MakeDeterministicNodeID(public net.Addr) (id [20]byte) {
+func MakeDeterministicNodeID(public net.Addr) (id krpc.ID) {
 	h := crypto.SHA1.New()
 	h.Write([]byte(public.String()))
 	h.Sum(id[:0:20])

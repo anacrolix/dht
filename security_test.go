@@ -8,6 +8,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/anacrolix/dht/v2/krpc"
 )
 
 func TestDHTSec(t *testing.T) {
@@ -42,7 +44,7 @@ func TestDHTSec(t *testing.T) {
 		ip := net.ParseIP(case_.ipStr)
 		_id, err := hex.DecodeString(case_.nodeIDHex)
 		require.NoError(t, err)
-		var id [20]byte
+		var id krpc.ID
 		require.Equal(t, 20, copy(id[:], _id))
 		secure := NodeIdSecure(id, ip)
 		assert.Equal(t, case_.valid, secure, "%v", case_)

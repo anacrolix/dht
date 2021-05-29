@@ -3,6 +3,8 @@ package dht
 import (
 	"hash/crc32"
 	"net"
+
+	"github.com/anacrolix/dht/v2/krpc"
 )
 
 func maskForIP(ip net.IP) []byte {
@@ -32,7 +34,7 @@ func crcIP(ip net.IP, rand uint8) uint32 {
 
 // Makes a node ID secure, in-place. The ID is 20 raw bytes.
 // http://www.libtorrent.org/dht_sec.html
-func SecureNodeId(id *[20]byte, ip net.IP) {
+func SecureNodeId(id *krpc.ID, ip net.IP) {
 	crc := crcIP(ip, id[19])
 	id[0] = byte(crc >> 24 & 0xff)
 	id[1] = byte(crc >> 16 & 0xff)

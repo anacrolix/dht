@@ -9,6 +9,7 @@ import (
 	"github.com/docopt/docopt-go"
 
 	"github.com/anacrolix/dht/v2"
+	"github.com/anacrolix/dht/v2/krpc"
 )
 
 func main() {
@@ -29,7 +30,7 @@ Usage: dht-secure-id <id> <ip>`, nil, true, "", false)
 		fmt.Fprintf(os.Stderr, "bad ip\n")
 		os.Exit(2)
 	}
-	var _id [20]byte
+	var _id krpc.ID
 	copy(_id[:], id)
 	dht.SecureNodeId(&_id, ip)
 	fmt.Printf("%x\n", _id)

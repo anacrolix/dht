@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"hash/fnv"
 
-	"github.com/anacrolix/missinggo"
+	"github.com/anacrolix/multiless"
 
 	"github.com/anacrolix/dht/v2/int160"
 	"github.com/anacrolix/dht/v2/krpc"
@@ -54,22 +54,17 @@ func (me AddrMaybeId) String() string {
 }
 
 func (l AddrMaybeId) CloserThan(r AddrMaybeId, target int160.T) bool {
-	var ml missinggo.MultiLess
-	ml.NextBool(r.Id == nil, l.Id == nil)
+	ml := multiless.New().Bool(l.Id == nil, r.Id == nil)
 	if l.Id != nil && r.Id != nil {
-		d := int160.Distance(*l.Id, target).Cmp(int160.Distance(*r.Id, target))
-		ml.StrictNext(d == 0, d < 0)
+		ml = ml.Cmp(l.Id.Distance(target).Cmp(r.Id.Distance(target)))
 	}
-	// TODO: Use bytes/hash when it's available (go1.14?), and have a unique seed for each
-	// instance.
+	// We could use maphash, but it wasn't much faster, and requires a seed. A seed would allow us
+	// to prevent deterministic handling of addrs for different uses.
 	hashString := func(s string) uint64 {
 		h := fnv.New64a()
 		h.Write([]byte(s))
 		return h.Sum64()
 	}
-	lh := hashString(l.Addr.String())
-	rh := hashString(r.Addr.String())
-	ml.StrictNext(lh == rh, lh < rh)
-	//ml.StrictNext(l.Addr.String() == r.Addr.String(), l.Addr.String() < r.Addr.String())
+	ml = ml.Uint64(hashString(l.Addr.String()), hashString(r.Addr.String()))
 	return ml.Less()
 }

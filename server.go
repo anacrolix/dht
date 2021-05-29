@@ -932,10 +932,11 @@ func (s *Server) transactionQuerySender(
 	}
 	select {
 	case <-sendCtx.Done():
-		return sendCtx.Err()
+		err = sendCtx.Err()
 	case <-time.After(s.resendDelay()):
-		return TransactionTimeout
+		err = TransactionTimeout
 	}
+	return fmt.Errorf("after %v tries: %w", numTries, err)
 }
 
 // Sends a ping query to the address given.

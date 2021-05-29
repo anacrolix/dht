@@ -1145,9 +1145,8 @@ func (s *Server) shouldStopRefreshingBucket(bucketIndex int) bool {
 	})
 }
 
-func (s *Server) refreshBucket(bucketIndex int) traversal.Stats {
+func (s *Server) refreshBucket(bucketIndex int) *traversal.Stats {
 	s.mu.RLock()
-	defer s.mu.RUnlock()
 	id := s.table.randomIdForBucket(bucketIndex)
 	op := traversal.Start(traversal.OperationInput{
 		Target: id.AsByteArray(),
@@ -1165,7 +1164,11 @@ func (s *Server) refreshBucket(bucketIndex int) traversal.Stats {
 			return s.config.NoSecurity || NodeIdSecure(info.ID, info.Addr.IP)
 		},
 	})
-	defer op.Stop()
+	defer func() {
+		s.mu.RUnlock()
+		op.Stop()
+		<-op.Stopped()
+	}()
 	b := &s.table.buckets[bucketIndex]
 wait:
 	for {
@@ -1196,7 +1199,8 @@ func (s *Server) shouldBootstrapUnlocked() bool {
 	return s.shouldBootstrap()
 }
 
-func (s *Server) pingQuestionableNodesInBucket(b *bucket) {
+func (s *Server) pingQuestionableNodesInBucket(bucketIndex int) {
+	b := &s.table.buckets[bucketIndex]
 	var wg sync.WaitGroup
 	b.EachNode(func(n *node) bool {
 		if s.IsQuestionable(n) {
@@ -1205,13 +1209,15 @@ func (s *Server) pingQuestionableNodesInBucket(b *bucket) {
 				defer wg.Done()
 				err := s.questionableNodePing(context.TODO(), n.Addr, n.Id.AsByteArray()).Err
 				if err != nil {
-					log.Printf("error pinging questionable node: %v", err)
+					log.Printf("error pinging questionable node in bucket %v: %v", bucketIndex, err)
 				}
 			}()
 		}
 		return true
 	})
+	s.mu.RUnlock()
 	wg.Wait()
+	s.mu.RLock()
 }
 
 func (s *Server) tableMaintainer() {
@@ -1225,11 +1231,10 @@ func (s *Server) tableMaintainer() {
 		}
 		s.mu.RLock()
 		for i := range s.table.buckets {
-			b := &s.table.buckets[i]
-			s.pingQuestionableNodesInBucket(b)
-			if time.Since(b.lastChanged) < 15*time.Minute {
-				continue
-			}
+			s.pingQuestionableNodesInBucket(i)
+			//if time.Since(b.lastChanged) < 15*time.Minute {
+			//	continue
+			//}
 			if s.shouldStopRefreshingBucket(i) {
 				continue
 			}
@@ -1266,7 +1271,7 @@ func (s *Server) questionableNodePing(ctx context.Context, addr Addr, id krpc.ID
 	} else {
 		s.mu.Lock()
 		s.updateNode(addr, &id, false, func(n *node) {
-			n.failedLastQuestionablePing = false
+			n.failedLastQuestionablePing = true
 		})
 		s.mu.Unlock()
 	}

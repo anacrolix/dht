@@ -60,15 +60,35 @@ type Operation struct {
 	outstanding  int
 	cond         chansync.BroadcastCond
 	stalled      chansync.LevelTrigger
+	stopping     chansync.SetOnce
 	stopped      chansync.SetOnce
 }
 
-func (op *Operation) Stats() Stats {
-	return op.stats
+func (op *Operation) Stats() *Stats {
+	return &op.stats
 }
 
 func (op *Operation) Stop() {
-	op.stopped.Set()
+	if op.stopping.Set() {
+		go func() {
+			defer op.stopped.Set()
+			op.mu.Lock()
+			defer op.mu.Unlock()
+			for {
+				if op.outstanding == 0 {
+					break
+				}
+				cond := op.cond.Signaled()
+				op.mu.Unlock()
+				<-cond
+				op.mu.Lock()
+			}
+		}()
+	}
+}
+
+func (op *Operation) Stopped() chansync.Done {
+	return op.stopped.Done()
 }
 
 func (op *Operation) Stalled() chansync.Active {
@@ -142,7 +162,7 @@ func (op *Operation) run() {
 	op.mu.Lock()
 	defer op.mu.Unlock()
 	for {
-		if op.stopped.IsSet() {
+		if op.stopping.IsSet() {
 			return
 		}
 		for op.outstanding < op.input.Alpha && op.haveQuery() {
@@ -156,7 +176,7 @@ func (op *Operation) run() {
 		op.mu.Unlock()
 		select {
 		case stalled <- struct{}{}:
-		case <-op.stopped.Done():
+		case <-op.stopping.Done():
 		case <-queryCondSignaled:
 		}
 		op.mu.Lock()

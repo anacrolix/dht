@@ -22,7 +22,13 @@ var (
 		bencode.Unmarshaler
 	} = (*ID)(nil)
 	_ bencode.Marshaler = ID{}
+	_ fmt.Formatter     = ID{}
 )
+
+func (h ID) Format(f fmt.State, c rune) {
+	// See metainfo.Hash.
+	f.Write([]byte(h.String()))
+}
 
 func IdFromString(s string) (id ID) {
 	if n := copy(id[:], s); n != 20 {

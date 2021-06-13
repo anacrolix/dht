@@ -58,13 +58,15 @@ func (l AddrMaybeId) CloserThan(r AddrMaybeId, target int160.T) bool {
 	if l.Id != nil && r.Id != nil {
 		ml = ml.Cmp(l.Id.Distance(target).Cmp(r.Id.Distance(target)))
 	}
-	// We could use maphash, but it wasn't much faster, and requires a seed. A seed would allow us
-	// to prevent deterministic handling of addrs for different uses.
-	hashString := func(s string) uint64 {
-		h := fnv.New64a()
-		h.Write([]byte(s))
-		return h.Sum64()
+	if !ml.Ok() {
+		// We could use maphash, but it wasn't much faster, and requires a seed. A seed would allow
+		// us to prevent deterministic handling of addrs for different uses.
+		hashString := func(s string) uint64 {
+			h := fnv.New64a()
+			h.Write([]byte(s))
+			return h.Sum64()
+		}
+		ml = ml.Uint64(hashString(l.Addr.String()), hashString(r.Addr.String()))
 	}
-	ml = ml.Uint64(hashString(l.Addr.String()), hashString(r.Addr.String()))
 	return ml.Less()
 }

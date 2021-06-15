@@ -3,11 +3,10 @@ package dht
 import (
 	"net"
 
-	"github.com/anacrolix/missinggo/v2/iter"
-	"github.com/anacrolix/stm/stmutil"
-
 	"github.com/anacrolix/dht/v2/int160"
+	"github.com/anacrolix/dht/v2/krpc"
 	"github.com/anacrolix/dht/v2/types"
+	"github.com/anacrolix/missinggo/v2/iter"
 )
 
 func mustListen(addr string) net.PacketConn {
@@ -27,14 +26,8 @@ func addrResolver(addr string) func() ([]Addr, error) {
 
 type addrMaybeId = types.AddrMaybeId
 
-func nodesByDistance(target int160.T) stmutil.Settish {
-	return stmutil.NewSortedSet(func(l, r interface{}) bool {
-		return l.(addrMaybeId).CloserThan(r.(addrMaybeId), target)
-	})
-}
-
 func randomIdInBucket(rootId int160.T, bucketIndex int) int160.T {
-	id := int160.FromByteArray(RandomNodeID())
+	id := int160.FromByteArray(krpc.RandomNodeID())
 	for i := range iter.N(bucketIndex) {
 		id.SetBit(i, rootId.GetBit(i))
 	}

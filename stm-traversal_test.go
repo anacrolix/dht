@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/anacrolix/dht/v2/int160"
+	"github.com/anacrolix/dht/v2/internal/testutil"
 	"github.com/anacrolix/dht/v2/krpc"
 )
 
@@ -19,7 +20,7 @@ func TestTraversal(t *testing.T) {
 	assert.False(t, stm.Atomically(func(tx *stm.Tx) interface{} { _, ok := traversal.popNextContact(tx); return ok }).(bool))
 	assert.False(t, stm.WouldBlock(stm.VoidOperation(traversal.waitFinished)))
 	stm.Atomically(stm.Compose(func() (ret []stm.Operation) {
-		for _, v := range sampleAddrMaybeIds[2:6] {
+		for _, v := range testutil.SampleAddrMaybeIds[2:6] {
 			ret = append(ret, traversal.pendContact(v))
 		}
 		return

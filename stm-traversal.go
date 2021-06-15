@@ -7,6 +7,7 @@ import (
 	"github.com/anacrolix/stm"
 	"github.com/anacrolix/stm/stmutil"
 
+	"github.com/anacrolix/dht/v2/containers"
 	"github.com/anacrolix/dht/v2/int160"
 	"github.com/anacrolix/dht/v2/krpc"
 	"github.com/anacrolix/dht/v2/traversal"
@@ -47,7 +48,7 @@ func newTraversal(input NewTraversalInput) stmTraversal {
 	t := stmTraversal{
 		targetInfohash:      targetInfohash,
 		triedAddrs:          stm.NewVar(stmutil.NewSet()),
-		nodesPendingContact: stm.NewVar(nodesByDistance(targetInfohash)),
+		nodesPendingContact: stm.NewVar(containers.NewAddrMaybeIdsByDistance(targetInfohash)),
 		addrBestIds:         stm.NewVar(stmutil.NewMap()),
 		pending:             stm.NewVar(0),
 	}

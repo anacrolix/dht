@@ -227,7 +227,6 @@ func NewServer(c *ServerConfig) (s *Server, err error) {
 	if s.resendDelay == nil {
 		s.resendDelay = defaultQueryResendDelay
 	}
-	go s.tableMaintainer()
 	go s.serveUntilClosed()
 	return
 }
@@ -1217,7 +1216,11 @@ func (s *Server) pingQuestionableNodesInBucket(bucketIndex int) {
 	s.mu.RLock()
 }
 
-func (s *Server) tableMaintainer() {
+// A routine that maintains the Server's routing table, by pinging questionable nodes, and
+// refreshing buckets. This should be invoked on a running Server when the caller is satisfied with
+// having set it up. It is not necessary to explicitly Bootstrap the Server once this routine has
+// started.
+func (s *Server) TableMaintainer() {
 	for {
 		if s.shouldBootstrapUnlocked() {
 			stats, err := s.Bootstrap()

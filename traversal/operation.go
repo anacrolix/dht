@@ -2,10 +2,11 @@ package traversal
 
 import (
 	"context"
-	"sort"
 	"sync/atomic"
 
-	"github.com/anacrolix/multiless"
+	"github.com/anacrolix/dht/v2/containers"
+	"github.com/anacrolix/missinggo/v2/iter"
+	"github.com/anacrolix/stm/stmutil"
 	"github.com/anacrolix/sync"
 
 	"github.com/anacrolix/chansync"
@@ -41,11 +42,13 @@ func Start(input OperationInput) *Operation {
 			return true
 		}
 	}
+	targetInt160 := input.Target.Int160()
 	op := &Operation{
-		targetInt160: input.Target.Int160(),
+		targetInt160: targetInt160,
 		input:        herp,
 		queried:      make(map[addrString]struct{}),
-		closest:      k_nearest_nodes.New(input.Target.Int160(), input.K),
+		closest:      k_nearest_nodes.New(targetInt160, input.K),
+		unqueried:    containers.NewAddrMaybeIdsByDistance(targetInt160),
 	}
 	go op.run()
 	return op
@@ -56,7 +59,7 @@ type addrString string
 type Operation struct {
 	stats        Stats
 	mu           sync.Mutex
-	unqueried    []types.AddrMaybeId
+	unqueried    stmutil.Settish
 	queried      map[addrString]struct{}
 	closest      k_nearest_nodes.Type
 	targetInt160 int160.T
@@ -109,7 +112,7 @@ func (op *Operation) AddNodes(nodes []types.AddrMaybeId) {
 		if ni := n.TryIntoNodeInfo(); ni != nil && !op.input.NodeFilter(*ni) {
 			continue
 		}
-		op.unqueried = append(op.unqueried, n)
+		op.unqueried = op.unqueried.Add(n)
 	}
 	op.cond.Broadcast()
 }
@@ -118,33 +121,22 @@ func (op *Operation) markQueried(addr krpc.NodeAddr) {
 	op.queried[addrString(addr.String())] = struct{}{}
 }
 
-func (op *Operation) closestUnqueriedIndex() int {
-	closest := 0
-	for i, a := range op.unqueried {
-		if a.CloserThan(op.unqueried[closest], op.targetInt160) {
-			closest = i
-		}
-	}
-	return closest
-
-}
-
 func (op *Operation) closestUnqueried() (ret types.AddrMaybeId) {
 	//defer func() {
 	//	spew.Dump("closest unqueried", ret)
 	//}()
-	return op.unqueried[op.closestUnqueriedIndex()]
+	_ret, _ := iter.First(op.unqueried.Iter)
+	return _ret.(types.AddrMaybeId)
 }
 
 func (op *Operation) popClosestUnqueried() types.AddrMaybeId {
-	i := op.closestUnqueriedIndex()
-	ret := op.unqueried[i]
-	op.unqueried = append(op.unqueried[:i], op.unqueried[i+1:]...)
+	ret := op.closestUnqueried()
+	op.unqueried = op.unqueried.Delete(ret)
 	return ret
 }
 
 func (op *Operation) haveQuery() bool {
-	if len(op.unqueried) == 0 {
+	if op.unqueried.Len() == 0 {
 		return false
 	}
 	if !op.closest.Full() {
@@ -180,15 +172,6 @@ func (op *Operation) run() {
 		}
 		op.mu.Lock()
 	}
-}
-
-func (op *Operation) sortNodesByClosest(nodes []krpc.NodeInfo) {
-	sort.Slice(nodes, func(i, j int) bool {
-		return multiless.New().Cmp(
-			int160.Distance(int160.FromByteArray(nodes[i].ID), op.targetInt160).Cmp(
-				int160.Distance(int160.FromByteArray(nodes[j].ID), op.targetInt160)),
-		).Less()
-	})
 }
 
 func (op *Operation) addClosest(node krpc.NodeInfo) {

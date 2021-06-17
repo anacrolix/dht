@@ -1157,9 +1157,7 @@ func (s *Server) refreshBucket(bucketIndex int) *traversal.Stats {
 			res := s.FindNode(NewAddr(addr.UDP()), id, QueryRateLimiting{})
 			return res.TraversalQueryResult(addr)
 		},
-		NodeFilter: func(info krpc.NodeInfo) bool {
-			return s.config.NoSecurity || NodeIdSecure(info.ID, info.Addr.IP)
-		},
+		NodeFilter: s.TraversalNodeFilter,
 	})
 	defer func() {
 		s.mu.RUnlock()
@@ -1279,28 +1277,18 @@ func (s *Server) questionableNodePing(ctx context.Context, addr Addr, id krpc.ID
 	return res
 }
 
-func (s *Server) NewTraversal(input NewTraversalInput) (t stmTraversal, err error) {
-	startAddrs, err := s.traversalStartingNodes()
-	if err != nil {
-		return
-	}
-	t = newTraversal(input)
-	t.shouldContact = s.shouldContact
-	t.serverBeginQuery = s.beginQuery
-	for _, addr := range startAddrs {
-		stm.Atomically(t.pendContact(addr))
-	}
-	return
-}
-
-func (a *Server) shouldContact(addr krpc.NodeAddr, tx *stm.Tx) bool {
-	if !validNodeAddr(addr.UDP()) {
+// Whether we should consider a node for contact based on its address and possible ID.
+func (s *Server) TraversalNodeFilter(node addrMaybeId) bool {
+	if !validNodeAddr(node.Addr.UDP()) {
 		return false
 	}
-	if a.ipBlocked(addr.IP) {
+	if s.ipBlocked(node.Addr.IP) {
 		return false
 	}
-	return true
+	if node.Id == nil {
+		return true
+	}
+	return s.config.NoSecurity || NodeIdSecure(node.Id.AsByteArray(), node.Addr.IP)
 }
 
 func validNodeAddr(addr net.Addr) bool {

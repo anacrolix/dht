@@ -69,11 +69,9 @@ func (s *Server) Announce(infoHash [20]byte, port int, impliedPort bool, opts ..
 		}
 	}
 	a.traversal = traversal.Start(traversal.OperationInput{
-		Target:  infoHash,
-		DoQuery: a.getPeers,
-		NodeFilter: func(info krpc.NodeInfo) bool {
-			return s.config.NoSecurity || NodeIdSecure(info.ID, info.Addr.IP)
-		},
+		Target:     infoHash,
+		DoQuery:    a.getPeers,
+		NodeFilter: s.TraversalNodeFilter,
 	})
 	nodes, err := s.traversalStartingNodes()
 	if err != nil {

@@ -29,7 +29,7 @@ type OperationInput struct {
 	Alpha      int
 	K          int
 	DoQuery    func(context.Context, krpc.NodeAddr) QueryResult
-	NodeFilter func(krpc.NodeInfo) bool
+	NodeFilter func(types.AddrMaybeId) bool
 }
 
 type defaultsAppliedOperationInput OperationInput
@@ -43,7 +43,7 @@ func Start(input OperationInput) *Operation {
 		herp.K = 8
 	}
 	if herp.NodeFilter == nil {
-		herp.NodeFilter = func(krpc.NodeInfo) bool {
+		herp.NodeFilter = func(types.AddrMaybeId) bool {
 			return true
 		}
 	}
@@ -115,7 +115,7 @@ func (op *Operation) AddNodes(nodes []types.AddrMaybeId) (added int) {
 		if _, ok := op.queried[addrString(n.Addr.String())]; ok {
 			continue
 		}
-		if ni := n.TryIntoNodeInfo(); ni != nil && !op.input.NodeFilter(*ni) {
+		if !op.input.NodeFilter(n) {
 			continue
 		}
 		op.unqueried = op.unqueried.Add(n)
@@ -178,7 +178,9 @@ func (op *Operation) run() {
 }
 
 func (op *Operation) addClosest(node krpc.NodeInfo, data interface{}) {
-	if !op.input.NodeFilter(node) {
+	var ami types.AddrMaybeId
+	ami.FromNodeInfo(node)
+	if !op.input.NodeFilter(ami) {
 		return
 	}
 	op.closest = op.closest.Push(k_nearest_nodes.Elem{

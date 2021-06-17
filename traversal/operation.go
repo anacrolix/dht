@@ -18,6 +18,7 @@ import (
 type QueryResult struct {
 	ResponseFrom *krpc.NodeInfo
 	Nodes        []krpc.NodeInfo
+	Nodes6       []krpc.NodeInfo
 }
 
 type OperationInput struct {

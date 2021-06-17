@@ -698,6 +698,7 @@ func (s *Server) writeToNode(ctx context.Context, b []byte, node Addr, wait, rat
 	}
 	if err != nil {
 		writeErrors.Add(1)
+		// TODO: Reverse the effects on the rate limiting here.
 		err = fmt.Errorf("error writing %d bytes to %s: %s", len(b), node, err)
 		return
 	}
@@ -804,18 +805,18 @@ type QueryResult struct {
 }
 
 // Converts a Server QueryResult to a traversal.QueryResult.
-func (me QueryResult) TraversalQueryResult(addr krpc.NodeAddr) (_ traversal.QueryResult) {
+func (me QueryResult) TraversalQueryResult(addr krpc.NodeAddr) (ret traversal.QueryResult) {
 	r := me.Reply.R
 	if r == nil {
 		return
 	}
-	return traversal.QueryResult{
-		ResponseFrom: &krpc.NodeInfo{
-			Addr: addr,
-			ID:   r.ID,
-		},
-		Nodes: append(append([]krpc.NodeInfo(nil), r.Nodes...), r.Nodes6...),
+	ret.ResponseFrom = &krpc.NodeInfo{
+		Addr: addr,
+		ID:   r.ID,
 	}
+	ret.Nodes = r.Nodes
+	ret.Nodes6 = r.Nodes6
+	return
 }
 
 // Rate-limiting to be applied to writes for a given query. Queries occur inside transactions that

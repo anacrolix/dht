@@ -44,11 +44,14 @@ func New(target int160.T, k int) Type {
 	}
 }
 
-func (me *Type) Range(f func(interface{})) {
+func (me *Type) Range(f func(Elem)) {
 	iter := me.inner.Iterator()
 	for !iter.Done() {
-		key, _ := iter.Next()
-		f(key)
+		key, value := iter.Next()
+		f(Elem{
+			Key:  key.(Key),
+			Data: value,
+		})
 	}
 }
 

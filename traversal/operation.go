@@ -16,9 +16,12 @@ import (
 )
 
 type QueryResult struct {
+	// A node that should be considered for a closest entry.
 	ResponseFrom *krpc.NodeInfo
-	Nodes        []krpc.NodeInfo
-	Nodes6       []krpc.NodeInfo
+	// Data associated with a closest node.
+	ClosestData interface{}
+	Nodes       []krpc.NodeInfo
+	Nodes6      []krpc.NodeInfo
 }
 
 type OperationInput struct {
@@ -36,17 +39,20 @@ func Start(input OperationInput) *Operation {
 	if herp.Alpha == 0 {
 		herp.Alpha = 3
 	}
+	if herp.K == 0 {
+		herp.K = 8
+	}
 	if herp.NodeFilter == nil {
 		herp.NodeFilter = func(krpc.NodeInfo) bool {
 			return true
 		}
 	}
-	targetInt160 := input.Target.Int160()
+	targetInt160 := herp.Target.Int160()
 	op := &Operation{
 		targetInt160: targetInt160,
 		input:        herp,
 		queried:      make(map[addrString]struct{}),
-		closest:      k_nearest_nodes.New(targetInt160, input.K),
+		closest:      k_nearest_nodes.New(targetInt160, herp.K),
 		unqueried:    containers.NewImmutableAddrMaybeIdsByDistance(targetInt160),
 	}
 	go op.run()
@@ -101,9 +107,10 @@ func (op *Operation) Stalled() chansync.Active {
 	return op.stalled.Active()
 }
 
-func (op *Operation) AddNodes(nodes []types.AddrMaybeId) {
+func (op *Operation) AddNodes(nodes []types.AddrMaybeId) (added int) {
 	op.mu.Lock()
 	defer op.mu.Unlock()
+	before := op.unqueried.Len()
 	for _, n := range nodes {
 		if _, ok := op.queried[addrString(n.Addr.String())]; ok {
 			continue
@@ -114,6 +121,7 @@ func (op *Operation) AddNodes(nodes []types.AddrMaybeId) {
 		op.unqueried = op.unqueried.Add(n)
 	}
 	op.cond.Broadcast()
+	return op.unqueried.Len() - before
 }
 
 func (op *Operation) markQueried(addr krpc.NodeAddr) {
@@ -169,14 +177,18 @@ func (op *Operation) run() {
 	}
 }
 
-func (op *Operation) addClosest(node krpc.NodeInfo) {
+func (op *Operation) addClosest(node krpc.NodeInfo, data interface{}) {
 	if !op.input.NodeFilter(node) {
 		return
 	}
 	op.closest = op.closest.Push(k_nearest_nodes.Elem{
 		Key:  node,
-		Data: nil,
+		Data: data,
 	})
+}
+
+func (op *Operation) Closest() *k_nearest_nodes.Type {
+	return &op.closest
 }
 
 func (op *Operation) startQuery() {
@@ -192,13 +204,22 @@ func (op *Operation) startQuery() {
 		}()
 		//log.Printf("traversal querying %v", a)
 		atomic.AddInt64(&op.stats.NumAddrsTried, 1)
-		res := op.input.DoQuery(context.TODO(), a.Addr)
+		ctx, cancel := context.WithCancel(context.Background())
+		go func() {
+			select {
+			case <-ctx.Done():
+			case <-op.stopping.Done():
+				cancel()
+			}
+		}()
+		res := op.input.DoQuery(ctx, a.Addr)
+		cancel()
 		if res.ResponseFrom != nil {
 			func() {
 				op.mu.Lock()
 				defer op.mu.Unlock()
 				atomic.AddInt64(&op.stats.NumResponses, 1)
-				op.addClosest(*res.ResponseFrom)
+				op.addClosest(*res.ResponseFrom, res.ClosestData)
 			}()
 		}
 		op.AddNodes(func() (ret []types.AddrMaybeId) {

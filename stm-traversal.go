@@ -3,7 +3,6 @@ package dht
 import (
 	"sync/atomic"
 
-	"github.com/anacrolix/missinggo/v2/iter"
 	"github.com/anacrolix/stm"
 	"github.com/anacrolix/stm/stmutil"
 
@@ -48,7 +47,7 @@ func newTraversal(input NewTraversalInput) stmTraversal {
 	t := stmTraversal{
 		targetInfohash:      targetInfohash,
 		triedAddrs:          stm.NewVar(stmutil.NewSet()),
-		nodesPendingContact: stm.NewVar(containers.NewAddrMaybeIdsByDistance(targetInfohash)),
+		nodesPendingContact: stm.NewVar(containers.NewImmutableAddrMaybeIdsByDistance(targetInfohash)),
 		addrBestIds:         stm.NewVar(stmutil.NewMap()),
 		pending:             stm.NewVar(0),
 	}
@@ -65,7 +64,7 @@ func newTraversal(input NewTraversalInput) stmTraversal {
 }
 
 func (t *stmTraversal) waitFinished(tx *stm.Tx) {
-	tx.Assert(tx.Get(t.nodesPendingContact).(stmutil.Lenner).Len() == 0)
+	tx.Assert(tx.Get(t.nodesPendingContact).(containers.AddrMaybeIdsByDistance).Len() == 0)
 }
 
 func (t *stmTraversal) pendContact(node addrMaybeId) stm.Operation {
@@ -78,7 +77,7 @@ func (t *stmTraversal) pendContact(node addrMaybeId) stm.Operation {
 			return
 		}
 		addrBestIds := tx.Get(t.addrBestIds).(stmutil.Mappish)
-		nodesPendingContact := tx.Get(t.nodesPendingContact).(stmutil.Settish)
+		nodesPendingContact := tx.Get(t.nodesPendingContact).(containers.AddrMaybeIdsByDistance)
 		if _best, ok := addrBestIds.Get(nodeAddrString); ok {
 			if node.Id == nil {
 				return
@@ -93,21 +92,21 @@ func (t *stmTraversal) pendContact(node addrMaybeId) stm.Operation {
 			})
 		}
 		tx.Set(t.addrBestIds, addrBestIds.Set(nodeAddrString, node.Id))
-		if !nodesPendingContact.Contains(node) {
-			//log.Printf("added pending contact %v", node)
-		}
+		//if !nodesPendingContact.Contains(node) {
+		//	//log.Printf("added pending contact %v", node)
+		//}
 		nodesPendingContact = nodesPendingContact.Add(node)
 		tx.Set(t.nodesPendingContact, nodesPendingContact)
 	})
 }
 
 func (a *stmTraversal) nextContact(tx *stm.Tx) (ret addrMaybeId, ok bool) {
-	npc := tx.Get(a.nodesPendingContact).(stmutil.Settish)
-	first, ok := iter.First(npc.Iter)
+	npc := tx.Get(a.nodesPendingContact).(containers.AddrMaybeIdsByDistance)
+	ok = npc.Len() > 0
 	if !ok {
 		return
 	}
-	ret = first.(addrMaybeId)
+	ret = npc.Next()
 	return
 }
 
@@ -117,7 +116,7 @@ func (a *stmTraversal) popNextContact(tx *stm.Tx) (ret addrMaybeId, ok bool) {
 		return
 	}
 	addrString := ret.Addr.String()
-	tx.Set(a.nodesPendingContact, tx.Get(a.nodesPendingContact).(stmutil.Settish).Delete(ret))
+	tx.Set(a.nodesPendingContact, tx.Get(a.nodesPendingContact).(containers.AddrMaybeIdsByDistance).Delete(ret))
 	tx.Set(a.addrBestIds, tx.Get(a.addrBestIds).(stmutil.Mappish).Delete(addrString))
 	tx.Set(a.triedAddrs, tx.Get(a.triedAddrs).(stmutil.Settish).Add(addrString))
 	return

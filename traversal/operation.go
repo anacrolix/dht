@@ -5,8 +5,6 @@ import (
 	"sync/atomic"
 
 	"github.com/anacrolix/dht/v2/containers"
-	"github.com/anacrolix/missinggo/v2/iter"
-	"github.com/anacrolix/stm/stmutil"
 	"github.com/anacrolix/sync"
 
 	"github.com/anacrolix/chansync"
@@ -48,7 +46,7 @@ func Start(input OperationInput) *Operation {
 		input:        herp,
 		queried:      make(map[addrString]struct{}),
 		closest:      k_nearest_nodes.New(targetInt160, input.K),
-		unqueried:    containers.NewAddrMaybeIdsByDistance(targetInt160),
+		unqueried:    containers.NewImmutableAddrMaybeIdsByDistance(targetInt160),
 	}
 	go op.run()
 	return op
@@ -59,7 +57,7 @@ type addrString string
 type Operation struct {
 	stats        Stats
 	mu           sync.Mutex
-	unqueried    stmutil.Settish
+	unqueried    containers.AddrMaybeIdsByDistance
 	queried      map[addrString]struct{}
 	closest      k_nearest_nodes.Type
 	targetInt160 int160.T
@@ -122,11 +120,7 @@ func (op *Operation) markQueried(addr krpc.NodeAddr) {
 }
 
 func (op *Operation) closestUnqueried() (ret types.AddrMaybeId) {
-	//defer func() {
-	//	spew.Dump("closest unqueried", ret)
-	//}()
-	_ret, _ := iter.First(op.unqueried.Iter)
-	return _ret.(types.AddrMaybeId)
+	return op.unqueried.Next()
 }
 
 func (op *Operation) popClosestUnqueried() types.AddrMaybeId {

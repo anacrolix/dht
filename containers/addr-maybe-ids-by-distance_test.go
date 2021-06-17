@@ -5,12 +5,11 @@ import (
 
 	"github.com/anacrolix/dht/v2/int160"
 	"github.com/anacrolix/dht/v2/internal/testutil"
-	"github.com/anacrolix/missinggo/v2/iter"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestNodesByDistance(t *testing.T) {
-	a := NewAddrMaybeIdsByDistance(int160.T{})
+	a := NewImmutableAddrMaybeIdsByDistance(int160.T{})
 	push := func(i int) {
 		a = a.Add(testutil.SampleAddrMaybeIds[i])
 	}
@@ -21,8 +20,9 @@ func TestNodesByDistance(t *testing.T) {
 	push(0)
 	push(1)
 	pop := func(is ...int) {
-		first, ok := iter.First(a.Iter)
+		ok := a.Len() != 0
 		assert.True(t, ok)
+		first := a.Next()
 		assert.Contains(t, func() (ret []addrMaybeId) {
 			for _, i := range is {
 				ret = append(ret, testutil.SampleAddrMaybeIds[i])

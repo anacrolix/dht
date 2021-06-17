@@ -18,6 +18,7 @@ import (
 	"github.com/anacrolix/stm"
 	"github.com/anacrolix/sync"
 	"github.com/pkg/errors"
+	"golang.org/x/time/rate"
 
 	"github.com/anacrolix/torrent/iplist"
 	"github.com/anacrolix/torrent/logonce"
@@ -53,7 +54,7 @@ type Server struct {
 	tokenServer  tokenServer // Manages tokens we issue to our queriers.
 	config       ServerConfig
 	stats        ServerStats
-	sendLimit    SendLimiter
+	sendLimit    *rate.Limiter
 
 	lastBootstrap    time.Time
 	bootstrappingNow bool
@@ -63,10 +64,6 @@ type SendLimiter interface {
 	Wait(ctx context.Context) error
 	Allow() bool
 	AllowStm(tx *stm.Tx) bool
-}
-
-func (s *Server) SendRateLimiter() SendLimiter {
-	return s.sendLimit
 }
 
 func (s *Server) numGoodNodes() (num int) {
@@ -751,32 +748,6 @@ func (s *Server) connTrackEntryForAddr(a Addr) conntrack.Entry {
 }
 
 type numWrites int
-
-// Returns an STM operation that returns a func() when the Server's connection tracking and send
-// rate-limiting allow, that executes `f`, where `f` returns the number of send operations actually
-// performed. After `f` completes, the func rectifies any rate-limiting against the number of writes
-// reported. If the operation returns, the *first* write has been accounted for already (See
-// QueryRateLimiting.NotFirst).
-func (s *Server) beginQuery(addr Addr, reason string, f func() numWrites) stm.Operation {
-	return func(tx *stm.Tx) interface{} {
-		tx.Assert(s.sendLimit.AllowStm(tx))
-		cteh := s.config.ConnectionTracking.Allow(tx, s.connTrackEntryForAddr(addr), reason, -1)
-		tx.Assert(cteh != nil)
-		return func() {
-			writes := f()
-			finalizeCteh(cteh, writes)
-		}
-	}
-}
-
-func finalizeCteh(cteh *conntrack.EntryHandle, writes numWrites) {
-	if writes == 0 {
-		cteh.Forget()
-		// TODO: panic("how to reverse rate limit?")
-	} else {
-		cteh.Done()
-	}
-}
 
 func (s *Server) makeQueryBytes(q string, a krpc.MsgArgs, t string) []byte {
 	a.ID = s.ID()

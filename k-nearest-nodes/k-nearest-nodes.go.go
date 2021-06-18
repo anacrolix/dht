@@ -4,7 +4,6 @@ import (
 	"hash/maphash"
 
 	"github.com/anacrolix/multiless"
-	"github.com/anacrolix/stm"
 	"github.com/benbjohnson/immutable"
 
 	"github.com/anacrolix/dht/v2/int160"
@@ -68,16 +67,6 @@ func (me Type) Push(elem Elem) Type {
 		me.inner = me.inner.Delete(key)
 	}
 	return me
-}
-
-func (me Type) Pop(tx *stm.Tx) (Type, Elem) {
-	iter := me.inner.Iterator()
-	x, value := iter.Next()
-	me.inner = me.inner.Delete(x)
-	return me, Elem{
-		Key:  x.(Key),
-		Data: value,
-	}
 }
 
 func (me Type) Farthest() (elem Elem) {

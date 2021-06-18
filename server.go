@@ -14,8 +14,6 @@ import (
 
 	"github.com/anacrolix/log"
 	"github.com/anacrolix/missinggo"
-	"github.com/anacrolix/missinggo/v2/conntrack"
-	"github.com/anacrolix/stm"
 	"github.com/anacrolix/sync"
 	"github.com/pkg/errors"
 	"golang.org/x/time/rate"
@@ -58,12 +56,6 @@ type Server struct {
 
 	lastBootstrap    time.Time
 	bootstrappingNow bool
-}
-
-type SendLimiter interface {
-	Wait(ctx context.Context) error
-	Allow() bool
-	AllowStm(tx *stm.Tx) bool
 }
 
 func (s *Server) numGoodNodes() (num int) {
@@ -161,10 +153,9 @@ func (s *Server) Addr() net.Addr {
 
 func NewDefaultServerConfig() *ServerConfig {
 	return &ServerConfig{
-		NoSecurity:         true,
-		StartingNodes:      func() ([]Addr, error) { return GlobalBootstrapAddrs("udp") },
-		ConnectionTracking: conntrack.NewInstance(),
-		DefaultWant:        []krpc.Want{krpc.WantNodes, krpc.WantNodes6},
+		NoSecurity:    true,
+		StartingNodes: func() ([]Addr, error) { return GlobalBootstrapAddrs("udp") },
+		DefaultWant:   []krpc.Want{krpc.WantNodes, krpc.WantNodes6},
 	}
 }
 
@@ -212,9 +203,6 @@ func NewServer(c *ServerConfig) (s *Server, err error) {
 			k: 8,
 		},
 		sendLimit: defaultSendLimiter,
-	}
-	if s.config.ConnectionTracking == nil {
-		s.config.ConnectionTracking = conntrack.NewInstance()
 	}
 	rand.Read(s.tokenServer.secret)
 	s.socket = c.Conn
@@ -737,14 +725,6 @@ func (s *Server) createToken(addr Addr) string {
 
 func (s *Server) validToken(token string, addr Addr) bool {
 	return s.tokenServer.ValidToken(token, addr)
-}
-
-func (s *Server) connTrackEntryForAddr(a Addr) conntrack.Entry {
-	return conntrack.Entry{
-		s.socket.LocalAddr().Network(),
-		s.socket.LocalAddr().String(),
-		a.String(),
-	}
 }
 
 type numWrites int

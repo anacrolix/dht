@@ -15,8 +15,6 @@ import (
 
 	"github.com/anacrolix/log"
 	"github.com/anacrolix/missinggo"
-	"github.com/anacrolix/missinggo/v2/conntrack"
-
 	"github.com/anacrolix/torrent/iplist"
 	"github.com/anacrolix/torrent/metainfo"
 
@@ -63,8 +61,6 @@ type ServerConfig struct {
 	QueryResendDelay func() time.Duration
 	// TODO: Expose Peers, to return NodeInfo for received get_peers queries.
 	PeerStore peer_store.Interface
-
-	ConnectionTracking *conntrack.Instance
 
 	// If no Logger is provided, log.Default is used and log.Debug messages are filtered out. Note
 	// that all messages without a log.Level, have log.Debug added to them before being passed to

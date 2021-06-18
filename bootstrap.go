@@ -9,6 +9,8 @@ import (
 	"github.com/anacrolix/dht/v2/traversal"
 )
 
+type TraversalStats = traversal.Stats
+
 // Populates the node table.
 func (s *Server) Bootstrap() (_ TraversalStats, err error) {
 	s.mu.Lock()

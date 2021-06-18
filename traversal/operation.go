@@ -153,6 +153,7 @@ func (op *Operation) haveQuery() bool {
 }
 
 func (op *Operation) run() {
+	defer close(op.stalled.Signal())
 	op.mu.Lock()
 	defer op.mu.Unlock()
 	for {

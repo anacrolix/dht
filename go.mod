@@ -11,7 +11,7 @@ require (
 	github.com/anacrolix/stm v0.3.0-alpha
 	github.com/anacrolix/sync v0.3.0
 	github.com/anacrolix/tagflag v1.3.0
-	github.com/anacrolix/torrent v1.28.1-0.20210524073152-70a5d55a6296
+	github.com/anacrolix/torrent v1.28.1-0.20210622065255-582f0ccd48a0
 	github.com/benbjohnson/immutable v0.3.0
 	github.com/bradfitz/iter v0.0.0-20191230175014-e8f45d346db8
 	github.com/docopt/docopt-go v0.0.0-20180111231733-ee0de3bc6815

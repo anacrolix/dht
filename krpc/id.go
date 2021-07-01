@@ -2,6 +2,7 @@ package krpc
 
 import (
 	crand "crypto/rand"
+	"encoding"
 	"encoding/hex"
 	"fmt"
 
@@ -20,6 +21,7 @@ type ID [20]byte
 var (
 	_ interface {
 		bencode.Unmarshaler
+		encoding.TextUnmarshaler
 	} = (*ID)(nil)
 	_ bencode.Marshaler = ID{}
 	_ fmt.Formatter     = ID{}
@@ -50,6 +52,17 @@ func (id *ID) UnmarshalBencode(b []byte) error {
 		return fmt.Errorf("string has wrong length: %d", n)
 	}
 	return nil
+}
+
+func (id *ID) UnmarshalText(b []byte) (err error) {
+	n, err := hex.Decode(id[:], b)
+	if err != nil {
+		return
+	}
+	if n != len(*id) {
+		err = fmt.Errorf("expected %v bytes, only got %v", len(*id), n)
+	}
+	return
 }
 
 func (id ID) String() string {

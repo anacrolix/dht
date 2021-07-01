@@ -36,7 +36,7 @@ func (s *Server) Bootstrap() (_ TraversalStats, err error) {
 		},
 		NodeFilter: s.TraversalNodeFilter,
 	})
-	nodes, err := s.traversalStartingNodes()
+	nodes, err := s.TraversalStartingNodes()
 	if err != nil {
 		return
 	}

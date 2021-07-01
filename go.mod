@@ -1,6 +1,7 @@
 module github.com/anacrolix/dht/v2
 
 require (
+	github.com/alexflint/go-arg v1.3.0
 	github.com/anacrolix/chansync v0.0.0-20210524073341-a336ebc2de92
 	github.com/anacrolix/confluence v1.7.1-0.20210311004351-d642adb8546c
 	github.com/anacrolix/envpprof v1.1.1
@@ -14,6 +15,7 @@ require (
 	github.com/anacrolix/torrent v1.28.1-0.20210622065255-582f0ccd48a0
 	github.com/benbjohnson/immutable v0.3.0
 	github.com/bradfitz/iter v0.0.0-20191230175014-e8f45d346db8
+	github.com/davecgh/go-spew v1.1.1
 	github.com/docopt/docopt-go v0.0.0-20180111231733-ee0de3bc6815
 	github.com/frankban/quicktest v1.11.3
 	github.com/pkg/errors v0.9.1

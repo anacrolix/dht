@@ -755,6 +755,17 @@ type QueryResult struct {
 	Err    error
 }
 
+func (qr QueryResult) ToError() error {
+	if qr.Err != nil {
+		return qr.Err
+	}
+	e := qr.Reply.Error()
+	if e != nil {
+		return e
+	}
+	return nil
+}
+
 // Converts a Server QueryResult to a traversal.QueryResult.
 func (me QueryResult) TraversalQueryResult(addr krpc.NodeAddr) (ret traversal.QueryResult) {
 	r := me.Reply.R
@@ -767,6 +778,9 @@ func (me QueryResult) TraversalQueryResult(addr krpc.NodeAddr) (ret traversal.Qu
 	}
 	ret.Nodes = r.Nodes
 	ret.Nodes6 = r.Nodes6
+	if r.Token != nil {
+		ret.ClosestData = *r.Token
+	}
 	return
 }
 
@@ -1021,7 +1035,7 @@ func (s *Server) closestNodes(k int, target int160.T, filter func(*node) bool) [
 	return s.table.closestNodes(k, target, filter)
 }
 
-func (s *Server) traversalStartingNodes() (nodes []addrMaybeId, err error) {
+func (s *Server) TraversalStartingNodes() (nodes []addrMaybeId, err error) {
 	s.mu.RLock()
 	s.table.forNodes(func(n *node) bool {
 		nodes = append(nodes, addrMaybeId{n.Addr.KRPC(), &n.Id})

@@ -73,7 +73,7 @@ func (s *Server) Announce(infoHash [20]byte, port int, impliedPort bool, opts ..
 		DoQuery:    a.getPeers,
 		NodeFilter: s.TraversalNodeFilter,
 	})
-	nodes, err := s.traversalStartingNodes()
+	nodes, err := s.TraversalStartingNodes()
 	if err != nil {
 		return
 	}

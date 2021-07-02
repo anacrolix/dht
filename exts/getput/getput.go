@@ -1,4 +1,4 @@
-package putget
+package getput
 
 import (
 	"context"

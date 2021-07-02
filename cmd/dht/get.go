@@ -3,11 +3,11 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"github.com/anacrolix/dht/v2"
-	"github.com/anacrolix/dht/v2/exts/putget"
+	"github.com/anacrolix/dht/v2/exts/getput"
 	"github.com/anacrolix/dht/v2/krpc"
-	"github.com/davecgh/go-spew/spew"
 )
 
 type GetCmd struct {
@@ -25,7 +25,7 @@ func get(cmd *GetCmd) (err error) {
 	}
 	for _, t := range cmd.Target {
 		var v interface{}
-		v, _, err = putget.Get(context.Background(), t, s)
+		v, _, err = getput.Get(context.Background(), t, s)
 		if err != nil {
 			return
 		}

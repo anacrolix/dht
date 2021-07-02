@@ -8,7 +8,7 @@ import (
 	"log"
 
 	"github.com/anacrolix/dht/v2"
-	"github.com/anacrolix/dht/v2/exts/putget"
+	"github.com/anacrolix/dht/v2/exts/getput"
 	"github.com/anacrolix/dht/v2/traversal"
 	"github.com/anacrolix/torrent/bencode"
 )
@@ -45,7 +45,7 @@ func put(cmd *PutCmd) (err error) {
 		}
 		target := sha1.Sum(putBytes)
 		var stats *traversal.Stats
-		stats, err = putget.Put(context.Background(), target, s, put)
+		stats, err = getput.Put(context.Background(), target, s, put)
 		if err != nil {
 			err = fmt.Errorf("in traversal: %w", err)
 			return

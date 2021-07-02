@@ -38,7 +38,7 @@ func Get(
 			})
 			err := res.ToError()
 			if err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, dht.TransactionTimeout) {
-				log.Printf("error querying %v: %v", addr, err)
+				//log.Printf("error querying %v: %v", addr, err)
 			}
 			if r := res.Reply.R; r != nil {
 				rv := r.V
@@ -49,6 +49,7 @@ func Get(
 					}
 					h := sha1.Sum(b)
 					if h == target {
+						log.Printf("got %v from %v", target, addr)
 						select {
 						case vChan <- rv:
 						default:
@@ -95,7 +96,7 @@ func Put(
 			})
 			err := res.ToError()
 			if err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, dht.TransactionTimeout) {
-				log.Printf("error querying %v: %v", addr, err)
+				//log.Printf("error querying %v: %v", addr, err)
 			}
 			tqr := res.TraversalQueryResult(addr)
 			if tqr.ClosestData == nil {

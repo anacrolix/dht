@@ -29,7 +29,7 @@ func get(cmd *GetCmd) (err error) {
 		if err != nil {
 			return
 		}
-		spew.Dump(v)
+		fmt.Println(v)
 	}
 	return nil
 }

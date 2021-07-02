@@ -2,20 +2,16 @@ package main
 
 import (
 	"context"
-	"crypto/sha1"
-	"fmt"
+	"errors"
 
 	"github.com/anacrolix/dht/v2"
 	"github.com/anacrolix/dht/v2/exts/putget"
 	"github.com/anacrolix/dht/v2/krpc"
-	"github.com/anacrolix/log"
-	"github.com/anacrolix/torrent/bencode"
 	"github.com/davecgh/go-spew/spew"
 )
 
 type GetCmd struct {
-	Target *krpc.ID `arg:"positional"`
-	Put    *string
+	Target []krpc.ID `arg:"positional"`
 }
 
 func get(cmd *GetCmd) (err error) {
@@ -24,31 +20,16 @@ func get(cmd *GetCmd) (err error) {
 		return
 	}
 	defer s.Close()
-	var put *interface{}
-	var target krpc.ID
-	if cmd.Put != nil {
-		putBytes := []byte(*cmd.Put)
-		err = bencode.Unmarshal(putBytes, &put)
+	if len(cmd.Target) == 0 {
+		return errors.New("no targets specified")
+	}
+	for _, t := range cmd.Target {
+		var v interface{}
+		v, _, err = putget.Get(context.Background(), t, s, nil)
 		if err != nil {
 			return
 		}
-		h := sha1.Sum(putBytes)
-		if cmd.Target != nil && h != *cmd.Target {
-			err = fmt.Errorf("put value hash %x != target %x", h, cmd.Target)
-			return
-		}
-		target = h
-		if cmd.Target == nil {
-			log.Printf("target is %x", h)
-		}
-	} else {
-		target = *cmd.Target
+		spew.Dump(v)
 	}
-	spew.Dump("put is", put)
-	v, err := putget.Get(context.Background(), target, s, put)
-	if err != nil {
-		return
-	}
-	spew.Dump(v)
 	return nil
 }

@@ -12,10 +12,20 @@ import (
 	"github.com/anacrolix/dht/v2/krpc"
 	"github.com/anacrolix/dht/v2/traversal"
 	"github.com/anacrolix/torrent/bencode"
-	"github.com/davecgh/go-spew/spew"
 )
 
-func Get(ctx context.Context, target krpc.ID, s *dht.Server, put *interface{}) (v interface{}, err error) {
+type PutGetResult struct {
+	GetV           interface{}
+	GetBytes       []byte
+	TraversalStats *traversal.Stats
+	SuccessfulPuts []krpc.NodeAddr
+}
+
+func Get(
+	ctx context.Context, target krpc.ID, s *dht.Server, put *interface{},
+) (
+	v interface{}, stats *traversal.Stats, err error,
+) {
 	vChan := make(chan interface{}, 1)
 	if put != nil {
 		vChan = nil
@@ -29,24 +39,17 @@ func Get(ctx context.Context, target krpc.ID, s *dht.Server, put *interface{}) (
 					Target: target,
 				},
 			})
-			if res.Err != nil {
-				log.Printf("error querying %v: %v", addr, res.Err)
-			}
-			if id := res.Reply.SenderID(); id != nil {
-				log.Printf("response from %v", id)
-			}
-			if e := res.Reply.E; e != nil {
-				log.Printf("received error: %v", e)
+			err := res.ToError()
+			if err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, dht.TransactionTimeout) {
+				log.Printf("error querying %v: %v", addr, err)
 			}
 			if r := res.Reply.R; r != nil {
 				rv := r.V
 				if rv != nil {
-					spew.Dump("got v", rv)
 					b, err := bencode.Marshal(rv)
 					if err != nil {
 						log.Printf("re-marshalling v: %v", err)
 					}
-					log.Printf("remarshalled to %q", string(b))
 					h := sha1.Sum(b)
 					if h == target {
 						select {
@@ -103,5 +106,6 @@ func Get(ctx context.Context, target krpc.ID, s *dht.Server, put *interface{}) (
 		})
 		wg.Wait()
 	}
+	stats = op.Stats()
 	return
 }

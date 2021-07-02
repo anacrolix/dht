@@ -45,7 +45,7 @@ func put(cmd *PutCmd) (err error) {
 		}
 		target := sha1.Sum(putBytes)
 		var stats *traversal.Stats
-		_, stats, err = putget.Get(context.Background(), target, s, put)
+		stats, err = putget.Put(context.Background(), target, s, put)
 		if err != nil {
 			err = fmt.Errorf("in traversal: %w", err)
 			return

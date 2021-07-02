@@ -22,14 +22,11 @@ type PutGetResult struct {
 }
 
 func Get(
-	ctx context.Context, target krpc.ID, s *dht.Server, put *interface{},
+	ctx context.Context, target krpc.ID, s *dht.Server,
 ) (
 	v interface{}, stats *traversal.Stats, err error,
 ) {
 	vChan := make(chan interface{}, 1)
-	if put != nil {
-		vChan = nil
-	}
 	op := traversal.Start(traversal.OperationInput{
 		Alpha:  15,
 		Target: target,
@@ -61,8 +58,47 @@ func Get(
 					}
 				}
 			}
+			return res.TraversalQueryResult(addr)
+		},
+		NodeFilter: s.TraversalNodeFilter,
+	})
+	nodes, err := s.TraversalStartingNodes()
+	if err != nil {
+		return
+	}
+	op.AddNodes(nodes)
+	select {
+	case <-op.Stalled():
+		err = errors.New("value not found")
+	case v = <-vChan:
+	case <-ctx.Done():
+		err = ctx.Err()
+	}
+	op.Stop()
+	stats = op.Stats()
+	return
+}
+
+func Put(
+	ctx context.Context, target krpc.ID, s *dht.Server, put interface{},
+) (
+	stats *traversal.Stats, err error,
+) {
+	op := traversal.Start(traversal.OperationInput{
+		Alpha:  15,
+		Target: target,
+		DoQuery: func(ctx context.Context, addr krpc.NodeAddr) traversal.QueryResult {
+			res := s.Query(ctx, dht.NewAddr(addr.UDP()), "get", dht.QueryInput{
+				MsgArgs: krpc.MsgArgs{
+					Target: target,
+				},
+			})
+			err := res.ToError()
+			if err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, dht.TransactionTimeout) {
+				log.Printf("error querying %v: %v", addr, err)
+			}
 			tqr := res.TraversalQueryResult(addr)
-			if put != nil && tqr.ClosestData == nil {
+			if tqr.ClosestData == nil {
 				tqr.ResponseFrom = nil
 			}
 			return tqr
@@ -79,7 +115,6 @@ func Get(
 		if put == nil {
 			err = errors.New("value not found")
 		}
-	case v = <-vChan:
 	case <-ctx.Done():
 		err = ctx.Err()
 	}
@@ -93,7 +128,7 @@ func Get(
 				res := s.Query(ctx, dht.NewAddr(elem.Addr.UDP()), "put", dht.QueryInput{
 					MsgArgs: krpc.MsgArgs{
 						Token: elem.Data.(string),
-						V:     *put,
+						V:     put,
 					},
 				})
 				err := res.ToError()

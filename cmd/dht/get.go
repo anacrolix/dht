@@ -25,7 +25,7 @@ func get(cmd *GetCmd) (err error) {
 	}
 	for _, t := range cmd.Target {
 		var v interface{}
-		v, _, err = putget.Get(context.Background(), t, s, nil)
+		v, _, err = putget.Get(context.Background(), t, s)
 		if err != nil {
 			return
 		}

@@ -225,15 +225,7 @@ func (op *Operation) startQuery() {
 				op.addClosest(*res.ResponseFrom, res.ClosestData)
 			}()
 		}
-		op.AddNodes(func() (ret []types.AddrMaybeId) {
-			for _, ni := range res.Nodes {
-				id := int160.FromByteArray(ni.ID)
-				ret = append(ret, types.AddrMaybeId{
-					Addr: ni.Addr,
-					Id:   &id,
-				})
-			}
-			return
-		}())
+		op.AddNodes(types.AddrMaybeIdSliceFromNodeInfoSlice(res.Nodes))
+		op.AddNodes(types.AddrMaybeIdSliceFromNodeInfoSlice(res.Nodes6))
 	}()
 }

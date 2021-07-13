@@ -277,7 +277,7 @@ func TestBootstrapRace(t *testing.T) {
 	require.NoError(t, err)
 	defer s.Close()
 	go func() {
-		for i := 0; i < maxTransactionSends-1; i++ {
+		for i := 0; i < defaultMaxQuerySends-1; i++ {
 			remotePc.ReadFrom(nil)
 		}
 		var b [1024]byte
@@ -335,7 +335,7 @@ func (me *bootstrapRacePacketConn) WriteTo(b []byte, addr net.Addr) (int, error)
 	defer me.mu.Unlock()
 	me.writes++
 	log.Printf("wrote %d times", me.writes)
-	if me.writes == maxTransactionSends {
+	if me.writes == defaultMaxQuerySends {
 		var m krpc.Msg
 		bencode.Unmarshal(b[:], &m)
 		m.Y = "r"

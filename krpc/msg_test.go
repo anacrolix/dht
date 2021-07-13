@@ -8,24 +8,55 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/anacrolix/torrent/bencode"
+	qt "github.com/frankban/quicktest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/anacrolix/torrent/bencode"
 )
 
 func testMarshalUnmarshalMsg(t *testing.T, m Msg, expected string) {
+	c := qt.New(t)
 	b, err := bencode.Marshal(m)
-	require.NoError(t, err)
-	assert.Equal(t, expected, string(b))
+	c.Assert(err, qt.IsNil)
+	//assert.Equal(t, expected, string(b))
+	c.Assert(string(b), qt.Equals, expected)
 	var _m Msg
 	err = bencode.Unmarshal([]byte(expected), &_m)
-	assert.NoError(t, err)
-	assert.EqualValues(t, m, _m)
-	assert.EqualValues(t, m.A, _m.A)
-	assert.EqualValues(t, m.R, _m.R)
+	//assert.NoError(t, err)
+	c.Assert(err, qt.IsNil)
+	c.Assert(_m.A, qt.Equals, m.A)
+	//assert.EqualValues(t, m.A, _m.A)
+	c.Assert(_m.R, qt.ContentEquals, m.R)
+	//assert.EqualValues(t, m.R, _m.R)
 }
 
 func TestMarshalUnmarshalMsg(t *testing.T) {
+	//{
+	//	"r":
+	//	{
+	//		"id": <20 byte id of sending node (string)>,
+	//		"interval": <the subset refresh interval in seconds (integer)>,
+	//		"nodes": <nodes close to 'target'>,
+	//		"num": <number of infohashes in storage (integer)>,
+	//		"samples": <subset of stored infohashes, N × 20 bytes (string)>
+	//	},
+	//	"t": <transaction-id (string)>,
+	//	"y": "r"
+	//}
+	// Test BEP 51 features
+	testMarshalUnmarshalMsg(t, Msg{
+		R: &Return{
+			ID: IdFromString("hellohellohellohello"),
+			Bep51Return: Bep51Return{
+				Interval: func() *int64 { var ret int64 = 420; return &ret }(),
+				//Num:      func() *int64 { var ret int64 = 69; return &ret }(),
+				Samples: func() *CompactInfohashes { var ret CompactInfohashes; return &ret }(),
+			},
+		},
+		T: "hello",
+		Y: "r",
+	}, `d1:rd2:id20:hellohellohellohello8:intervali420e7:samples0:e1:t5:hello1:y1:re`)
 	testMarshalUnmarshalMsg(t, Msg{}, "d1:t0:1:y0:e")
 	testMarshalUnmarshalMsg(t, Msg{
 		Y: "q",

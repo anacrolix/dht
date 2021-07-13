@@ -5,28 +5,23 @@ package dht
 import (
 	"context"
 	"fmt"
+	"sync"
 	"sync/atomic"
 
+	"github.com/anacrolix/dht/v2/traversal"
 	"github.com/anacrolix/log"
-	"github.com/anacrolix/stm"
-	"github.com/anacrolix/stm/stmutil"
 
 	"github.com/anacrolix/dht/v2/int160"
+	dhtutil "github.com/anacrolix/dht/v2/k-nearest-nodes"
 	"github.com/anacrolix/dht/v2/krpc"
 )
 
 // Maintains state for an ongoing Announce operation. An Announce is started by calling
 // Server.Announce.
 type Announce struct {
-	traversal traversal
-
 	Peers chan PeersValues
 
 	values chan PeersValues // Responses are pushed to this channel.
-
-	// These only exist to support routines relying on channels for synchronization.
-	done   <-chan struct{}
-	cancel func()
 
 	server   *Server
 	infoHash int160.T // Target
@@ -37,9 +32,7 @@ type Announce struct {
 	announcePortImplied bool
 	scrape              bool
 
-	// List of pendingAnnouncePeer. TODO: Perhaps this should be sorted by distance to the target,
-	// so we can do that sloppy hash stuff ;).
-	pendingAnnouncePeers *stm.Var
+	traversal *traversal.Operation
 }
 
 func (a *Announce) String() string {
@@ -48,7 +41,7 @@ func (a *Announce) String() string {
 
 // Returns the number of distinct remote addresses the announce has queried.
 func (a *Announce) NumContacted() int64 {
-	return atomic.LoadInt64(&a.traversal.stats.NumAddrsTried)
+	return atomic.LoadInt64(&a.traversal.Stats().NumAddrsTried)
 }
 
 type AnnounceOpt *struct{}
@@ -60,34 +53,31 @@ func Scrape() AnnounceOpt { return scrape }
 // Traverses the DHT graph toward nodes that store peers for the infohash, streaming them to the
 // caller, and announcing the local node to each responding node if port is non-zero or impliedPort
 // is true.
-func (s *Server) Announce(infoHash [20]byte, port int, impliedPort bool, opts ...AnnounceOpt) (*Announce, error) {
+func (s *Server) Announce(infoHash [20]byte, port int, impliedPort bool, opts ...AnnounceOpt) (_ *Announce, err error) {
 	infoHashInt160 := int160.FromByteArray(infoHash)
-	traversal, err := s.newTraversal(infoHashInt160)
-	if err != nil {
-		return nil, err
-	}
-	traversal.reason = "dht announce get_peers"
 	a := &Announce{
-		Peers:                make(chan PeersValues),
-		values:               make(chan PeersValues),
-		server:               s,
-		infoHash:             infoHashInt160,
-		announcePort:         port,
-		announcePortImplied:  impliedPort,
-		pendingAnnouncePeers: stm.NewVar(newPendingAnnouncePeers(infoHashInt160)),
-		traversal:            traversal,
+		Peers:               make(chan PeersValues),
+		values:              make(chan PeersValues),
+		server:              s,
+		infoHash:            infoHashInt160,
+		announcePort:        port,
+		announcePortImplied: impliedPort,
 	}
-	a.traversal.query = a.getPeers
-	a.traversal.stopTraversal = a.stopTraversal
 	for _, opt := range opts {
 		if opt == scrape {
 			a.scrape = true
 		}
 	}
-	var ctx context.Context
-	ctx, a.cancel = context.WithCancel(context.Background())
-	a.done = ctx.Done()
-	a.traversal.doneVar, _ = stmutil.ContextDoneVar(ctx)
+	a.traversal = traversal.Start(traversal.OperationInput{
+		Target:     infoHash,
+		DoQuery:    a.getPeers,
+		NodeFilter: s.TraversalNodeFilter,
+	})
+	nodes, err := s.TraversalStartingNodes()
+	if err != nil {
+		return
+	}
+	a.traversal.AddNodes(nodes)
 	// Function ferries from values to Peers until discovery is halted.
 	go func() {
 		defer close(a.Peers)
@@ -96,80 +86,68 @@ func (s *Server) Announce(infoHash [20]byte, port int, impliedPort bool, opts ..
 			case psv := <-a.values:
 				select {
 				case a.Peers <- psv:
-				case <-a.done:
+				case <-a.traversal.Stopped():
 					return
 				}
-			case <-a.done:
+			case <-a.traversal.Stopped():
 				return
 			}
 		}
 	}()
-	go a.run()
+	go func() {
+		<-a.traversal.Stalled()
+		a.traversal.Stop()
+		<-a.traversal.Stopped()
+		a.announceClosest()
+		close(a.values)
+	}()
 	return a, nil
 }
 
-// Store a potential peer announce. I think it's okay to have no peer ID here, as any next contact
-// candidate will be closer than the "farthest" potential announce peer.
-func (a *Announce) maybeAnnouncePeer(to Addr, token *string, peerId *krpc.ID) {
-	if token == nil {
-		return
-	}
-	if !a.server.config.NoSecurity && (peerId == nil || !NodeIdSecure(*peerId, to.IP())) {
-		return
-	}
-	x := pendingAnnouncePeer{
-		token: *token,
-	}
-	x.Addr = to.KRPC()
-	if peerId != nil {
-		id := int160.FromByteArray(*peerId)
-		x.Id = &id
-	}
-	stm.AtomicModify(a.pendingAnnouncePeers, func(v pendingAnnouncePeers) pendingAnnouncePeers {
-		return v.Push(x)
+func (a *Announce) announceClosest() {
+	var wg sync.WaitGroup
+	a.traversal.Closest().Range(func(elem dhtutil.Elem) {
+		wg.Add(1)
+		go func() {
+			log.Printf("announce_peer to %v: %v", elem, a.announcePeer(elem))
+			wg.Done()
+		}()
 	})
+	wg.Wait()
 }
 
-func (a *Announce) announcePeer(peer pendingAnnouncePeer) numWrites {
-	res := a.server.announcePeer(NewAddr(peer.Addr.UDP()), a.infoHash, a.announcePort, peer.token, a.announcePortImplied,
-		QueryRateLimiting{NotFirst: true})
-	return res.writes
+func (a *Announce) announcePeer(peer dhtutil.Elem) error {
+	return a.server.announcePeer(
+		NewAddr(peer.Addr.UDP()), a.infoHash, a.announcePort, peer.Data.(string),
+		a.announcePortImplied, QueryRateLimiting{}).Err
 }
 
-func (a *Announce) beginAnnouncePeer(tx *stm.Tx) interface{} {
-	tx.Assert(a.getPendingAnnouncePeers(tx).Len() != 0)
-	new, x := tx.Get(a.pendingAnnouncePeers).(pendingAnnouncePeers).Pop(tx)
-	tx.Set(a.pendingAnnouncePeers, new)
-
-	return a.traversal.beginQuery(NewAddr(x.Addr.UDP()), "dht announce announce_peer", func() numWrites {
-		a.server.logger().Printf("announce_peer to %v", x)
-		return a.announcePeer(x)
-	})(tx).(func())
-}
-
-func (a *Announce) getPeers(addr Addr) QueryResult {
-	res := a.server.GetPeers(context.TODO(), addr, a.infoHash, a.scrape, QueryRateLimiting{
-		// This is paid for in earlier in a call to Server.beginQuery.
-		NotFirst: true,
-	})
-	m := res.Reply
-	// Register suggested nodes closer to the target info-hash.
-	if r := m.R; r != nil {
-		select {
-		case a.values <- PeersValues{
+func (a *Announce) getPeers(ctx context.Context, addr krpc.NodeAddr) (tqr traversal.QueryResult) {
+	res := a.server.GetPeers(ctx, NewAddr(addr.UDP()), a.infoHash, a.scrape, QueryRateLimiting{})
+	if r := res.Reply.R; r != nil {
+		peersValues := PeersValues{
 			Peers: r.Values,
 			NodeInfo: krpc.NodeInfo{
-				Addr: addr.KRPC(),
+				Addr: addr,
 				ID:   r.ID,
 			},
 			Return: *r,
-		}:
-		case <-a.done:
 		}
-		// TODO: We're not distinguishing here for missing IDs. Those would be zero values?
-		a.maybeAnnouncePeer(addr, r.Token, &r.ID)
+		select {
+		case a.values <- peersValues:
+		case <-a.traversal.Stopped():
+		}
+		if r.Token != nil {
+			tqr.ClosestData = *r.Token
+			tqr.ResponseFrom = &krpc.NodeInfo{
+				ID:   r.ID,
+				Addr: addr,
+			}
+		}
+		tqr.Nodes = r.Nodes
+		tqr.Nodes6 = r.Nodes6
 	}
-	return res
+	return
 }
 
 // Corresponds to the "values" key in a get_peers KRPC response. A list of
@@ -183,50 +161,7 @@ type PeersValues struct {
 
 // Stop the announce.
 func (a *Announce) Close() {
-	a.close()
-}
-
-func (a *Announce) close() {
-	a.cancel()
-}
-
-func (a *Announce) farthestAnnouncePeer(tx *stm.Tx) (pendingAnnouncePeer, bool) {
-	pending := a.getPendingAnnouncePeers(tx)
-	if pending.Len() < pending.k {
-		return pendingAnnouncePeer{}, false
-	} else {
-		return pending.Farthest()
-	}
-}
-
-func (a *Announce) getPendingAnnouncePeers(tx *stm.Tx) pendingAnnouncePeers {
-	return tx.Get(a.pendingAnnouncePeers).(pendingAnnouncePeers)
-}
-
-func (a *Announce) stopTraversal(tx *stm.Tx, next addrMaybeId) bool {
-	farthest, ok := a.farthestAnnouncePeer(tx)
-	return ok && farthest.closerThan(next, a.infoHash)
-}
-
-func (a *Announce) run() {
-	defer a.cancel()
-	a.traversal.run()
-	a.logger().Printf("finishing get peers step")
-	for {
-		txRes := stm.Atomically(stm.Select(
-			wrapRun(a.beginAnnouncePeer),
-			func(tx *stm.Tx) interface{} {
-				if tx.Get(a.traversal.doneVar).(bool) || a.traversal.getPending(tx) == 0 && a.getPendingAnnouncePeers(tx).Len() == 0 {
-					return txResT{done: true}
-				}
-				return tx.Retry()
-			},
-		)).(txResT)
-		if txRes.done {
-			break
-		}
-		go txRes.run()
-	}
+	a.traversal.Stop()
 }
 
 func (a *Announce) logger() log.Logger {

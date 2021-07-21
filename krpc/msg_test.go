@@ -19,16 +19,13 @@ func testMarshalUnmarshalMsg(t *testing.T, m Msg, expected string) {
 	c := qt.New(t)
 	b, err := bencode.Marshal(m)
 	c.Assert(err, qt.IsNil)
-	//assert.Equal(t, expected, string(b))
 	c.Assert(string(b), qt.Equals, expected)
 	var _m Msg
 	err = bencode.Unmarshal([]byte(expected), &_m)
-	//assert.NoError(t, err)
 	c.Assert(err, qt.IsNil)
+	c.Assert(_m, qt.ContentEquals, m)
 	c.Assert(_m.A, qt.Equals, m.A)
-	//assert.EqualValues(t, m.A, _m.A)
 	c.Assert(_m.R, qt.ContentEquals, m.R)
-	//assert.EqualValues(t, m.R, _m.R)
 }
 
 func TestMarshalUnmarshalMsg(t *testing.T) {
@@ -170,4 +167,36 @@ func floorDecimals(f float64, decimals int) float64 {
 func TestEmptyScrapeBloomFilterEstimatedCount(t *testing.T) {
 	var f ScrapeBloomFilter
 	assert.EqualValues(t, 0, math.Floor(f.EstimateCount()))
+}
+
+func marshalAndReturnUnmarshaledMsg(t *testing.T, m Msg, expected string) (ret Msg) {
+	c := qt.New(t)
+	b, err := bencode.Marshal(m)
+	c.Assert(err, qt.IsNil)
+	c.Assert(string(b), qt.Equals, expected)
+	err = bencode.Unmarshal([]byte(expected), &ret)
+	c.Assert(err, qt.IsNil)
+	return
+}
+
+func TestBep51EmptySampleField(t *testing.T) {
+	testMarshalUnmarshalMsg(t,
+		Msg{
+			R: &Return{},
+		},
+		"d1:rd2:id20:\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00e1:t0:1:y0:e",
+	)
+	samples := marshalAndReturnUnmarshaledMsg(t,
+		Msg{
+			R: &Return{
+				Bep51Return: Bep51Return{
+					Samples: &CompactInfohashes{},
+				},
+			},
+		},
+		"d1:rd2:id20:\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x007:samples0:e1:t0:1:y0:e",
+	).R.Samples
+	c := qt.New(t)
+	c.Assert(samples, qt.Not(qt.IsNil))
+	c.Assert(*samples, qt.HasLen, 0)
 }

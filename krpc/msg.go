@@ -48,9 +48,12 @@ const (
 
 // BEP 51 (DHT Infohash Indexing)
 type Bep51Return struct {
-	Interval *int64             `bencode:"interval,omitempty"`
-	Num      *int64             `bencode:"num,omitempty"`
-	Samples  *CompactInfohashes `bencode:"samples,omitempty"`
+	Interval *int64 `bencode:"interval,omitempty"`
+	Num      *int64 `bencode:"num,omitempty"`
+	// Nodes supporting this extension should always include the samples field in the response, even
+	// when it is zero-length. This lets indexing nodes to distinguish nodes supporting this
+	// extension from those that respond to unknown query types which contain a target field [2].
+	Samples *CompactInfohashes `bencode:"samples,omitempty"`
 }
 
 type Return struct {

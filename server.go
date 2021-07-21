@@ -526,7 +526,12 @@ func (s *Server) handleQuery(source Addr, m krpc.Msg) {
 		}
 
 		s.reply(source, m.T, krpc.Return{})
+	//case "sample_infohashes":
+	//// Nodes supporting this extension should always include the samples field in the response,
+	//// even when it is zero-length. This lets indexing nodes to distinguish nodes supporting this
+	//// extension from those that respond to unknown query types which contain a target field [2].
 	default:
+		// TODO: http://libtorrent.org/dht_extensions.html#forward-compatibility
 		s.sendError(source, m.T, krpc.ErrorMethodUnknown)
 	}
 }

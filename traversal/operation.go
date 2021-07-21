@@ -149,7 +149,7 @@ func (op *Operation) haveQuery() bool {
 	if cu.Id == nil {
 		return false
 	}
-	return cu.Id.Distance(op.targetInt160).Cmp(op.closest.Farthest().ID.Int160().Distance(op.targetInt160)) < 0
+	return cu.Id.Distance(op.targetInt160).Cmp(op.closest.Farthest().ID.Int160().Distance(op.targetInt160)) <= 0
 }
 
 func (op *Operation) run() {

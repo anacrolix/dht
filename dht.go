@@ -9,8 +9,6 @@ import (
 	"net"
 	"time"
 
-	"github.com/rs/dnscache"
-
 	peer_store "github.com/anacrolix/dht/v2/peer-store"
 
 	"github.com/anacrolix/log"
@@ -92,22 +90,8 @@ func jitterDuration(average time.Duration, plusMinus time.Duration) time.Duratio
 
 type Peer = krpc.NodeAddr
 
-var dnsResolver = &dnscache.Resolver{}
-
-func dnsResolverRefresher() {
-	ticker := time.NewTicker(5 * time.Minute)
-	defer ticker.Stop()
-	for {
-		<-ticker.C
-		dnsResolver.Refresh(false)
-	}
-}
-
-func init() {
-	go dnsResolverRefresher()
-}
-
 func GlobalBootstrapAddrs(network string) (addrs []Addr, err error) {
+	initDnsResolver()
 	for _, s := range []string{
 		"router.utorrent.com:6881",
 		"router.bittorrent.com:6881",

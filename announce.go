@@ -109,7 +109,10 @@ func (a *Announce) announceClosest() {
 	a.traversal.Closest().Range(func(elem dhtutil.Elem) {
 		wg.Add(1)
 		go func() {
-			log.Printf("announce_peer to %v: %v", elem, a.announcePeer(elem))
+			a.logger().WithLevel(log.Debug).Printf(
+				"announce_peer to %v: %v",
+				elem, a.announcePeer(elem),
+			)
 			wg.Done()
 		}()
 	})

@@ -75,6 +75,7 @@ func (s *Server) Announce(infoHash [20]byte, port int, impliedPort bool, opts ..
 	})
 	nodes, err := s.TraversalStartingNodes()
 	if err != nil {
+		a.traversal.Stop()
 		return
 	}
 	a.traversal.AddNodes(nodes)

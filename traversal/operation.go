@@ -206,7 +206,7 @@ func (op *Operation) startQuery() {
 			op.cond.Broadcast()
 		}()
 		//log.Printf("traversal querying %v", a)
-		atomic.AddInt64(&op.stats.NumAddrsTried, 1)
+		atomic.AddUint32(&op.stats.NumAddrsTried, 1)
 		ctx, cancel := context.WithCancel(context.Background())
 		go func() {
 			select {
@@ -221,7 +221,7 @@ func (op *Operation) startQuery() {
 			func() {
 				op.mu.Lock()
 				defer op.mu.Unlock()
-				atomic.AddInt64(&op.stats.NumResponses, 1)
+				atomic.AddUint32(&op.stats.NumResponses, 1)
 				op.addClosest(*res.ResponseFrom, res.ClosestData)
 			}()
 		}

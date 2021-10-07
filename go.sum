@@ -38,8 +38,8 @@ github.com/alexflint/go-arg v1.3.0/go.mod h1:9iRbDxne7LcR/GSvEr7ma++GLpdIU1zrghf
 github.com/alexflint/go-scalar v1.0.0 h1:NGupf1XV/Xb04wXskDFzS0KWOLH632W/EO4fAFi+A70=
 github.com/alexflint/go-scalar v1.0.0/go.mod h1:GpHzbCOZXEKMEcygYQ5n/aa4Aq84zbxjy3MxYW0gjYw=
 github.com/anacrolix/chansync v0.0.0-20210524073341-a336ebc2de92/go.mod h1:DZsatdsdXxD0WiwcGl0nJVwyjCKMDv+knl1q2iBjA2k=
-github.com/anacrolix/chansync v0.1.0 h1:4cIfJmEV8sYkSEMW2AXnPjX6iQT4plqELJ65pLna6OA=
-github.com/anacrolix/chansync v0.1.0/go.mod h1:DZsatdsdXxD0WiwcGl0nJVwyjCKMDv+knl1q2iBjA2k=
+github.com/anacrolix/chansync v0.3.0-0.0.20211007004133-3f72684c4a93 h1:sQ8igc3anitrtKPEHRK+RBvuNZP0+DRAa6jskKlq4+k=
+github.com/anacrolix/chansync v0.3.0-0.0.20211007004133-3f72684c4a93/go.mod h1:DZsatdsdXxD0WiwcGl0nJVwyjCKMDv+knl1q2iBjA2k=
 github.com/anacrolix/confluence v1.7.1-0.20210221224747-9cb14aa2c53a/go.mod h1:T0JHvSaf9UfoiUdCtCOUuRroHm/tauUJTbLc6/vd5YA=
 github.com/anacrolix/confluence v1.7.1-0.20210221225853-90405640e928/go.mod h1:NoLcfoRet+kYttjLXJRmh4qBVrylJsfIItik5GGj21A=
 github.com/anacrolix/confluence v1.7.1-0.20210311004351-d642adb8546c/go.mod h1:KCZ3eObqKECNeZg0ekAoJVakHMP3gAdR8i0bQ26IkzM=

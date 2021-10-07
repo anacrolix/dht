@@ -4,6 +4,7 @@ import (
 	"context"
 	"sync/atomic"
 
+	"github.com/anacrolix/chansync/events"
 	"github.com/anacrolix/dht/v2/containers"
 	"github.com/anacrolix/sync"
 
@@ -99,11 +100,11 @@ func (op *Operation) Stop() {
 	}
 }
 
-func (op *Operation) Stopped() chansync.Done {
+func (op *Operation) Stopped() events.Done {
 	return op.stopped.Done()
 }
 
-func (op *Operation) Stalled() chansync.Active {
+func (op *Operation) Stalled() events.Active {
 	return op.stalled.Active()
 }
 
@@ -163,7 +164,7 @@ func (op *Operation) run() {
 		for op.outstanding < op.input.Alpha && op.haveQuery() {
 			op.startQuery()
 		}
-		var stalled chansync.Signal
+		var stalled events.Signal
 		if (!op.haveQuery() || op.input.Alpha == 0) && op.outstanding == 0 {
 			stalled = op.stalled.Signal()
 		}

@@ -36,7 +36,12 @@ type MsgArgs struct {
 	Scrape      int    `bencode:"scrape,omitempty"`       // BEP 33
 
 	// BEP 44
-	V interface{} `bencode:"v,omitempty"`
+	V    []byte   `bencode:"v,omitempty"`
+	Seq  int64    `bencode:"seq,omitempty"`
+	Cas  int64    `bencode:"cas,omitempty"`
+	K    [32]byte `bencode:"k,omitempty"`
+	Salt []byte   `bencode:"salt,omitempty"`
+	Sig  [64]byte `bencode:"sig,omitempty"`
 }
 
 type Want string
@@ -54,6 +59,13 @@ type Bep51Return struct {
 	// when it is zero-length. This lets indexing nodes to distinguish nodes supporting this
 	// extension from those that respond to unknown query types which contain a target field [2].
 	Samples *CompactInfohashes `bencode:"samples,omitempty"`
+}
+
+type Bep44Return struct {
+	V   []byte   `bencode:"v,omitempty"`
+	K   [32]byte `bencode:"k,omitempty"`
+	Sig [64]byte `bencode:"sig,omitempty"`
+	Seq int64    `bencode:"seq,omitempty"`
 }
 
 type Return struct {
@@ -74,8 +86,8 @@ type Return struct {
 
 	Bep51Return
 
-	// BEP 44 get
-	V interface{} `bencode:"v,omitempty"`
+	// BEP 44
+	Bep44Return
 }
 
 func (r Return) ForAllNodes(f func(NodeInfo)) {

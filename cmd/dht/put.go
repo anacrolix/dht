@@ -29,16 +29,15 @@ func put(cmd *PutCmd) (err error) {
 	}
 	for _, data := range cmd.Data {
 		putBytes := []byte(data)
-		var put *interface{}
+		var put []byte
 		if cmd.Strings {
-			var s interface{} = string(putBytes)
-			put = &s
-			putBytes, err = bencode.Marshal(*put)
+			put = putBytes
+			putBytes, err = bencode.Marshal(put)
 			if err != nil {
 				return fmt.Errorf("marshalling string arg to bytes: %w", err)
 			}
 		} else {
-			err = bencode.Unmarshal(putBytes, &put)
+			err = bencode.Unmarshal(putBytes, put)
 			if err != nil {
 				return
 			}

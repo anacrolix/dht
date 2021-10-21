@@ -591,9 +591,15 @@ func (s *Server) handleQuery(source Addr, m krpc.Msg) {
 			break
 		}
 
+		r.Seq = item.Seq
+
+		if item.Seq < args.Seq {
+			s.reply(source, m.T, r)
+			break
+		}
+
 		r.V = item.V
 		r.K = item.K
-		r.Seq = item.Seq
 		r.Sig = item.Sig
 
 		s.reply(source, m.T, r)
@@ -989,6 +995,7 @@ func (s *Server) Ping(node *net.UDPAddr) QueryResult {
 	return res
 }
 
+// Put adds a new item to node. You need to call Get first for a write token.
 func (s *Server) Put(ctx context.Context, node Addr, i *bep44.Item, token string, rl QueryRateLimiting) QueryResult {
 	if err := s.store.Put(i); err != nil {
 		return QueryResult{
@@ -1113,11 +1120,15 @@ func (s *Server) GetPeers(ctx context.Context, addr Addr, infoHash int160.T, scr
 	return
 }
 
-func (s *Server) Get(ctx context.Context, addr Addr, target bep44.Target, rl QueryRateLimiting) QueryResult {
+// Get gets item information from a specific target ID. If seq is set to a specific value,
+// only items with seq bigger than the one provided will return a V, K and Sig, if any.
+// Get must be used to get a Put write token, when you want to write an item instead of read it.
+func (s *Server) Get(ctx context.Context, addr Addr, target bep44.Target, seq int64, rl QueryRateLimiting) QueryResult {
 	return s.Query(ctx, addr, "get", QueryInput{
 		MsgArgs: krpc.MsgArgs{
 			ID:     s.ID(),
 			Target: target,
+			Seq:    seq,
 			Want:   []krpc.Want{krpc.WantNodes, krpc.WantNodes6},
 		},
 		RateLimiting: rl,

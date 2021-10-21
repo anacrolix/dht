@@ -24,7 +24,7 @@ func TestPutGet(t *testing.T) {
 	require.NoError(err)
 
 	// send get request to s2, we need a write token to put data
-	qr := s1.Get(context.TODO(), s2Addr, immuItem.Target(), QueryRateLimiting{})
+	qr := s1.Get(context.TODO(), s2Addr, immuItem.Target(), immuItem.Seq, QueryRateLimiting{})
 	require.NoError(qr.ToError())
 	require.NotNil(qr.Reply.R)
 	require.NotNil(qr.Reply.R.Token)
@@ -33,7 +33,7 @@ func TestPutGet(t *testing.T) {
 	qr = s1.Put(context.TODO(), s2Addr, immuItem, *qr.Reply.R.Token, QueryRateLimiting{})
 	require.NoError(qr.ToError())
 
-	qr = s1.Get(context.TODO(), s2Addr, immuItem.Target(), QueryRateLimiting{})
+	qr = s1.Get(context.TODO(), s2Addr, immuItem.Target(), immuItem.Seq, QueryRateLimiting{})
 	require.NoError(qr.ToError())
 	require.Equal("Hello World! immu", qr.Reply.R.V)
 
@@ -44,7 +44,7 @@ func TestPutGet(t *testing.T) {
 	require.NoError(err)
 
 	// send get request to s2, we need a write token to put data
-	qr = s1.Get(context.TODO(), s2Addr, mutItem.Target(), QueryRateLimiting{})
+	qr = s1.Get(context.TODO(), s2Addr, mutItem.Target(), mutItem.Seq, QueryRateLimiting{})
 	require.NoError(qr.ToError())
 	require.NotNil(qr.Reply.R)
 
@@ -55,7 +55,7 @@ func TestPutGet(t *testing.T) {
 	qr = s1.Put(context.TODO(), s2Addr, mutItem, *mutToken, QueryRateLimiting{})
 	require.NoError(qr.ToError())
 
-	qr = s1.Get(context.TODO(), s2Addr, mutItem.Target(), QueryRateLimiting{})
+	qr = s1.Get(context.TODO(), s2Addr, mutItem.Target(), mutItem.Seq, QueryRateLimiting{})
 	require.NoError(qr.ToError())
 	require.Equal("Hello World!", qr.Reply.R.V)
 
@@ -76,6 +76,15 @@ func TestPutGet(t *testing.T) {
 	mi, err = s2.store.Get(mutItem.Target())
 	require.NoError(err)
 	require.Equal("Bye World!", mi.V)
+
+	qr = s1.Get(context.TODO(), s2Addr, mutItem.Target(), mutItem.Seq, QueryRateLimiting{})
+	require.NoError(qr.ToError())
+	require.Equal("Bye World!", qr.Reply.R.V)
+
+	qr = s1.Get(context.TODO(), s2Addr, mutItem.Target(), 3, QueryRateLimiting{})
+	require.NoError(qr.ToError())
+	require.Nil(qr.Reply.R.V)
+	require.Equal(int64(2), qr.Reply.R.Seq)
 }
 
 func newServerFromPort(port int) *Server {

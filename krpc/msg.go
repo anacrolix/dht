@@ -36,12 +36,12 @@ type MsgArgs struct {
 	Scrape      int    `bencode:"scrape,omitempty"`       // BEP 33
 
 	// BEP 44
-	V    []byte   `bencode:"v,omitempty"`
-	Seq  int64    `bencode:"seq,omitempty"`
-	Cas  int64    `bencode:"cas,omitempty"`
-	K    [32]byte `bencode:"k,omitempty"`
-	Salt []byte   `bencode:"salt,omitempty"`
-	Sig  [64]byte `bencode:"sig,omitempty"`
+	V    interface{} `bencode:"v,omitempty"`
+	Seq  int64       `bencode:"seq,omitempty"`
+	Cas  int64       `bencode:"cas,omitempty"`
+	K    [32]byte    `bencode:"k,omitempty"`
+	Salt []byte      `bencode:"salt,omitempty"`
+	Sig  [64]byte    `bencode:"sig,omitempty"`
 }
 
 type Want string
@@ -62,10 +62,10 @@ type Bep51Return struct {
 }
 
 type Bep44Return struct {
-	V   []byte   `bencode:"v,omitempty"`
-	K   [32]byte `bencode:"k,omitempty"`
-	Sig [64]byte `bencode:"sig,omitempty"`
-	Seq int64    `bencode:"seq,omitempty"`
+	V   interface{} `bencode:"v,omitempty"`
+	K   [32]byte    `bencode:"k,omitempty"`
+	Sig [64]byte    `bencode:"sig,omitempty"`
+	Seq int64       `bencode:"seq,omitempty"`
 }
 
 type Return struct {

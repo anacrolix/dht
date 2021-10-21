@@ -81,7 +81,7 @@ func Get(
 }
 
 func Put(
-	ctx context.Context, target krpc.ID, s *dht.Server, put []byte,
+	ctx context.Context, target krpc.ID, s *dht.Server, put interface{},
 ) (
 	stats *traversal.Stats, err error,
 ) {

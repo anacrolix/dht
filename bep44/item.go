@@ -1,7 +1,6 @@
 package bep44
 
 import (
-	"bytes"
 	"crypto/ed25519"
 	"crypto/sha1"
 	"fmt"
@@ -18,8 +17,8 @@ type Item struct {
 	// time when this object was added to storage
 	created time.Time
 
-	// Value to be stored bencoded
-	V []byte
+	// Value to be stored
+	V interface{}
 
 	// 32 byte ed25519 public key
 	K    [32]byte
@@ -42,7 +41,7 @@ type Item struct {
 //
 // The optional seq field specifies that an item's value should only be sent if its
 // sequence number is greater than the given value.
-func NewItem(value, salt []byte, seq, cas int64, k ed25519.PrivateKey) (*Item, error) {
+func NewItem(value interface{}, salt []byte, seq, cas int64, k ed25519.PrivateKey) (*Item, error) {
 	v, err := bencode.Marshal(value)
 	if err != nil {
 		return nil, err
@@ -76,7 +75,7 @@ func (i *Item) Target() Target {
 	return sha1.Sum(bencode.MustMarshal(i.V))
 }
 
-func (i *Item) Modify(value []byte, k ed25519.PrivateKey) bool {
+func (i *Item) Modify(value interface{}, k ed25519.PrivateKey) bool {
 	if !i.IsMutable() {
 		return false
 	}
@@ -117,7 +116,7 @@ func Check(i *Item) error {
 		return err
 	}
 
-	if len(i.V) > 1000 {
+	if len(bv) > 1000 {
 		return ErrValueFieldTooBig
 	}
 
@@ -140,7 +139,7 @@ func Check(i *Item) error {
 func CheckIncoming(stored, incoming *Item) error {
 	// If the sequence number is equal, and the value is also the same,
 	// the node SHOULD reset its timeout counter.
-	if stored.Seq == incoming.Seq && bytes.Equal(stored.V, incoming.V) {
+	if stored.Seq == incoming.Seq && stored.V == incoming.V {
 		return nil
 	}
 

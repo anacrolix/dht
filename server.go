@@ -24,10 +24,10 @@ import (
 
 	"github.com/anacrolix/torrent/bencode"
 
+	"github.com/anacrolix/dht/v2/bep44"
 	"github.com/anacrolix/dht/v2/int160"
 	"github.com/anacrolix/dht/v2/krpc"
 	peer_store "github.com/anacrolix/dht/v2/peer-store"
-	"github.com/anacrolix/dht/v2/store"
 	"github.com/anacrolix/dht/v2/traversal"
 	"github.com/anacrolix/dht/v2/types"
 )
@@ -58,7 +58,7 @@ type Server struct {
 	lastBootstrap    time.Time
 	bootstrappingNow bool
 
-	store *store.Wrapper
+	store *bep44.Wrapper
 }
 
 func (s *Server) numGoodNodes() (num int) {
@@ -159,7 +159,7 @@ func NewDefaultServerConfig() *ServerConfig {
 		NoSecurity:    true,
 		StartingNodes: func() ([]Addr, error) { return GlobalBootstrapAddrs("udp") },
 		DefaultWant:   []krpc.Want{krpc.WantNodes, krpc.WantNodes6},
-		Store:         store.NewMemory(),
+		Store:         bep44.NewMemory(),
 		Exp:           2 * time.Hour,
 	}
 }
@@ -209,7 +209,7 @@ func NewServer(c *ServerConfig) (s *Server, err error) {
 		},
 		sendLimit: defaultSendLimiter,
 
-		store: store.NewWrapper(c.Store, c.Exp),
+		store: bep44.NewWrapper(c.Store, c.Exp),
 	}
 	rand.Read(s.tokenServer.secret)
 	s.socket = c.Conn
@@ -534,7 +534,13 @@ func (s *Server) handleQuery(source Addr, m krpc.Msg) {
 
 		s.reply(source, m.T, krpc.Return{})
 	case "put":
-		i := &store.Item{
+		if !s.validToken(args.Token, source) {
+			expvars.Add("received put with invalid token", 1)
+			return
+		}
+		expvars.Add("received put with valid token", 1)
+
+		i := &bep44.Item{
 			V:    args.V,
 			K:    args.K,
 			Salt: args.Salt,
@@ -557,17 +563,6 @@ func (s *Server) handleQuery(source Addr, m krpc.Msg) {
 			ID: s.ID(),
 		})
 	case "get":
-		item, err := s.store.Get(store.Target(args.Target))
-		if err != nil {
-			kerr, ok := err.(krpc.Error)
-			if !ok {
-				s.sendError(source, m.T, krpc.ErrorMethodUnknown)
-			}
-
-			s.sendError(source, m.T, kerr)
-			break
-		}
-
 		var r krpc.Return
 		if err := s.setReturnNodes(&r, m, source); err != nil {
 			s.sendError(source, m.T, *err)
@@ -576,6 +571,25 @@ func (s *Server) handleQuery(source Addr, m krpc.Msg) {
 
 		t := s.createToken(source)
 		r.Token = &t
+
+		item, err := s.store.Get(bep44.Target(args.Target))
+		if err == bep44.ErrItemNotFound {
+			s.reply(source, m.T, r)
+			break
+		}
+
+		if kerr, ok := err.(krpc.Error); ok {
+			s.sendError(source, m.T, kerr)
+			break
+		}
+
+		if err != nil {
+			s.sendError(source, m.T, krpc.Error{
+				Code: krpc.ErrorCodeGenericError,
+				Msg:  err.Error(),
+			})
+			break
+		}
 
 		r.V = item.V
 		r.K = item.K
@@ -975,14 +989,13 @@ func (s *Server) Ping(node *net.UDPAddr) QueryResult {
 	return res
 }
 
-func (s *Server) Put(ctx context.Context, node Addr, i *store.Item, rl QueryRateLimiting) QueryResult {
+func (s *Server) Put(ctx context.Context, node Addr, i *bep44.Item, token string, rl QueryRateLimiting) QueryResult {
 	if err := s.store.Put(i); err != nil {
 		return QueryResult{
 			Err: err,
 		}
 	}
 
-	token := s.createToken(node)
 	return s.Query(ctx, node, "put", QueryInput{
 		MsgArgs: krpc.MsgArgs{
 			Cas:   i.Cas,
@@ -1100,7 +1113,7 @@ func (s *Server) GetPeers(ctx context.Context, addr Addr, infoHash int160.T, scr
 	return
 }
 
-func (s *Server) Get(ctx context.Context, addr Addr, target store.Target, rl QueryRateLimiting) QueryResult {
+func (s *Server) Get(ctx context.Context, addr Addr, target bep44.Target, rl QueryRateLimiting) QueryResult {
 	return s.Query(ctx, addr, "get", QueryInput{
 		MsgArgs: krpc.MsgArgs{
 			ID:     s.ID(),

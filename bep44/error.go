@@ -1,4 +1,4 @@
-package store
+package bep44
 
 import "github.com/anacrolix/dht/v2/krpc"
 

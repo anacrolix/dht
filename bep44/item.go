@@ -1,4 +1,4 @@
-package store
+package bep44
 
 import (
 	"bytes"

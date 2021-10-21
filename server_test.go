@@ -7,7 +7,7 @@ import (
 	"net"
 	"testing"
 
-	"github.com/anacrolix/dht/v2/store"
+	"github.com/anacrolix/dht/v2/bep44"
 	"github.com/anacrolix/log"
 	"github.com/stretchr/testify/require"
 )
@@ -20,11 +20,17 @@ func TestPutGet(t *testing.T) {
 
 	s2Addr := NewAddr(s2.Addr())
 
-	immuItem, err := store.NewItem([]byte("Hello World! immu"), nil, 1, 1, nil)
+	immuItem, err := bep44.NewItem([]byte("Hello World! immu"), nil, 1, 1, nil)
 	require.NoError(err)
 
+	// send get request to s2, we need a write token to put data
+	qr := s1.Get(context.TODO(), s2Addr, immuItem.Target(), QueryRateLimiting{})
+	require.NoError(qr.ToError())
+	require.NotNil(qr.Reply.R)
+	require.NotNil(qr.Reply.R.Token)
+
 	// send put request to s2
-	qr := s1.Put(context.TODO(), s2Addr, immuItem, QueryRateLimiting{})
+	qr = s1.Put(context.TODO(), s2Addr, immuItem, *qr.Reply.R.Token, QueryRateLimiting{})
 	require.NoError(qr.ToError())
 
 	qr = s1.Get(context.TODO(), s2Addr, immuItem.Target(), QueryRateLimiting{})
@@ -34,11 +40,19 @@ func TestPutGet(t *testing.T) {
 	_, priv, err := ed25519.GenerateKey(nil)
 	require.NoError(err)
 
-	mutItem, err := store.NewItem([]byte("Hello World!"), []byte("s1"), 1, 1, priv)
+	mutItem, err := bep44.NewItem([]byte("Hello World!"), []byte("s1"), 1, 1, priv)
 	require.NoError(err)
 
+	// send get request to s2, we need a write token to put data
+	qr = s1.Get(context.TODO(), s2Addr, mutItem.Target(), QueryRateLimiting{})
+	require.NoError(qr.ToError())
+	require.NotNil(qr.Reply.R)
+
+	mutToken := qr.Reply.R.Token
+	require.NotNil(mutToken)
+
 	// send put request to s2
-	qr = s1.Put(context.TODO(), s2Addr, mutItem, QueryRateLimiting{})
+	qr = s1.Put(context.TODO(), s2Addr, mutItem, *mutToken, QueryRateLimiting{})
 	require.NoError(qr.ToError())
 
 	qr = s1.Get(context.TODO(), s2Addr, mutItem.Target(), QueryRateLimiting{})
@@ -56,7 +70,7 @@ func TestPutGet(t *testing.T) {
 	//change mutable item
 	ok := mutItem.Modify([]byte("Bye World!"), priv)
 	require.True(ok)
-	qr = s1.Put(context.TODO(), s2Addr, mutItem, QueryRateLimiting{})
+	qr = s1.Put(context.TODO(), s2Addr, mutItem, *mutToken, QueryRateLimiting{})
 	require.NoError(qr.ToError())
 
 	mi, err = s2.store.Get(mutItem.Target())

@@ -9,14 +9,13 @@ import (
 	"net"
 	"time"
 
+	"github.com/anacrolix/dht/v2/bep44"
+	"github.com/anacrolix/dht/v2/krpc"
 	peer_store "github.com/anacrolix/dht/v2/peer-store"
-
 	"github.com/anacrolix/log"
 	"github.com/anacrolix/missinggo/v2"
 	"github.com/anacrolix/torrent/iplist"
 	"github.com/anacrolix/torrent/metainfo"
-
-	"github.com/anacrolix/dht/v2/krpc"
 )
 
 func defaultQueryResendDelay() time.Duration {
@@ -59,6 +58,11 @@ type ServerConfig struct {
 	QueryResendDelay func() time.Duration
 	// TODO: Expose Peers, to return NodeInfo for received get_peers queries.
 	PeerStore peer_store.Interface
+	// BEP-44: Storing arbitrary data in the DHT. If not store provided, a default in-memory
+	// implementation will be used.
+	Store bep44.Store
+	//BEP-44: expiration time with non-announced items. Two hours by default
+	Exp time.Duration
 
 	// If no Logger is provided, log.Default is used and log.Debug messages are filtered out. Note
 	// that all messages without a log.Level, have log.Debug added to them before being passed to

@@ -3,7 +3,6 @@ package dht
 import (
 	"context"
 	"crypto/ed25519"
-	"fmt"
 	"net"
 	"testing"
 
@@ -15,8 +14,8 @@ import (
 func TestPutGet(t *testing.T) {
 	require := require.New(t)
 
-	s1 := newServerFromPort(4580)
-	s2 := newServerFromPort(4581)
+	s1 := newServer()
+	s2 := newServer()
 
 	s2Addr := NewAddr(s2.Addr())
 
@@ -87,9 +86,9 @@ func TestPutGet(t *testing.T) {
 	require.Equal(int64(2), qr.Reply.R.Seq)
 }
 
-func newServerFromPort(port int) *Server {
+func newServer() *Server {
 	cfg := NewDefaultServerConfig()
-	conn1, err := net.ListenPacket("udp", fmt.Sprintf("localhost:%d", port))
+	conn1, err := net.ListenPacket("udp", "localhost:0")
 	if err != nil {
 		panic(err)
 	}

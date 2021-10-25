@@ -14,8 +14,8 @@ import (
 func TestPutGet(t *testing.T) {
 	require := require.New(t)
 
-	s1 := newServer()
-	s2 := newServer()
+	s1 := newServer(t)
+	s2 := newServer(t)
 
 	s2Addr := NewAddr(s2.Addr())
 
@@ -86,7 +86,7 @@ func TestPutGet(t *testing.T) {
 	require.Equal(int64(2), qr.Reply.R.Seq)
 }
 
-func newServer() *Server {
+func newServer(t *testing.T) *Server {
 	cfg := NewDefaultServerConfig()
 	conn1, err := net.ListenPacket("udp", "localhost:0")
 	if err != nil {
@@ -99,6 +99,10 @@ func newServer() *Server {
 	if err != nil {
 		panic(err)
 	}
+
+	t.Cleanup(func() {
+		s.Close()
+	})
 
 	return s
 }

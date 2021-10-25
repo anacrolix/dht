@@ -1,6 +1,5 @@
 # dht
 
-[![CircleCI](https://circleci.com/gh/anacrolix/dht.svg?style=shield)](https://circleci.com/gh/anacrolix/dht)
 [![Go Reference](https://pkg.go.dev/badge/github.com/anacrolix/dht/v2.svg)](https://pkg.go.dev/github.com/anacrolix/dht/v2)
 
 ## Installation

@@ -2,16 +2,15 @@ package getput
 
 import (
 	"context"
-	"crypto/sha1"
 	"errors"
 	"log"
 	"sync"
 
 	"github.com/anacrolix/dht/v2"
+	"github.com/anacrolix/dht/v2/bep44"
 	k_nearest_nodes "github.com/anacrolix/dht/v2/k-nearest-nodes"
 	"github.com/anacrolix/dht/v2/krpc"
 	"github.com/anacrolix/dht/v2/traversal"
-	"github.com/anacrolix/torrent/bencode"
 )
 
 type PutGetResult struct {
@@ -22,7 +21,7 @@ type PutGetResult struct {
 }
 
 func Get(
-	ctx context.Context, target krpc.ID, s *dht.Server,
+	ctx context.Context, target bep44.Target, s *dht.Server,
 ) (
 	v interface{}, stats *traversal.Stats, err error,
 ) {
@@ -31,11 +30,7 @@ func Get(
 		Alpha:  15,
 		Target: target,
 		DoQuery: func(ctx context.Context, addr krpc.NodeAddr) traversal.QueryResult {
-			res := s.Query(ctx, dht.NewAddr(addr.UDP()), "get", dht.QueryInput{
-				MsgArgs: krpc.MsgArgs{
-					Target: target,
-				},
-			})
+			res := s.Get(ctx, dht.NewAddr(addr.UDP()), target, 0, dht.QueryRateLimiting{})
 			err := res.ToError()
 			if err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, dht.TransactionTimeout) {
 				//log.Printf("error querying %v: %v", addr, err)
@@ -43,11 +38,11 @@ func Get(
 			if r := res.Reply.R; r != nil {
 				rv := r.V
 				if rv != nil {
-					b, err := bencode.Marshal(rv)
+					i, err := bep44.NewItem(rv, nil, 0, 0, nil)
 					if err != nil {
 						log.Printf("re-marshalling v: %v", err)
 					}
-					h := sha1.Sum(b)
+					h := i.Target()
 					if h == target {
 						log.Printf("got %v from %v", target, addr)
 						select {
@@ -89,11 +84,7 @@ func Put(
 		Alpha:  15,
 		Target: target,
 		DoQuery: func(ctx context.Context, addr krpc.NodeAddr) traversal.QueryResult {
-			res := s.Query(ctx, dht.NewAddr(addr.UDP()), "get", dht.QueryInput{
-				MsgArgs: krpc.MsgArgs{
-					Target: target,
-				},
-			})
+			res := s.Get(ctx, dht.NewAddr(addr.UDP()), target, 0, dht.QueryRateLimiting{})
 			err := res.ToError()
 			if err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, dht.TransactionTimeout) {
 				//log.Printf("error querying %v: %v", addr, err)
@@ -121,17 +112,16 @@ func Put(
 	}
 	op.Stop()
 	if put != nil {
+		item, err := bep44.NewItem(put, nil, 0, 0, nil)
+		if err != nil {
+			return nil, err
+		}
 		var wg sync.WaitGroup
 		op.Closest().Range(func(elem k_nearest_nodes.Elem) {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				res := s.Query(ctx, dht.NewAddr(elem.Addr.UDP()), "put", dht.QueryInput{
-					MsgArgs: krpc.MsgArgs{
-						Token: elem.Data.(string),
-						V:     put,
-					},
-				})
+				res := s.Put(ctx, dht.NewAddr(elem.Addr.UDP()), item, elem.Data.(string), dht.QueryRateLimiting{})
 				err := res.ToError()
 				if err != nil {
 					log.Printf("error putting to %v: %v", elem.Addr, err)

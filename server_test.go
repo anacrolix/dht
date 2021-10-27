@@ -29,7 +29,7 @@ func TestPutGet(t *testing.T) {
 	require.NotNil(qr.Reply.R.Token)
 
 	// send put request to s2
-	qr = s1.Put(context.TODO(), s2Addr, immuItem, *qr.Reply.R.Token, QueryRateLimiting{})
+	qr = s1.Put(context.TODO(), s2Addr, immuItem.ToPut(), *qr.Reply.R.Token, QueryRateLimiting{})
 	require.NoError(qr.ToError())
 
 	qr = s1.Get(context.TODO(), s2Addr, immuItem.Target(), immuItem.Seq, QueryRateLimiting{})
@@ -51,7 +51,7 @@ func TestPutGet(t *testing.T) {
 	require.NotNil(mutToken)
 
 	// send put request to s2
-	qr = s1.Put(context.TODO(), s2Addr, mutItem, *mutToken, QueryRateLimiting{})
+	qr = s1.Put(context.TODO(), s2Addr, mutItem.ToPut(), *mutToken, QueryRateLimiting{})
 	require.NoError(qr.ToError())
 
 	qr = s1.Get(context.TODO(), s2Addr, mutItem.Target(), mutItem.Seq, QueryRateLimiting{})
@@ -69,7 +69,7 @@ func TestPutGet(t *testing.T) {
 	//change mutable item
 	ok := mutItem.Modify("Bye World!", priv)
 	require.True(ok)
-	qr = s1.Put(context.TODO(), s2Addr, mutItem, *mutToken, QueryRateLimiting{})
+	qr = s1.Put(context.TODO(), s2Addr, mutItem.ToPut(), *mutToken, QueryRateLimiting{})
 	require.NoError(qr.ToError())
 
 	mi, err = s2.store.Get(mutItem.Target())

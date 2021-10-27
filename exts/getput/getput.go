@@ -112,10 +112,7 @@ func Put(
 	}
 	op.Stop()
 	if put != nil {
-		item, err := bep44.NewItem(put, nil, 0, 0, nil)
-		if err != nil {
-			return nil, err
-		}
+		item := bep44.Put{V: put}
 		var wg sync.WaitGroup
 		op.Closest().Range(func(elem k_nearest_nodes.Elem) {
 			wg.Add(1)

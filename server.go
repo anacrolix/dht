@@ -996,8 +996,8 @@ func (s *Server) Ping(node *net.UDPAddr) QueryResult {
 }
 
 // Put adds a new item to node. You need to call Get first for a write token.
-func (s *Server) Put(ctx context.Context, node Addr, i *bep44.Item, token string, rl QueryRateLimiting) QueryResult {
-	if err := s.store.Put(i); err != nil {
+func (s *Server) Put(ctx context.Context, node Addr, i bep44.Put, token string, rl QueryRateLimiting) QueryResult {
+	if err := s.store.Put(i.ToItem()); err != nil {
 		return QueryResult{
 			Err: err,
 		}

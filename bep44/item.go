@@ -28,6 +28,17 @@ type Item struct {
 	Seq  int64
 }
 
+func (i *Item) ToPut() Put {
+	return Put{
+		V:    i.V,
+		K:    i.K,
+		Salt: i.Salt,
+		Sig:  i.Sig,
+		Cas:  i.Cas,
+		Seq:  i.Seq,
+	}
+}
+
 // NewItem creates a new arbitrary DHT element. The distinction between storing mutable
 // and immutable items is the inclusion of a public key, a sequence number, signature
 // and an optional salt.

@@ -50,7 +50,7 @@ func put(cmd *PutCmd) (err error) {
 			err = fmt.Errorf("in traversal: %w", err)
 			return
 		}
-		log.Print(stats)
+		log.Printf("%+v", stats)
 		fmt.Printf("%x\n", target)
 	}
 	return nil

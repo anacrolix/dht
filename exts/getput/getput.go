@@ -44,7 +44,7 @@ func Get(
 					}
 					h := i.Target()
 					if h == target {
-						log.Printf("got %v from %v", target, addr)
+						log.Printf("got %x from %v", target, addr)
 						select {
 						case vChan <- rv:
 						default:

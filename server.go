@@ -1128,12 +1128,12 @@ func (s *Server) GetPeers(ctx context.Context, addr Addr, infoHash int160.T, scr
 // Get gets item information from a specific target ID. If seq is set to a specific value,
 // only items with seq bigger than the one provided will return a V, K and Sig, if any.
 // Get must be used to get a Put write token, when you want to write an item instead of read it.
-func (s *Server) Get(ctx context.Context, addr Addr, target bep44.Target, seq int64, rl QueryRateLimiting) QueryResult {
+func (s *Server) Get(ctx context.Context, addr Addr, target bep44.Target, seq *int64, rl QueryRateLimiting) QueryResult {
 	return s.Query(ctx, addr, "get", QueryInput{
 		MsgArgs: krpc.MsgArgs{
 			ID:     s.ID(),
 			Target: target,
-			Seq:    &seq,
+			Seq:    seq,
 			Want:   []krpc.Want{krpc.WantNodes, krpc.WantNodes6},
 		},
 		RateLimiting: rl,

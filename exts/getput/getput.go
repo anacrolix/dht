@@ -31,7 +31,7 @@ type GetResult struct {
 }
 
 func Get(
-	ctx context.Context, target bep44.Target, s *dht.Server, seq int64, salt []byte,
+	ctx context.Context, target bep44.Target, s *dht.Server, seq *int64, salt []byte,
 ) (
 	ret GetResult, stats *traversal.Stats, err error,
 ) {
@@ -117,7 +117,7 @@ func Put(
 		Alpha:  15,
 		Target: target,
 		DoQuery: func(ctx context.Context, addr krpc.NodeAddr) traversal.QueryResult {
-			res := s.Get(ctx, dht.NewAddr(addr.UDP()), target, 0, dht.QueryRateLimiting{})
+			res := s.Get(ctx, dht.NewAddr(addr.UDP()), target, nil, dht.QueryRateLimiting{})
 			err := res.ToError()
 			if err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, dht.TransactionTimeout) {
 				//log.Printf("error querying %v: %v", addr, err)

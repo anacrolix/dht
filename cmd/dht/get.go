@@ -13,7 +13,7 @@ import (
 
 type GetCmd struct {
 	Target []krpc.ID `arg:"positional"`
-	Seq    int64
+	Seq    *int64
 	Salt   string
 }
 

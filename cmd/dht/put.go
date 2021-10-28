@@ -34,7 +34,7 @@ func put(cmd *PutCmd) (err error) {
 	if len(cmd.Data) == 0 {
 		return errors.New("no payloads given")
 	}
-	mutable := cmd.Mutable || len(cmd.Key.Bytes) != 0 || cmd.Cas != 0 || cmd.Seq != 0 || len(cmd.Salt) != 0
+	mutable := cmd.Mutable || len(cmd.Key.Bytes) != 0 || cmd.Cas != 0 || len(cmd.Salt) != 0
 	for _, data := range cmd.Data {
 		putBytes := []byte(data)
 		var v interface{}

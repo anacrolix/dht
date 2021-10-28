@@ -47,8 +47,9 @@ func TestVectorMutableWithSalt(t *testing.T) {
 	c := qt.New(t)
 	salt := []byte("foobar")
 	bv := []byte("12:Hello World!")
+	var seq int64 = 1
 	c.Check(
-		bufferToSign(salt, bv, 1),
+		bufferToSign(salt, bv, seq),
 		qt.DeepEquals,
 		[]byte("4:salt6:foobar3:seqi1e1:v12:Hello World!"))
 	edwardsPrivateKey := mustDecodeHex(
@@ -59,9 +60,53 @@ func TestVectorMutableWithSalt(t *testing.T) {
 			"df9a8a7104b1258f30bed3787e6cb896fca78c58f8e03b5f18f14951a87d9a08")
 	pubKey := mustDecodeHex("77ff84905a91936367c01360803104f92432fcd904a43511876df5cdf3e7e548")
 	c.Check(
-		EdwardsSignSha512(*(*[64]byte)(edwardsPrivateKey), pubKey, bufferToSign(salt, bv, 1)),
+		EdwardsSignSha512(*(*[64]byte)(edwardsPrivateKey), pubKey, bufferToSign(salt, bv, seq)),
 		qt.DeepEquals,
 		sig)
+	expectedTargetId := mustDecodeHex("411eba73b6f087ca51a3795d9c8c938d365e32c1")
+	put := Put{
+		V:    "Hello World!",
+		K:    (*[32]byte)(pubKey),
+		Salt: salt,
+		Sig:  [64]byte{},
+		Cas:  0,
+		Seq:  0,
+	}
+	target := put.Target()
+	c.Check(target[:], qt.DeepEquals, expectedTargetId)
+}
+
+func TestVectorMutable(t *testing.T) {
+	c := qt.New(t)
+	var salt []byte
+	bv := []byte("12:Hello World!")
+	var seq int64 = 1
+	c.Check(
+		bufferToSign(salt, bv, seq),
+		qt.DeepEquals,
+		[]byte("3:seqi1e1:v12:Hello World!"))
+	edwardsPrivateKey := mustDecodeHex(
+		"e06d3183d14159228433ed599221b80bd0a5ce8352e4bdf0262f76786ef1c74d" +
+			"b7e7a9fea2c0eb269d61e3b38e450a22e754941ac78479d6c54e1faf6037881d")
+	sig := mustDecodeHex(
+		"305ac8aeb6c9c151fa120f120ea2cfb923564e11552d06a5d856091e5e853cff" +
+			"1260d3f39e4999684aa92eb73ffd136e6f4f3ecbfda0ce53a1608ecd7ae21f01")
+	pubKey := mustDecodeHex("77ff84905a91936367c01360803104f92432fcd904a43511876df5cdf3e7e548")
+	c.Check(
+		EdwardsSignSha512(*(*[64]byte)(edwardsPrivateKey), pubKey, bufferToSign(salt, bv, seq)),
+		qt.DeepEquals,
+		sig)
+	expectedTargetId := mustDecodeHex("4a533d47ec9c7d95b1ad75f576cffc641853b750")
+	put := Put{
+		V:    "Hello World!",
+		K:    (*[32]byte)(pubKey),
+		Salt: salt,
+		Sig:  [64]byte{},
+		Cas:  0,
+		Seq:  0,
+	}
+	target := put.Target()
+	c.Check(target[:], qt.DeepEquals, expectedTargetId)
 }
 
 // ed25519 sign with pre-sha512-summed private key. I believe this means we also need the public key

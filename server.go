@@ -265,7 +265,7 @@ func (s *Server) processPacket(b []byte, addr Addr) {
 		expvars.Add("processed packets with trailing bytes", 1)
 	} else if err != nil {
 		readUnmarshalError.Add(1)
-		log.Printf("%s: received bad krpc message from %s: %s: %+q", s, addr, err, b)
+		//log.Printf("%s: received bad krpc message from %s: %s: %+q", s, addr, err, b)
 		func() {
 			if se, ok := err.(*bencode.SyntaxError); ok {
 				// The message was truncated.

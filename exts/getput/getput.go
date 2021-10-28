@@ -14,7 +14,6 @@ import (
 	"github.com/anacrolix/dht/v2/krpc"
 	"github.com/anacrolix/dht/v2/traversal"
 	"github.com/anacrolix/torrent/bencode"
-	"github.com/davecgh/go-spew/spew"
 )
 
 type PutGetResult struct {
@@ -45,7 +44,7 @@ func Get(
 			res := s.Get(ctx, dht.NewAddr(addr.UDP()), target, seq, dht.QueryRateLimiting{})
 			err := res.ToError()
 			if err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, dht.TransactionTimeout) {
-				log.Printf("error querying %v: %v", addr, err)
+				//log.Printf("error querying %v: %v", addr, err)
 			}
 			if r := res.Reply.R; r != nil {
 				rv := r.V
@@ -69,7 +68,7 @@ func Get(
 					case <-ctx.Done():
 					}
 				} else if rv != nil {
-					log.Printf("get response item didn't match target: %q", rv)
+					log.Printf("get response item hash didn't match target: %q", rv)
 				}
 			}
 			return res.TraversalQueryResult(addr)
@@ -90,7 +89,7 @@ receiveResults:
 			err = errors.New("value not found")
 		}
 	case v := <-vChan:
-		spew.Dump("got result", v)
+		log.Printf("received %#v", v)
 		gotValue = true
 		if !v.Mutable {
 			ret = v

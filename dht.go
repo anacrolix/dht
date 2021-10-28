@@ -39,7 +39,10 @@ type ServerConfig struct {
 	NodeId krpc.ID
 	Conn   net.PacketConn
 	// Don't respond to queries from other nodes.
-	Passive       bool
+	Passive bool
+	// Whether to wait for rate limiting to allow us to reply.
+	WaitToReply bool
+
 	StartingNodes StartingNodesGetter
 	// Disable the DHT security extension: http://www.libtorrent.org/dht_sec.html.
 	NoSecurity bool

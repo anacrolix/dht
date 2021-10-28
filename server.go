@@ -595,7 +595,7 @@ func (s *Server) handleQuery(source Addr, m krpc.Msg) {
 
 		r.Seq = &item.Seq
 
-		if item.Seq < *args.Seq {
+		if args.Seq != nil && item.Seq <= *args.Seq {
 			s.reply(source, m.T, r)
 			break
 		}
@@ -633,25 +633,24 @@ func (s *Server) sendError(addr Addr, t string, e krpc.Error) {
 }
 
 func (s *Server) reply(addr Addr, t string, r krpc.Return) {
-	r.ID = s.id.AsByteArray()
-	m := krpc.Msg{
-		T:  t,
-		Y:  "r",
-		R:  &r,
-		IP: addr.KRPC(),
-	}
-	b, err := bencode.Marshal(m)
-	if err != nil {
-		panic(err)
-	}
-	log.Fmsg("replying to %q", addr).Log(s.logger())
-	wrote, err := s.writeToNode(context.Background(), b, addr, false, true)
-	if err != nil {
-		s.config.Logger.Printf("error replying to %s: %s", addr, err)
-	}
-	if wrote {
-		expvars.Add("replied to peer", 1)
-	}
+	go func() {
+		r.ID = s.id.AsByteArray()
+		m := krpc.Msg{
+			T:  t,
+			Y:  "r",
+			R:  &r,
+			IP: addr.KRPC(),
+		}
+		b := bencode.MustMarshal(m)
+		log.Fmsg("replying to %q", addr).Log(s.logger())
+		wrote, err := s.writeToNode(context.Background(), b, addr, s.config.WaitToReply, true)
+		if err != nil {
+			s.config.Logger.Printf("error replying to %s: %s", addr, err)
+		}
+		if wrote {
+			expvars.Add("replied to peer", 1)
+		}
+	}()
 }
 
 // Adds a node if appropriate.

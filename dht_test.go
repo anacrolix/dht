@@ -102,9 +102,10 @@ func TestDHTDefaultConfig(t *testing.T) {
 func TestPing(t *testing.T) {
 	recvConn := mustListen("127.0.0.1:5680")
 	srv, err := NewServer(&ServerConfig{
-		Conn:       recvConn,
-		NoSecurity: true,
-		Logger:     log.Default,
+		Conn:        recvConn,
+		NoSecurity:  true,
+		Logger:      log.Default,
+		WaitToReply: true,
 	})
 	require.NoError(t, err)
 	defer srv.Close()
@@ -112,6 +113,7 @@ func TestPing(t *testing.T) {
 		Conn:          mustListen("127.0.0.1:5681"),
 		StartingNodes: addrResolver("127.0.0.1:5680"),
 		Logger:        log.Default,
+		WaitToReply:   true,
 	})
 	require.NoError(t, err)
 	defer srv0.Close()
@@ -186,6 +188,7 @@ func TestHook(t *testing.T) {
 			}
 			return true
 		},
+		WaitToReply: true,
 	})
 	require.NoError(t, err)
 	defer receiver.Close()

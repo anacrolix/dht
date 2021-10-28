@@ -3,7 +3,6 @@ package dht
 import (
 	"context"
 	"crypto/ed25519"
-	"net"
 	"testing"
 
 	"github.com/anacrolix/dht/v2/bep44"
@@ -88,12 +87,9 @@ func TestPutGet(t *testing.T) {
 
 func newServer(t *testing.T) *Server {
 	cfg := NewDefaultServerConfig()
-	conn1, err := net.ListenPacket("udp", "localhost:0")
-	if err != nil {
-		panic(err)
-	}
+	cfg.WaitToReply = true
 
-	cfg.Conn = conn1
+	cfg.Conn = mustListen("localhost:0")
 	cfg.Logger = log.Default.FilterLevel(log.Debug)
 	s, err := NewServer(cfg)
 	if err != nil {

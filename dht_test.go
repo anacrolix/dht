@@ -100,27 +100,30 @@ func TestDHTDefaultConfig(t *testing.T) {
 }
 
 func TestPing(t *testing.T) {
-	recvConn := mustListen("127.0.0.1:5680")
+	recvConn := mustListen("127.0.0.1:0")
 	srv, err := NewServer(&ServerConfig{
 		Conn:        recvConn,
 		NoSecurity:  true,
 		Logger:      log.Default,
 		WaitToReply: true,
 	})
+	srvUdpAddr := func(s *Server) *net.UDPAddr {
+		return &net.UDPAddr{
+			IP:   []byte{127, 0, 0, 1},
+			Port: s.Addr().(*net.UDPAddr).Port,
+		}
+	}
 	require.NoError(t, err)
 	defer srv.Close()
 	srv0, err := NewServer(&ServerConfig{
-		Conn:          mustListen("127.0.0.1:5681"),
-		StartingNodes: addrResolver("127.0.0.1:5680"),
+		Conn:          mustListen("127.0.0.1:0"),
+		StartingNodes: addrResolver(srvUdpAddr(srv).String()),
 		Logger:        log.Default,
 		WaitToReply:   true,
 	})
 	require.NoError(t, err)
 	defer srv0.Close()
-	res := srv.Ping(&net.UDPAddr{
-		IP:   []byte{127, 0, 0, 1},
-		Port: srv0.Addr().(*net.UDPAddr).Port,
-	})
+	res := srv.Ping(srvUdpAddr(srv0))
 	require.NoError(t, res.Err)
 	require.EqualValues(t, srv0.ID(), *res.Reply.SenderID())
 }

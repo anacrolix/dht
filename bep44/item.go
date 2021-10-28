@@ -1,6 +1,7 @@
 package bep44
 
 import (
+	"bytes"
 	"crypto/ed25519"
 	"crypto/sha1"
 	"fmt"
@@ -152,8 +153,13 @@ func Check(i *Item) error {
 func CheckIncoming(stored, incoming *Item) error {
 	// If the sequence number is equal, and the value is also the same,
 	// the node SHOULD reset its timeout counter.
-	if stored.Seq == incoming.Seq && stored.V == incoming.V {
-		return nil
+	if stored.Seq == incoming.Seq {
+		if bytes.Equal(
+			bencode.MustMarshal(stored.V),
+			bencode.MustMarshal(incoming.V),
+		) {
+			return nil
+		}
 	}
 
 	if stored.Seq >= incoming.Seq {

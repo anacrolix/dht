@@ -19,7 +19,8 @@ import (
 )
 
 func defaultQueryResendDelay() time.Duration {
-	return jitterDuration(5*time.Second, time.Second)
+	// This should be the highest reasonable UDP latency an end-user might have.
+	return 2 * time.Second
 }
 
 // Uniquely identifies a transaction to us.
@@ -30,8 +31,8 @@ type transactionKey struct {
 
 type StartingNodesGetter func() ([]Addr, error)
 
-// ServerConfig allows to set up a  configuration of the `Server` instance
-// to be created with NewServer
+// ServerConfig allows setting up a  configuration of the `Server` instance to be created with
+// NewServer.
 type ServerConfig struct {
 	// Set NodeId Manually. Caller must ensure that if NodeId does not conform
 	// to DHT Security Extensions, that NoSecurity is also set.

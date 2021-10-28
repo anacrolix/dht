@@ -1,7 +1,8 @@
 module github.com/anacrolix/dht/v2
 
 require (
-	github.com/anacrolix/args v0.1.1-0.20211020052733-53ed238acbd4
+	filippo.io/edwards25519 v1.0.0-rc.1
+	github.com/anacrolix/args v0.1.1-0.20211029000258-e180bab81115
 	github.com/anacrolix/chansync v0.3.0-0.0.20211007004133-3f72684c4a93
 	github.com/anacrolix/confluence v1.9.0
 	github.com/anacrolix/envpprof v1.1.1
@@ -12,7 +13,7 @@ require (
 	github.com/anacrolix/stm v0.3.0
 	github.com/anacrolix/sync v0.4.0
 	github.com/anacrolix/tagflag v1.3.0
-	github.com/anacrolix/torrent v1.33.0
+	github.com/anacrolix/torrent v1.34.1-0.20211028052123-446016cb270c
 	github.com/benbjohnson/immutable v0.3.0
 	github.com/bradfitz/iter v0.0.0-20191230175014-e8f45d346db8
 	github.com/docopt/docopt-go v0.0.0-20180111231733-ee0de3bc6815
@@ -25,7 +26,6 @@ require (
 )
 
 require (
-	filippo.io/edwards25519 v1.0.0-rc.1 // indirect
 	github.com/anacrolix/missinggo/perf v1.0.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/dustin/go-humanize v1.0.0 // indirect
@@ -44,10 +44,6 @@ require (
 	gopkg.in/yaml.v3 v3.0.0-20200313102051-9f266ea9e77c // indirect
 )
 
-go 1.18
+go 1.17
 
 exclude github.com/willf/bitset v1.2.0
-
-replace github.com/anacrolix/args => ../args
-
-replace github.com/anacrolix/torrent => ../torrent

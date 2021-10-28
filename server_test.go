@@ -22,7 +22,7 @@ func TestPutGet(t *testing.T) {
 	require.NoError(err)
 
 	// send get request to s2, we need a write token to put data
-	qr := s1.Get(context.TODO(), s2Addr, immuItem.Target(), immuItem.Seq, QueryRateLimiting{})
+	qr := s1.Get(context.TODO(), s2Addr, immuItem.Target(), nil, QueryRateLimiting{})
 	require.NoError(qr.ToError())
 	require.NotNil(qr.Reply.R)
 	require.NotNil(qr.Reply.R.Token)
@@ -31,7 +31,7 @@ func TestPutGet(t *testing.T) {
 	qr = s1.Put(context.TODO(), s2Addr, immuItem.ToPut(), *qr.Reply.R.Token, QueryRateLimiting{})
 	require.NoError(qr.ToError())
 
-	qr = s1.Get(context.TODO(), s2Addr, immuItem.Target(), immuItem.Seq, QueryRateLimiting{})
+	qr = s1.Get(context.TODO(), s2Addr, immuItem.Target(), nil, QueryRateLimiting{})
 	require.NoError(qr.ToError())
 	require.Equal("Hello World! immu", qr.Reply.R.V)
 
@@ -42,7 +42,7 @@ func TestPutGet(t *testing.T) {
 	require.NoError(err)
 
 	// send get request to s2, we need a write token to put data
-	qr = s1.Get(context.TODO(), s2Addr, mutItem.Target(), mutItem.Seq, QueryRateLimiting{})
+	qr = s1.Get(context.TODO(), s2Addr, mutItem.Target(), nil, QueryRateLimiting{})
 	require.NoError(qr.ToError())
 	require.NotNil(qr.Reply.R)
 
@@ -53,7 +53,7 @@ func TestPutGet(t *testing.T) {
 	qr = s1.Put(context.TODO(), s2Addr, mutItem.ToPut(), *mutToken, QueryRateLimiting{})
 	require.NoError(qr.ToError())
 
-	qr = s1.Get(context.TODO(), s2Addr, mutItem.Target(), mutItem.Seq, QueryRateLimiting{})
+	qr = s1.Get(context.TODO(), s2Addr, mutItem.Target(), nil, QueryRateLimiting{})
 	require.NoError(qr.ToError())
 	require.Equal("Hello World!", qr.Reply.R.V)
 
@@ -75,11 +75,13 @@ func TestPutGet(t *testing.T) {
 	require.NoError(err)
 	require.Equal("Bye World!", mi.V)
 
-	qr = s1.Get(context.TODO(), s2Addr, mutItem.Target(), mutItem.Seq, QueryRateLimiting{})
+	qr = s1.Get(context.TODO(), s2Addr, mutItem.Target(), nil, QueryRateLimiting{})
 	require.NoError(qr.ToError())
 	require.Equal("Bye World!", qr.Reply.R.V)
 
-	qr = s1.Get(context.TODO(), s2Addr, mutItem.Target(), 3, QueryRateLimiting{})
+	seqPtr := new(int64)
+	*seqPtr = 3
+	qr = s1.Get(context.TODO(), s2Addr, mutItem.Target(), seqPtr, QueryRateLimiting{})
 	require.NoError(qr.ToError())
 	require.Nil(qr.Reply.R.V)
 	require.Equal(int64(2), *qr.Reply.R.Seq)

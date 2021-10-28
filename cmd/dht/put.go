@@ -21,7 +21,7 @@ type PutCmd struct {
 	Key     targets.Hex
 	Seq     int64
 	Cas     int64
-	Salt    []byte
+	Salt    string
 	Mutable bool
 }
 
@@ -53,7 +53,7 @@ func put(cmd *PutCmd) (err error) {
 		}
 		put := bep44.Put{
 			V:    v,
-			Salt: cmd.Salt,
+			Salt: []byte(cmd.Salt),
 			Cas:  cmd.Cas,
 			Seq:  cmd.Seq,
 		}

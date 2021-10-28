@@ -14,7 +14,7 @@ import (
 type GetCmd struct {
 	Target []krpc.ID `arg:"positional"`
 	Seq    int64
-	Salt   []byte
+	Salt   string
 }
 
 func get(cmd *GetCmd) (err error) {
@@ -29,7 +29,7 @@ func get(cmd *GetCmd) (err error) {
 	for _, t := range cmd.Target {
 		log.Printf("getting %v", t)
 		var v interface{}
-		v, _, err = getput.Get(context.Background(), t, s, cmd.Seq, cmd.Salt)
+		v, _, err = getput.Get(context.Background(), t, s, cmd.Seq, []byte(cmd.Salt))
 		if err != nil {
 			log.Printf("error getting %v: %v", t, err)
 		} else {

@@ -50,7 +50,7 @@ func Get(
 			if r := res.Reply.R; r != nil {
 				rv := r.V
 				bv := bencode.MustMarshal(rv)
-				spew.Dump(r)
+				//spew.Dump(r)
 				if sha1.Sum(bv) == target {
 					select {
 					case vChan <- GetResult{
@@ -59,16 +59,16 @@ func Get(
 					}:
 					case <-ctx.Done():
 					}
-				} else if sha1.Sum(append(r.K[:], salt...)) == target && bep44.Verify(r.K[:], salt, r.Seq, bv, r.Sig[:]) {
+				} else if sha1.Sum(append(r.K[:], salt...)) == target && bep44.Verify(r.K[:], salt, *r.Seq, bv, r.Sig[:]) {
 					select {
 					case vChan <- GetResult{
-						Seq:     r.Seq,
+						Seq:     *r.Seq,
 						V:       rv,
 						Mutable: true,
 					}:
 					case <-ctx.Done():
 					}
-				} else {
+				} else if rv != nil {
 					log.Printf("get response item didn't match target: %q", rv)
 				}
 			}
@@ -117,7 +117,7 @@ func Put(
 		Alpha:  15,
 		Target: target,
 		DoQuery: func(ctx context.Context, addr krpc.NodeAddr) traversal.QueryResult {
-			res := s.Get(ctx, dht.NewAddr(addr.UDP()), target, 1, dht.QueryRateLimiting{})
+			res := s.Get(ctx, dht.NewAddr(addr.UDP()), target, 0, dht.QueryRateLimiting{})
 			err := res.ToError()
 			if err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, dht.TransactionTimeout) {
 				//log.Printf("error querying %v: %v", addr, err)

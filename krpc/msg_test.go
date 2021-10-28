@@ -118,25 +118,25 @@ func TestMarshalUnmarshalMsg(t *testing.T) {
 	testMarshalUnmarshalMsg(t, Msg{
 		A: &MsgArgs{
 			V:    nil,
-			Seq:  0,
+			Seq:  new(int64),
 			Cas:  0,
 			K:    k,
 			Salt: nil,
 			Sig:  sig,
 		},
 	}, "d1:ad2:id20:\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x001:k32:"+
-		string(k[:])+"3:sig64:"+string(sig[:])+"e1:t0:1:y0:e")
+		string(k[:])+"3:seqi0e3:sig64:"+string(sig[:])+"e1:t0:1:y0:e")
 	testMarshalUnmarshalMsg(t, Msg{
 		R: &Return{
 			Bep44Return: Bep44Return{
 				V:   []interface{}{"tee", "hee"},
-				Seq: 0,
+				Seq: new(int64),
 				K:   k,
 				Sig: sig,
 			},
 		},
 	}, "d1:rd2:id20:\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x001:k32:"+
-		string(k[:])+"3:sig64:"+string(sig[:])+"1:vl3:tee3:heeee1:t0:1:y0:e")
+		string(k[:])+"3:seqi0e3:sig64:"+string(sig[:])+"1:vl3:tee3:heeee1:t0:1:y0:e")
 }
 
 func TestMsgReadOnly(t *testing.T) {

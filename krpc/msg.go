@@ -37,7 +37,7 @@ type MsgArgs struct {
 
 	// BEP 44
 	V    interface{} `bencode:"v,omitempty"`
-	Seq  int64       `bencode:"seq,omitempty"`
+	Seq  *int64      `bencode:"seq,omitempty"`
 	Cas  int64       `bencode:"cas,omitempty"`
 	K    [32]byte    `bencode:"k,omitempty"`
 	Salt []byte      `bencode:"salt,omitempty"`
@@ -65,7 +65,7 @@ type Bep44Return struct {
 	V   interface{} `bencode:"v,omitempty"`
 	K   [32]byte    `bencode:"k,omitempty"`
 	Sig [64]byte    `bencode:"sig,omitempty"`
-	Seq int64       `bencode:"seq,omitempty"`
+	Seq *int64      `bencode:"seq,omitempty"`
 }
 
 type Return struct {

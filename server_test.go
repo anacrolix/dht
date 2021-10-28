@@ -83,7 +83,7 @@ func TestPutGet(t *testing.T) {
 	qr = s1.Get(context.TODO(), s2Addr, mutItem.Target(), 3, QueryRateLimiting{})
 	require.NoError(qr.ToError())
 	require.Nil(qr.Reply.R.V)
-	require.Equal(int64(2), qr.Reply.R.Seq)
+	require.Equal(int64(2), *qr.Reply.R.Seq)
 }
 
 func newServer(t *testing.T) *Server {

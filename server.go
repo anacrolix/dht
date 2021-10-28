@@ -548,7 +548,7 @@ func (s *Server) handleQuery(source Addr, m krpc.Msg) {
 			Salt: args.Salt,
 			Sig:  args.Sig,
 			Cas:  args.Cas,
-			Seq:  args.Seq,
+			Seq:  *args.Seq,
 		}
 
 		if err := s.store.Put(i); err != nil {
@@ -593,9 +593,9 @@ func (s *Server) handleQuery(source Addr, m krpc.Msg) {
 			break
 		}
 
-		r.Seq = item.Seq
+		r.Seq = &item.Seq
 
-		if item.Seq < args.Seq {
+		if item.Seq < *args.Seq {
 			s.reply(source, m.T, r)
 			break
 		}
@@ -956,7 +956,7 @@ func (s *Server) transactionQuerySender(
 	rateLimiting QueryRateLimiting,
 	numTries int,
 ) error {
-	log.Printf("sending %q", b)
+	//log.Printf("sending %q", b)
 	err := transactionSender(
 		sendCtx,
 		func() error {
@@ -1010,7 +1010,7 @@ func (s *Server) Put(ctx context.Context, node Addr, i bep44.Put, token string, 
 			Cas:   i.Cas,
 			ID:    s.ID(),
 			Salt:  i.Salt,
-			Seq:   i.Seq,
+			Seq:   &i.Seq,
 			Sig:   i.Sig,
 			Token: token,
 			V:     i.V,
@@ -1133,7 +1133,7 @@ func (s *Server) Get(ctx context.Context, addr Addr, target bep44.Target, seq in
 		MsgArgs: krpc.MsgArgs{
 			ID:     s.ID(),
 			Target: target,
-			Seq:    seq,
+			Seq:    &seq,
 			Want:   []krpc.Want{krpc.WantNodes, krpc.WantNodes6},
 		},
 		RateLimiting: rl,

@@ -114,7 +114,7 @@ func (s *Item) IsMutable() bool {
 
 func bufferToSign(salt, bv []byte, seq int64) []byte {
 	var bts []byte
-	if salt != nil {
+	if len(salt) != 0 {
 		bts = append(bts, []byte("4:salt")...)
 		x := bencode.MustMarshal(salt)
 		bts = append(bts, x...)

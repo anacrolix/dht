@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 
 	"github.com/anacrolix/dht/v2"
 	"github.com/anacrolix/dht/v2/exts/getput"
@@ -12,6 +13,8 @@ import (
 
 type GetCmd struct {
 	Target []krpc.ID `arg:"positional"`
+	Seq    int64
+	Salt   []byte
 }
 
 func get(cmd *GetCmd) (err error) {
@@ -24,12 +27,14 @@ func get(cmd *GetCmd) (err error) {
 		return errors.New("no targets specified")
 	}
 	for _, t := range cmd.Target {
+		log.Printf("getting %v", t)
 		var v interface{}
-		v, _, err = getput.Get(context.Background(), t, s)
+		v, _, err = getput.Get(context.Background(), t, s, cmd.Seq, cmd.Salt)
 		if err != nil {
-			return
+			log.Printf("error getting %v: %v", t, err)
+		} else {
+			fmt.Println(v)
 		}
-		fmt.Println(v)
 	}
 	return nil
 }

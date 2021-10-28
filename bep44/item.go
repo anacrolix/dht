@@ -29,14 +29,17 @@ type Item struct {
 }
 
 func (i *Item) ToPut() Put {
-	return Put{
+	p := Put{
 		V:    i.V,
-		K:    i.K,
 		Salt: i.Salt,
 		Sig:  i.Sig,
 		Cas:  i.Cas,
 		Seq:  i.Seq,
 	}
+	if i.K != Empty32ByteArray {
+		p.K = &i.K
+	}
+	return p
 }
 
 // NewItem creates a new arbitrary DHT element. The distinction between storing mutable
@@ -64,7 +67,7 @@ func NewItem(value interface{}, salt []byte, seq, cas int64, k ed25519.PrivateKe
 	if k != nil {
 		pk := []byte(k.Public().(ed25519.PublicKey))
 		copy(kk[:], pk)
-		copy(sig[:], ed25519.Sign(k, bufferToSign(salt, v, seq)))
+		copy(sig[:], Sign(k, salt, seq, v))
 	}
 
 	return &Item{
@@ -99,7 +102,7 @@ func (i *Item) Modify(value interface{}, k ed25519.PrivateKey) bool {
 	i.V = value
 	i.Seq++
 	var sig [64]byte
-	copy(sig[:], ed25519.Sign(k, bufferToSign(i.Salt, v, i.Seq)))
+	copy(sig[:], Sign(k, i.Salt, i.Seq, v))
 	i.Sig = sig
 
 	return true
@@ -139,8 +142,7 @@ func Check(i *Item) error {
 		return ErrSaltFieldTooBig
 	}
 
-	bts := bufferToSign(i.Salt, bv, i.Seq)
-	if ok := ed25519.Verify(i.K[:], bts, i.Sig[:]); !ok {
+	if !Verify(i.K[:], i.Salt, i.Seq, bv, i.Sig[:]) {
 		return ErrInvalidSignature
 	}
 

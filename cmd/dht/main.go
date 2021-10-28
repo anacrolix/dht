@@ -3,32 +3,29 @@ package main
 import (
 	"fmt"
 	"log"
-	"os"
 
-	"github.com/alexflint/go-arg"
+	"github.com/anacrolix/args"
 )
 
 func main() {
 	log.SetFlags(log.Flags() | log.Lshortfile)
-	err := mainErr()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "error in main: %v\n", err)
-		os.Exit(1)
-	}
-}
-
-func mainErr() error {
-	var args struct {
-		Put *PutCmd `arg:"subcommand"`
-		Get *GetCmd `arg:"subcommand"`
-	}
-	arg.MustParse(&args)
-	switch {
-	case args.Put != nil:
-		return put(args.Put)
-	case args.Get != nil:
-		return get(args.Get)
-	default:
-		panic("unimplemented")
-	}
+	args.ParseMain(
+		args.Subcommand("put", func(ctx args.SubCmdCtx) (err error) {
+			var putOpt PutCmd
+			ctx.Parse(args.FromStruct(&putOpt)...)
+			switch len(putOpt.Key.Bytes) {
+			case 0, 32:
+			default:
+				return fmt.Errorf("key has bad length %v", len(putOpt.Key.Bytes))
+			}
+			ctx.Defer(func() error { return put(&putOpt) })
+			return nil
+		}),
+		args.Subcommand("get", func(ctx args.SubCmdCtx) error {
+			var getOpt GetCmd
+			ctx.Parse(args.FromStruct(&getOpt)...)
+			ctx.Defer(func() error { return get(&getOpt) })
+			return nil
+		}),
+	)
 }

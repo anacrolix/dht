@@ -2,8 +2,10 @@ package getput
 
 import (
 	"context"
+	"crypto/sha1"
 	"errors"
 	"log"
+	"math"
 	"sync"
 
 	"github.com/anacrolix/dht/v2"
@@ -11,6 +13,8 @@ import (
 	k_nearest_nodes "github.com/anacrolix/dht/v2/k-nearest-nodes"
 	"github.com/anacrolix/dht/v2/krpc"
 	"github.com/anacrolix/dht/v2/traversal"
+	"github.com/anacrolix/torrent/bencode"
+	"github.com/davecgh/go-spew/spew"
 )
 
 type PutGetResult struct {
@@ -20,38 +24,52 @@ type PutGetResult struct {
 	SuccessfulPuts []krpc.NodeAddr
 }
 
+type GetResult struct {
+	Seq     int64
+	V       interface{}
+	Mutable bool
+}
+
 func Get(
-	ctx context.Context, target bep44.Target, s *dht.Server,
+	ctx context.Context, target bep44.Target, s *dht.Server, seq int64, salt []byte,
 ) (
-	v interface{}, stats *traversal.Stats, err error,
+	ret GetResult, stats *traversal.Stats, err error,
 ) {
-	vChan := make(chan interface{}, 1)
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	vChan := make(chan GetResult)
 	op := traversal.Start(traversal.OperationInput{
 		Alpha:  15,
 		Target: target,
 		DoQuery: func(ctx context.Context, addr krpc.NodeAddr) traversal.QueryResult {
-			res := s.Get(ctx, dht.NewAddr(addr.UDP()), target, 0, dht.QueryRateLimiting{})
+			res := s.Get(ctx, dht.NewAddr(addr.UDP()), target, seq, dht.QueryRateLimiting{})
 			err := res.ToError()
 			if err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, dht.TransactionTimeout) {
-				//log.Printf("error querying %v: %v", addr, err)
+				log.Printf("error querying %v: %v", addr, err)
 			}
 			if r := res.Reply.R; r != nil {
 				rv := r.V
-				if rv != nil {
-					i, err := bep44.NewItem(rv, nil, 0, 0, nil)
-					if err != nil {
-						log.Printf("re-marshalling v: %v", err)
+				bv := bencode.MustMarshal(rv)
+				spew.Dump(r)
+				if sha1.Sum(bv) == target {
+					select {
+					case vChan <- GetResult{
+						V:       rv,
+						Mutable: false,
+					}:
+					case <-ctx.Done():
 					}
-					h := i.Target()
-					if h == target {
-						log.Printf("got %x from %v", target, addr)
-						select {
-						case vChan <- rv:
-						default:
-						}
-					} else {
-						log.Printf("returned v failed hash check: %x", h)
+				} else if sha1.Sum(append(r.K[:], salt...)) == target && bep44.Verify(r.K[:], salt, r.Seq, bv, r.Sig[:]) {
+					select {
+					case vChan <- GetResult{
+						Seq:     r.Seq,
+						V:       rv,
+						Mutable: true,
+					}:
+					case <-ctx.Done():
 					}
+				} else {
+					log.Printf("get response item didn't match target: %q", rv)
 				}
 			}
 			return res.TraversalQueryResult(addr)
@@ -63,10 +81,25 @@ func Get(
 		return
 	}
 	op.AddNodes(nodes)
+	ret.Seq = math.MinInt64
+	gotValue := false
+receiveResults:
 	select {
 	case <-op.Stalled():
-		err = errors.New("value not found")
-	case v = <-vChan:
+		if !gotValue {
+			err = errors.New("value not found")
+		}
+	case v := <-vChan:
+		spew.Dump("got result", v)
+		gotValue = true
+		if !v.Mutable {
+			ret = v
+			break
+		}
+		if v.Seq >= ret.Seq {
+			ret = v
+		}
+		goto receiveResults
 	case <-ctx.Done():
 		err = ctx.Err()
 	}
@@ -76,7 +109,7 @@ func Get(
 }
 
 func Put(
-	ctx context.Context, target krpc.ID, s *dht.Server, put interface{},
+	ctx context.Context, target krpc.ID, s *dht.Server, put bep44.Put,
 ) (
 	stats *traversal.Stats, err error,
 ) {
@@ -84,7 +117,7 @@ func Put(
 		Alpha:  15,
 		Target: target,
 		DoQuery: func(ctx context.Context, addr krpc.NodeAddr) traversal.QueryResult {
-			res := s.Get(ctx, dht.NewAddr(addr.UDP()), target, 0, dht.QueryRateLimiting{})
+			res := s.Get(ctx, dht.NewAddr(addr.UDP()), target, 1, dht.QueryRateLimiting{})
 			err := res.ToError()
 			if err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, dht.TransactionTimeout) {
 				//log.Printf("error querying %v: %v", addr, err)
@@ -104,31 +137,26 @@ func Put(
 	op.AddNodes(nodes)
 	select {
 	case <-op.Stalled():
-		if put == nil {
-			err = errors.New("value not found")
-		}
 	case <-ctx.Done():
 		err = ctx.Err()
 	}
 	op.Stop()
-	if put != nil {
-		item := bep44.Put{V: put}
-		var wg sync.WaitGroup
-		op.Closest().Range(func(elem k_nearest_nodes.Elem) {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				res := s.Put(ctx, dht.NewAddr(elem.Addr.UDP()), item, elem.Data.(string), dht.QueryRateLimiting{})
-				err := res.ToError()
-				if err != nil {
-					log.Printf("error putting to %v: %v", elem.Addr, err)
-				} else {
-					log.Printf("put to %v", elem.Addr)
-				}
-			}()
-		})
-		wg.Wait()
-	}
+	var wg sync.WaitGroup
+	op.Closest().Range(func(elem k_nearest_nodes.Elem) {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			token := elem.Data.(string)
+			res := s.Put(ctx, dht.NewAddr(elem.Addr.UDP()), put, token, dht.QueryRateLimiting{})
+			err := res.ToError()
+			if err != nil {
+				log.Printf("error putting to %v [token=%q]: %v", elem.Addr, token, err)
+			} else {
+				log.Printf("put to %v [token=%q]", elem.Addr, token)
+			}
+		}()
+	})
+	wg.Wait()
 	stats = op.Stats()
 	return
 }

@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math"
+	"math/rand"
 	"net"
 	"strings"
 	"testing"
@@ -24,7 +25,7 @@ func testMarshalUnmarshalMsg(t *testing.T, m Msg, expected string) {
 	err = bencode.Unmarshal([]byte(expected), &_m)
 	c.Assert(err, qt.IsNil)
 	c.Assert(_m, qt.ContentEquals, m)
-	c.Assert(_m.A, qt.Equals, m.A)
+	c.Assert(_m.A, qt.ContentEquals, m.A)
 	c.Assert(_m.R, qt.ContentEquals, m.R)
 }
 
@@ -109,6 +110,33 @@ func TestMarshalUnmarshalMsg(t *testing.T) {
 			Port: 62844,
 		},
 	}, "d2:ip6:|\xa8\xb4\b\xf5|1:rd2:id20:\xeb\xff6isQ\xffJ\xec)ͺ\xab\xf2\xfb\xe3F|\xc2ge1:t1:\x031:y1:re")
+
+	var k [32]byte
+	rand.Read(k[:])
+	var sig [64]byte
+	rand.Read(sig[:])
+	testMarshalUnmarshalMsg(t, Msg{
+		A: &MsgArgs{
+			V:    nil,
+			Seq:  0,
+			Cas:  0,
+			K:    k,
+			Salt: nil,
+			Sig:  sig,
+		},
+	}, "d1:ad2:id20:\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x001:k32:"+
+		string(k[:])+"3:sig64:"+string(sig[:])+"e1:t0:1:y0:e")
+	testMarshalUnmarshalMsg(t, Msg{
+		R: &Return{
+			Bep44Return: Bep44Return{
+				V:   []interface{}{"tee", "hee"},
+				Seq: 0,
+				K:   k,
+				Sig: sig,
+			},
+		},
+	}, "d1:rd2:id20:\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x001:k32:"+
+		string(k[:])+"3:sig64:"+string(sig[:])+"1:vl3:tee3:heeee1:t0:1:y0:e")
 }
 
 func TestMsgReadOnly(t *testing.T) {

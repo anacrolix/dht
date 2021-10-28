@@ -252,6 +252,7 @@ func (s *Server) IPBlocklist() iplist.Ranger {
 }
 
 func (s *Server) processPacket(b []byte, addr Addr) {
+	//log.Printf("got packet %q", b)
 	if len(b) < 2 || b[0] != 'd' {
 		// KRPC messages are bencoded dicts.
 		readNotKRPCDict.Add(1)
@@ -264,6 +265,7 @@ func (s *Server) processPacket(b []byte, addr Addr) {
 		expvars.Add("processed packets with trailing bytes", 1)
 	} else if err != nil {
 		readUnmarshalError.Add(1)
+		log.Printf("%s: received bad krpc message from %s: %s: %+q", s, addr, err, b)
 		func() {
 			if se, ok := err.(*bencode.SyntaxError); ok {
 				// The message was truncated.
@@ -280,7 +282,7 @@ func (s *Server) processPacket(b []byte, addr Addr) {
 				}
 			}
 			// if missinggo.CryHeard() {
-			// 	log.Printf("%s: received bad krpc message from %s: %s: %+q", s, addr, err, b)
+			log.Printf("%s: received bad krpc message from %s: %s: %+q", s, addr, err, b)
 			// }
 		}()
 		return
@@ -954,6 +956,7 @@ func (s *Server) transactionQuerySender(
 	rateLimiting QueryRateLimiting,
 	numTries int,
 ) error {
+	log.Printf("sending %q", b)
 	err := transactionSender(
 		sendCtx,
 		func() error {
@@ -1002,19 +1005,21 @@ func (s *Server) Put(ctx context.Context, node Addr, i bep44.Put, token string, 
 			Err: err,
 		}
 	}
-
-	return s.Query(ctx, node, "put", QueryInput{
+	qi := QueryInput{
 		MsgArgs: krpc.MsgArgs{
 			Cas:   i.Cas,
 			ID:    s.ID(),
-			K:     i.K,
 			Salt:  i.Salt,
 			Seq:   i.Seq,
 			Sig:   i.Sig,
 			Token: token,
 			V:     i.V,
 		},
-	})
+	}
+	if i.K != nil {
+		qi.MsgArgs.K = *i.K
+	}
+	return s.Query(ctx, node, "put", qi)
 }
 
 func (s *Server) announcePeer(node Addr, infoHash int160.T, port int, token string, impliedPort bool, rl QueryRateLimiting) (ret QueryResult) {

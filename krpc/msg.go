@@ -36,6 +36,9 @@ type MsgArgs struct {
 	Scrape      int    `bencode:"scrape,omitempty"`       // BEP 33
 
 	// BEP 44
+
+	// I don't know if we should use bencode.Bytes for this. If we unmarshalled bytes that didn't
+	// marshal back the same, our hashes will not match. But this might also serve to prevent abuse.
 	V    interface{} `bencode:"v,omitempty"`
 	Seq  *int64      `bencode:"seq,omitempty"`
 	Cas  int64       `bencode:"cas,omitempty"`

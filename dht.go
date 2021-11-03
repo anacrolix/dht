@@ -98,18 +98,20 @@ func jitterDuration(average time.Duration, plusMinus time.Duration) time.Duratio
 
 type Peer = krpc.NodeAddr
 
+var DefaultGlobalBootstrapHostPorts = []string{
+	"router.utorrent.com:6881",
+	"router.bittorrent.com:6881",
+	"dht.transmissionbt.com:6881",
+	"dht.aelitis.com:6881",     // Vuze
+	"router.silotis.us:6881",   // IPv6
+	"dht.libtorrent.org:25401", // @arvidn's
+	"dht.anacrolix.link:42069",
+	"router.bittorrent.cloud:42069",
+}
+
 func GlobalBootstrapAddrs(network string) (addrs []Addr, err error) {
 	initDnsResolver()
-	for _, s := range []string{
-		"router.utorrent.com:6881",
-		"router.bittorrent.com:6881",
-		"dht.transmissionbt.com:6881",
-		"dht.aelitis.com:6881",     // Vuze
-		"router.silotis.us:6881",   // IPv6
-		"dht.libtorrent.org:25401", // @arvidn's
-		"dht.anacrolix.link:42069",
-		"router.bittorrent.cloud:42069",
-	} {
+	for _, s := range DefaultGlobalBootstrapHostPorts {
 		host, port, err := net.SplitHostPort(s)
 		if err != nil {
 			panic(err)

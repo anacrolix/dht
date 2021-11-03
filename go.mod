@@ -2,7 +2,7 @@ module github.com/anacrolix/dht/v2
 
 require (
 	filippo.io/edwards25519 v1.0.0-rc.1
-	github.com/anacrolix/args v0.1.1-0.20211029000258-e180bab81115
+	github.com/anacrolix/args v0.3.1-0.20211103220016-7818f46756fc
 	github.com/anacrolix/chansync v0.3.0-0.0.20211007004133-3f72684c4a93
 	github.com/anacrolix/confluence v1.9.0
 	github.com/anacrolix/envpprof v1.1.1
@@ -10,6 +10,7 @@ require (
 	github.com/anacrolix/missinggo v1.3.0
 	github.com/anacrolix/missinggo/v2 v2.5.2
 	github.com/anacrolix/multiless v0.2.0
+	github.com/anacrolix/publicip v0.2.0
 	github.com/anacrolix/stm v0.3.0
 	github.com/anacrolix/sync v0.4.0
 	github.com/anacrolix/tagflag v1.3.0

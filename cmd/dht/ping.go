@@ -2,32 +2,29 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"net"
 	"sync"
 	"time"
 
-	"github.com/anacrolix/tagflag"
-
 	"github.com/anacrolix/dht/v2"
 )
 
-func main() {
-	log.SetFlags(log.LstdFlags | log.Lshortfile)
-	var args = struct {
-		Timeout time.Duration
-		tagflag.StartPos
-		Nodes []string `help:"nodes to ping e.g. router.bittorrent.com:6881"`
-	}{}
-	tagflag.Parse(&args)
-	s, err := dht.NewServer(nil)
-	if err != nil {
-		log.Fatal(err)
-	}
-	log.Printf("dht server on %s with id %x", s.Addr(), s.ID())
+type pingArgs struct {
+	Timeout  time.Duration `help:"sets a timeout for all queries"`
+	Defaults bool          `help:"include all the default bootstrap nodes"`
+	Nodes    []string      `arg:"positional" arity:"*" help:"nodes to ping e.g. router.bittorrent.com:6881"`
+}
+
+func ping(args pingArgs, s *dht.Server) error {
 	var wg sync.WaitGroup
-	for _, a := range args.Nodes {
+	defaults := dht.DefaultGlobalBootstrapHostPorts
+	if !args.Defaults {
+		defaults = nil
+	}
+	for _, a := range append(args.Nodes, defaults...) {
 		func(a string) {
 			ua, err := net.ResolveUDPAddr("udp", a)
 			if err != nil {
@@ -68,7 +65,8 @@ func main() {
 	}
 	select {
 	case <-done:
+		return nil
 	case <-timeout:
-		log.Print("timed out")
+		return errors.New("timed out")
 	}
 }

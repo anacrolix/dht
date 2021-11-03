@@ -72,9 +72,8 @@ github.com/alexflint/go-arg v1.3.0/go.mod h1:9iRbDxne7LcR/GSvEr7ma++GLpdIU1zrghf
 github.com/alexflint/go-arg v1.4.2/go.mod h1:9iRbDxne7LcR/GSvEr7ma++GLpdIU1zrghf2y2768kM=
 github.com/alexflint/go-scalar v1.0.0/go.mod h1:GpHzbCOZXEKMEcygYQ5n/aa4Aq84zbxjy3MxYW0gjYw=
 github.com/alexflint/go-scalar v1.1.0/go.mod h1:LoFvNMqS1CPrMVltza4LvnGKhaSpc3oyLEBUZVhhS2o=
-github.com/anacrolix/args v0.1.1-0.20211020052733-53ed238acbd4/go.mod h1:41JBnF8sKExNVLHPkCdL74jkZc3dSxAkGsk1TuKOUFI=
-github.com/anacrolix/args v0.1.1-0.20211029000258-e180bab81115 h1:56UwGy4ca0XQnXnSTDaYgMLdpFYoxQhzueCvLnx1GjQ=
-github.com/anacrolix/args v0.1.1-0.20211029000258-e180bab81115/go.mod h1:41JBnF8sKExNVLHPkCdL74jkZc3dSxAkGsk1TuKOUFI=
+github.com/anacrolix/args v0.3.1-0.20211103220016-7818f46756fc h1:sqVrLEBXq4HzucFejmHf97pYEDZEclrjczId6H22OFE=
+github.com/anacrolix/args v0.3.1-0.20211103220016-7818f46756fc/go.mod h1:41JBnF8sKExNVLHPkCdL74jkZc3dSxAkGsk1TuKOUFI=
 github.com/anacrolix/chansync v0.0.0-20210524073341-a336ebc2de92/go.mod h1:DZsatdsdXxD0WiwcGl0nJVwyjCKMDv+knl1q2iBjA2k=
 github.com/anacrolix/chansync v0.1.0/go.mod h1:DZsatdsdXxD0WiwcGl0nJVwyjCKMDv+knl1q2iBjA2k=
 github.com/anacrolix/chansync v0.2.1-0.20210910114620-14955c95ded9/go.mod h1:DZsatdsdXxD0WiwcGl0nJVwyjCKMDv+knl1q2iBjA2k=
@@ -151,6 +150,8 @@ github.com/anacrolix/multiless v0.1.1-0.20210520040635-10ee7b5f3cff/go.mod h1:Tr
 github.com/anacrolix/multiless v0.1.1-0.20210529082330-de2f6cf29619/go.mod h1:TrCLEZfIDbMVfLoQt5tOoiBS/uq4y8+ojuEVVvTNPX4=
 github.com/anacrolix/multiless v0.2.0 h1:HtGBBOQcHaJM59RP3ysITId7AMIgiNF4xJucaFh14Ms=
 github.com/anacrolix/multiless v0.2.0/go.mod h1:TrCLEZfIDbMVfLoQt5tOoiBS/uq4y8+ojuEVVvTNPX4=
+github.com/anacrolix/publicip v0.2.0 h1:n/BmRxXRlOT/wQFd6Xhu57r9uTU+Xvb9MyEkLooh3TU=
+github.com/anacrolix/publicip v0.2.0/go.mod h1:67G1lVkLo8UjdEcJkwScWVTvlJ35OCDsRJoWXl/wi4g=
 github.com/anacrolix/squirrel v0.1.0/go.mod h1:YzgVvikMdFD441oTWlNG189bpKabO9Sbf3uCSVgca04=
 github.com/anacrolix/squirrel v0.1.1-0.20210914065657-81bc5ecdc43a/go.mod h1:YzgVvikMdFD441oTWlNG189bpKabO9Sbf3uCSVgca04=
 github.com/anacrolix/stm v0.1.0/go.mod h1:ZKz7e7ERWvP0KgL7WXfRjBXHNRhlVRlbBQecqFtPq+A=

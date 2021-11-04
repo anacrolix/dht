@@ -8,6 +8,7 @@ import (
 	"github.com/anacrolix/args"
 	"github.com/anacrolix/dht/v2"
 	"github.com/anacrolix/publicip"
+	"github.com/anacrolix/torrent"
 )
 
 func main() {
@@ -24,6 +25,19 @@ func main() {
 					return fmt.Errorf("key has bad length %v", len(putOpt.Key.Bytes))
 				}
 				ctx.Defer(func() error { return put(&putOpt) })
+				return nil
+			}),
+			args.Subcommand("put-mutable-infohash", func(ctx args.SubCmdCtx) (err error) {
+				var putOpt PutMutableInfohash
+				var ih torrent.InfoHash
+				ctx.Parse(append(
+					args.FromStruct(&putOpt),
+					args.Opt(args.OptOpt{
+						Long:     "info hash",
+						Target:   &ih,
+						Required: true,
+					}))...)
+				ctx.Defer(func() error { return putMutableInfohash(&putOpt, ih) })
 				return nil
 			}),
 			args.Subcommand("get", func(ctx args.SubCmdCtx) error {

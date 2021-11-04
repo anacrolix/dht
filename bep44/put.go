@@ -36,7 +36,7 @@ func (p *Put) Sign(k ed25519.PrivateKey) {
 
 func (i *Put) Target() Target {
 	if i.IsMutable() {
-		return sha1.Sum(append(i.K[:], i.Salt...))
+		return MakeMutableTarget(*i.K, i.Salt)
 	} else {
 		return sha1.Sum(bencode.MustMarshal(i.V))
 	}

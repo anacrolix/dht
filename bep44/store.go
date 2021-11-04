@@ -1,12 +1,9 @@
 package bep44
 
 import (
-	"crypto/sha1"
 	"errors"
 	"time"
 )
-
-type Target = [sha1.Size]byte
 
 var ErrItemNotFound = errors.New("item not found")
 

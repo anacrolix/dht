@@ -15,12 +15,13 @@ func Int160WithBitSet(bit int) *int160.T {
 type addrMaybeId = types.AddrMaybeId
 
 var SampleAddrMaybeIds = []addrMaybeId{
-	addrMaybeId{},
-	addrMaybeId{Id: new(int160.T)},
-	addrMaybeId{Id: Int160WithBitSet(13)},
-	addrMaybeId{Id: Int160WithBitSet(12)},
-	addrMaybeId{Addr: krpc.NodeAddr{Port: 1}},
-	addrMaybeId{
+	{},
+	{Id: new(int160.T)},
+	{Id: Int160WithBitSet(13)},
+	{Id: Int160WithBitSet(12)},
+	{Addr: krpc.NodeAddr{Port: 1}},
+	{
 		Id:   Int160WithBitSet(14),
-		Addr: krpc.NodeAddr{Port: 1}},
+		Addr: krpc.NodeAddr{Port: 1},
+	},
 }

@@ -44,12 +44,12 @@ func Get(
 			res := s.Get(ctx, dht.NewAddr(addr.UDP()), target, seq, dht.QueryRateLimiting{})
 			err := res.ToError()
 			if err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, dht.TransactionTimeout) {
-				//log.Printf("error querying %v: %v", addr, err)
+				// log.Printf("error querying %v: %v", addr, err)
 			}
 			if r := res.Reply.R; r != nil {
 				rv := r.V
 				bv := bencode.MustMarshal(rv)
-				//spew.Dump(r)
+				// spew.Dump(r)
 				if sha1.Sum(bv) == target {
 					select {
 					case vChan <- GetResult{
@@ -119,7 +119,7 @@ func Put(
 			res := s.Get(ctx, dht.NewAddr(addr.UDP()), target, nil, dht.QueryRateLimiting{})
 			err := res.ToError()
 			if err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, dht.TransactionTimeout) {
-				//log.Printf("error querying %v: %v", addr, err)
+				// log.Printf("error querying %v: %v", addr, err)
 			}
 			tqr := res.TraversalQueryResult(addr)
 			if tqr.ClosestData == nil {

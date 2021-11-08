@@ -65,7 +65,7 @@ type ServerConfig struct {
 	// BEP-44: Storing arbitrary data in the DHT. If not store provided, a default in-memory
 	// implementation will be used.
 	Store bep44.Store
-	//BEP-44: expiration time with non-announced items. Two hours by default
+	// BEP-44: expiration time with non-announced items. Two hours by default
 	Exp time.Duration
 
 	// If no Logger is provided, log.Default is used and log.Debug messages are filtered out. Note
@@ -118,7 +118,7 @@ func GlobalBootstrapAddrs(network string) (addrs []Addr, err error) {
 		}
 		hostAddrs, err := dnsResolver.LookupHost(context.Background(), host)
 		if err != nil {
-			//log.Default.WithDefaultLevel(log.Debug).Printf("error looking up %q: %v", s, err)
+			// log.Default.WithDefaultLevel(log.Debug).Printf("error looking up %q: %v", s, err)
 			continue
 		}
 		for _, a := range hostAddrs {

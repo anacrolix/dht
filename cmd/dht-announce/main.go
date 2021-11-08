@@ -23,7 +23,7 @@ func main() {
 }
 
 func mainErr() int {
-	var flags = struct {
+	flags := struct {
 		Port   int
 		Debug  bool
 		Scrape bool

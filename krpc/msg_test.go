@@ -48,7 +48,7 @@ func TestMarshalUnmarshalMsg(t *testing.T) {
 			ID: IdFromString("hellohellohellohello"),
 			Bep51Return: Bep51Return{
 				Interval: func() *int64 { var ret int64 = 420; return &ret }(),
-				//Num:      func() *int64 { var ret int64 = 69; return &ret }(),
+				// Num:      func() *int64 { var ret int64 = 69; return &ret }(),
 				Samples: func() *CompactInfohashes { var ret CompactInfohashes; return &ret }(),
 			},
 		},

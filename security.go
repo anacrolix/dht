@@ -63,9 +63,7 @@ func NodeIdSecure(id [20]byte, ip net.IP) bool {
 	return true
 }
 
-var (
-	classA, classB, classC *net.IPNet
-)
+var classA, classB, classC *net.IPNet
 
 func mustParseCIDRIPNet(s string) *net.IPNet {
 	_, ret, err := net.ParseCIDR(s)

@@ -65,7 +65,7 @@ func TestPutGet(t *testing.T) {
 	require.NoError(err)
 	require.Equal("Hello World!", mi.V)
 
-	//change mutable item
+	// change mutable item
 	ok := mutItem.Modify("Bye World!", priv)
 	require.True(ok)
 	qr = s1.Put(context.TODO(), s2Addr, mutItem.ToPut(), *mutToken, QueryRateLimiting{})

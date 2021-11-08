@@ -36,6 +36,6 @@ func TestNodesByDistance(t *testing.T) {
 	pop(3)
 	pop(0, 4)
 	pop(0, 4)
-	//pop(0, 4)
+	// pop(0, 4)
 	assert.EqualValues(t, 0, a.Len())
 }

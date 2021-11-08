@@ -252,7 +252,7 @@ func (s *Server) IPBlocklist() iplist.Ranger {
 }
 
 func (s *Server) processPacket(b []byte, addr Addr) {
-	//log.Printf("got packet %q", b)
+	// log.Printf("got packet %q", b)
 	if len(b) < 2 || b[0] != 'd' {
 		// KRPC messages are bencoded dicts.
 		readNotKRPCDict.Add(1)
@@ -265,7 +265,7 @@ func (s *Server) processPacket(b []byte, addr Addr) {
 		expvars.Add("processed packets with trailing bytes", 1)
 	} else if err != nil {
 		readUnmarshalError.Add(1)
-		//log.Printf("%s: received bad krpc message from %s: %s: %+q", s, addr, err, b)
+		// log.Printf("%s: received bad krpc message from %s: %s: %+q", s, addr, err, b)
 		func() {
 			if se, ok := err.(*bencode.SyntaxError); ok {
 				// The message was truncated.
@@ -307,7 +307,7 @@ func (s *Server) processPacket(b []byte, addr Addr) {
 		s.logger().Printf("received response for untracked transaction %q from %v", d.T, addr)
 		return
 	}
-	//s.logger().Printf("received response for transaction %q from %v", d.T, addr)
+	// s.logger().Printf("received response for transaction %q from %v", d.T, addr)
 	go t.handleResponse(d)
 	s.updateNode(addr, d.SenderID(), !d.ReadOnly, func(n *node) {
 		n.lastGotResponse = time.Now()
@@ -743,7 +743,7 @@ func (s *Server) writeToNode(ctx context.Context, b []byte, node Addr, wait, rat
 			return
 		}
 	}
-	//s.config.Logger.WithValues(log.Debug).Printf("writing to %s: %q", node.String(), b)
+	// s.config.Logger.WithValues(log.Debug).Printf("writing to %s: %q", node.String(), b)
 	if rate {
 		if wait {
 			err = s.sendLimit.Wait(ctx)
@@ -955,7 +955,7 @@ func (s *Server) transactionQuerySender(
 	rateLimiting QueryRateLimiting,
 	numTries int,
 ) error {
-	//log.Printf("sending %q", b)
+	// log.Printf("sending %q", b)
 	err := transactionSender(
 		sendCtx,
 		func() error {
@@ -1035,7 +1035,8 @@ func (s *Server) announcePeer(node Addr, infoHash int160.T, port int, token stri
 				Port:        &port,
 				Token:       token,
 			},
-			RateLimiting: rl})
+			RateLimiting: rl,
+		})
 	if ret.Err != nil {
 		return
 	}
@@ -1057,7 +1058,8 @@ func (s *Server) FindNode(addr Addr, targetID int160.T, rl QueryRateLimiting) (r
 			Target: targetID.AsByteArray(),
 			Want:   s.config.DefaultWant,
 		},
-		RateLimiting: rl})
+		RateLimiting: rl,
+	})
 	return
 }
 
@@ -1178,7 +1180,7 @@ func (s *Server) TraversalStartingNodes() (nodes []addrMaybeId, err error) {
 		if err != nil {
 			return nil, errors.Wrap(err, "getting starting nodes")
 		} else {
-			//log.Printf("resolved %v addresses", len(addrs))
+			// log.Printf("resolved %v addresses", len(addrs))
 		}
 		for _, a := range addrs {
 			nodes = append(nodes, addrMaybeId{a.KRPC(), nil})

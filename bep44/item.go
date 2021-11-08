@@ -10,9 +10,7 @@ import (
 	"github.com/anacrolix/torrent/bencode"
 )
 
-var (
-	Empty32ByteArray [32]byte
-)
+var Empty32ByteArray [32]byte
 
 type Item struct {
 	// time when this object was added to storage

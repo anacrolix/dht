@@ -206,7 +206,7 @@ func (op *Operation) startQuery() {
 			op.outstanding--
 			op.cond.Broadcast()
 		}()
-		//log.Printf("traversal querying %v", a)
+		// log.Printf("traversal querying %v", a)
 		atomic.AddUint32(&op.stats.NumAddrsTried, 1)
 		ctx, cancel := context.WithCancel(context.Background())
 		go func() {

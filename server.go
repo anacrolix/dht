@@ -195,6 +195,10 @@ func NewServer(c *ServerConfig) (s *Server, err error) {
 	// Add log.Debug by default.
 	c.Logger = c.Logger.WithDefaultLevel(log.Debug)
 
+	if c.Store == nil {
+		c.Store = bep44.NewMemory()
+	}
+
 	s = &Server{
 		config:      *c,
 		ipBlockList: c.IPBlocklist,

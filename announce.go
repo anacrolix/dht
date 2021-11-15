@@ -25,12 +25,9 @@ type Announce struct {
 
 	server   *Server
 	infoHash int160.T // Target
-	// The torrent port that we're announcing.
-	announcePort int
-	// The torrent port should be determined by the receiver in case we're
-	// being NATed.
-	announcePortImplied bool
-	scrape              bool
+
+	announcePeerOpts *AnnouncePeerOpts
+	scrape           bool
 
 	traversal *traversal.Operation
 }
@@ -44,29 +41,57 @@ func (a *Announce) NumContacted() uint32 {
 	return atomic.LoadUint32(&a.traversal.Stats().NumAddrsTried)
 }
 
-type AnnounceOpt *struct{}
+// Server.Announce option
+type AnnounceOpt func(a *Announce)
 
-var scrape = AnnounceOpt(&struct{}{})
+// Scrape BEP 33 bloom filters in queries.
+func Scrape() AnnounceOpt {
+	return func(a *Announce) {
+		a.scrape = true
+	}
+}
 
-func Scrape() AnnounceOpt { return scrape }
+// Arguments for announce_peer from a Server.Announce.
+type AnnouncePeerOpts struct {
+	// The peer port that we're announcing.
+	Port int
+	// The peer port should be determined by the receiver to be the source port of the query packet.
+	ImpliedPort bool
+}
 
+// Finish an Announce get_peers traversal with an announce of a local peer.
+func AnnouncePeer(opts AnnouncePeerOpts) AnnounceOpt {
+	return func(a *Announce) {
+		a.announcePeerOpts = &opts
+	}
+}
+
+// Deprecated: Use Server.AnnounceTraversal.
 // Traverses the DHT graph toward nodes that store peers for the infohash, streaming them to the
 // caller, and announcing the local node to each responding node if port is non-zero or impliedPort
 // is true.
 func (s *Server) Announce(infoHash [20]byte, port int, impliedPort bool, opts ...AnnounceOpt) (_ *Announce, err error) {
+	if port != 0 || impliedPort {
+		opts = append([]AnnounceOpt{AnnouncePeer(AnnouncePeerOpts{
+			Port:        port,
+			ImpliedPort: impliedPort,
+		})}, opts...)
+	}
+	return s.AnnounceTraversal(infoHash, opts...)
+}
+
+// Traverses the DHT graph toward nodes that store peers for the infohash, streaming them to the
+// caller.
+func (s *Server) AnnounceTraversal(infoHash [20]byte, opts ...AnnounceOpt) (_ *Announce, err error) {
 	infoHashInt160 := int160.FromByteArray(infoHash)
 	a := &Announce{
-		Peers:               make(chan PeersValues),
-		values:              make(chan PeersValues),
-		server:              s,
-		infoHash:            infoHashInt160,
-		announcePort:        port,
-		announcePortImplied: impliedPort,
+		Peers:    make(chan PeersValues),
+		values:   make(chan PeersValues),
+		server:   s,
+		infoHash: infoHashInt160,
 	}
 	for _, opt := range opts {
-		if opt == scrape {
-			a.scrape = true
-		}
+		opt(a)
 	}
 	a.traversal = traversal.Start(traversal.OperationInput{
 		Target:     infoHash,
@@ -99,7 +124,9 @@ func (s *Server) Announce(infoHash [20]byte, port int, impliedPort bool, opts ..
 		<-a.traversal.Stalled()
 		a.traversal.Stop()
 		<-a.traversal.Stopped()
-		a.announceClosest()
+		if a.announcePeerOpts != nil {
+			a.announceClosest()
+		}
 		close(a.values)
 	}()
 	return a, nil
@@ -122,8 +149,13 @@ func (a *Announce) announceClosest() {
 
 func (a *Announce) announcePeer(peer dhtutil.Elem) error {
 	return a.server.announcePeer(
-		NewAddr(peer.Addr.UDP()), a.infoHash, a.announcePort, peer.Data.(string),
-		a.announcePortImplied, QueryRateLimiting{}).Err
+		NewAddr(peer.Addr.UDP()),
+		a.infoHash,
+		a.announcePeerOpts.Port,
+		peer.Data.(string),
+		a.announcePeerOpts.ImpliedPort,
+		QueryRateLimiting{},
+	).Err
 }
 
 func (a *Announce) getPeers(ctx context.Context, addr krpc.NodeAddr) (tqr traversal.QueryResult) {

@@ -16,6 +16,7 @@ import (
 	"github.com/anacrolix/missinggo/v2"
 	"github.com/anacrolix/torrent/iplist"
 	"github.com/anacrolix/torrent/metainfo"
+	"golang.org/x/time/rate"
 )
 
 func defaultQueryResendDelay() time.Duration {
@@ -74,6 +75,8 @@ type ServerConfig struct {
 	Logger log.Logger
 
 	DefaultWant []krpc.Want
+
+	SendLimiter *rate.Limiter
 }
 
 // ServerStats instance is returned by Server.Stats() and stores Server metrics

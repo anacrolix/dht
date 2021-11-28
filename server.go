@@ -161,6 +161,7 @@ func NewDefaultServerConfig() *ServerConfig {
 		DefaultWant:   []krpc.Want{krpc.WantNodes, krpc.WantNodes6},
 		Store:         bep44.NewMemory(),
 		Exp:           2 * time.Hour,
+		SendLimiter:   DefaultSendLimiter,
 	}
 }
 
@@ -198,6 +199,9 @@ func NewServer(c *ServerConfig) (s *Server, err error) {
 	if c.Store == nil {
 		c.Store = bep44.NewMemory()
 	}
+	if c.SendLimiter == nil {
+		c.SendLimiter = DefaultSendLimiter
+	}
 
 	s = &Server{
 		config:      *c,
@@ -211,8 +215,6 @@ func NewServer(c *ServerConfig) (s *Server, err error) {
 		table: table{
 			k: 8,
 		},
-		sendLimit: defaultSendLimiter,
-
 		store: bep44.NewWrapper(c.Store, c.Exp),
 	}
 	rand.Read(s.tokenServer.secret)
@@ -750,13 +752,13 @@ func (s *Server) writeToNode(ctx context.Context, b []byte, node Addr, wait, rat
 	// s.config.Logger.WithValues(log.Debug).Printf("writing to %s: %q", node.String(), b)
 	if rate {
 		if wait {
-			err = s.sendLimit.Wait(ctx)
+			err = s.config.SendLimiter.Wait(ctx)
 			if err != nil {
 				err = fmt.Errorf("waiting for rate-limit token: %w", err)
 				return false, err
 			}
 		} else {
-			if !s.sendLimit.Allow() {
+			if !s.config.SendLimiter.Allow() {
 				return false, errors.New("rate limit exceeded")
 			}
 		}

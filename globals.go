@@ -4,4 +4,4 @@ import (
 	"golang.org/x/time/rate"
 )
 
-var defaultSendLimiter = rate.NewLimiter(25, 25)
+var DefaultSendLimiter = rate.NewLimiter(25, 25)

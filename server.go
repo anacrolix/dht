@@ -1129,7 +1129,7 @@ func (s *Server) Close() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.closed.Set()
-	s.socket.Close()
+	go s.socket.Close()
 }
 
 func (s *Server) GetPeers(ctx context.Context, addr Addr, infoHash int160.T, scrape bool, rl QueryRateLimiting) (ret QueryResult) {

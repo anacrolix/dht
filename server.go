@@ -340,9 +340,17 @@ func (s *Server) serve() error {
 			readZeroPort.Add(1)
 			continue
 		}
-		s.mu.Lock()
-		blocked := s.ipBlocked(missinggo.AddrIP(addr))
-		s.mu.Unlock()
+		blocked, err := func() (bool, error) {
+			s.mu.RLock()
+			defer s.mu.RUnlock()
+			if s.closed.IsSet() {
+				return false, errors.New("server is closed")
+			}
+			return s.ipBlocked(missinggo.AddrIP(addr)), nil
+		}()
+		if err != nil {
+			return err
+		}
 		if blocked {
 			readBlocked.Add(1)
 			continue
@@ -622,20 +630,22 @@ func (s *Server) handleQuery(source Addr, m krpc.Msg) {
 }
 
 func (s *Server) sendError(addr Addr, t string, e krpc.Error) {
-	m := krpc.Msg{
-		T: t,
-		Y: "e",
-		E: &e,
-	}
-	b, err := bencode.Marshal(m)
-	if err != nil {
-		panic(err)
-	}
-	s.logger().Printf("sending error to %q: %v", addr, e)
-	_, err = s.writeToNode(context.Background(), b, addr, false, true)
-	if err != nil {
-		s.logger().Printf("error replying to %q: %v", addr, err)
-	}
+	go func() {
+		m := krpc.Msg{
+			T: t,
+			Y: "e",
+			E: &e,
+		}
+		b, err := bencode.Marshal(m)
+		if err != nil {
+			panic(err)
+		}
+		s.logger().Printf("sending error to %q: %v", addr, e)
+		_, err = s.writeToNode(context.Background(), b, addr, false, true)
+		if err != nil {
+			s.logger().Printf("error replying to %q: %v", addr, err)
+		}
+	}()
 }
 
 func (s *Server) reply(addr Addr, t string, r krpc.Return) {
@@ -743,11 +753,24 @@ func (s *Server) nodeErr(n *node) error {
 }
 
 func (s *Server) writeToNode(ctx context.Context, b []byte, node Addr, wait, rate bool) (wrote bool, err error) {
-	if list := s.ipBlockList; list != nil {
-		if r, ok := list.Lookup(node.IP()); ok {
-			err = fmt.Errorf("write to %v blocked by %v", node, r)
+	func() {
+		// This is a pain. It would be better if the blocklist returned an error if it was closed
+		// instead.
+		s.mu.RLock()
+		defer s.mu.RUnlock()
+		if s.closed.IsSet() {
+			err = errors.New("server is closed")
 			return
 		}
+		if list := s.ipBlockList; list != nil {
+			if r, ok := list.Lookup(node.IP()); ok {
+				err = fmt.Errorf("write to %v blocked by %v", node, r)
+				return
+			}
+		}
+	}()
+	if err != nil {
+		return
 	}
 	// s.config.Logger.WithValues(log.Debug).Printf("writing to %s: %q", node.String(), b)
 	if rate {

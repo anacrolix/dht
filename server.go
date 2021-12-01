@@ -795,7 +795,10 @@ func (s *Server) writeToNode(ctx context.Context, b []byte, node Addr, wait, rat
 	}
 	if err != nil {
 		writeErrors.Add(1)
-		// TODO: Reverse the effects on the rate limiting here.
+		if rate {
+			// Give the token back. nfi if this will actually work.
+			s.config.SendLimiter.AllowN(time.Now(), -1)
+		}
 		err = fmt.Errorf("error writing %d bytes to %s: %s", len(b), node, err)
 		return
 	}

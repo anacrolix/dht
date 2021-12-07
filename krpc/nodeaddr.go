@@ -60,3 +60,7 @@ func (me *NodeAddr) FromUDPAddr(ua *net.UDPAddr) {
 	me.IP = ua.IP
 	me.Port = ua.Port
 }
+
+func (me NodeAddr) Equal(x NodeAddr) bool {
+	return me.IP.Equal(x.IP) && me.Port == x.Port
+}

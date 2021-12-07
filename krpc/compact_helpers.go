@@ -72,3 +72,13 @@ func bencodeBytesResult(b []byte, err error) ([]byte, error) {
 	}
 	return bencode.Marshal(b)
 }
+
+// returns position of x in v, or -1 if not found
+func addrIndex(v []NodeAddr, x NodeAddr) int {
+	for i := 0; i < len(v); i += 1 {
+		if v[i].Equal(x) {
+			return i
+		}
+	}
+	return -1
+}

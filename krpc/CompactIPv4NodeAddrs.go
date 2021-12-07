@@ -23,3 +23,7 @@ func (me *CompactIPv4NodeAddrs) UnmarshalBencode(b []byte) error {
 func (me CompactIPv4NodeAddrs) NodeAddrs() []NodeAddr {
 	return me
 }
+
+func (me CompactIPv4NodeAddrs) Index(x NodeAddr) int {
+	return addrIndex(me, x)
+}

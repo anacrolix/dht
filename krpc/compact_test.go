@@ -1,6 +1,7 @@
 package krpc
 
 import (
+	"net"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -57,5 +58,34 @@ func TestNodeAddrIndex6(t *testing.T) {
 		if out != tc.out {
 			t.Errorf("CompactIPv6NodeAddrs(%v).Index(%v) = %v, want %v", tc.v, tc.a, out, tc.out)
 		}
+	}
+}
+
+var marshalIPv4SliceTests = []struct {
+	in     CompactIPv4NodeAddrs
+	out    []byte
+	panics bool
+}{
+	{[]NodeAddr{{net.IP{172, 16, 1, 1}, 3}}, []byte{172, 16, 1, 1, 0, 3}, false},
+	{[]NodeAddr{{net.IPv4(172, 16, 1, 1), 4}}, []byte{172, 16, 1, 1, 0, 4}, false},
+	{[]NodeAddr{{net.IPv4(172, 16, 1, 1), 5}, {net.IPv4(192, 168, 0, 3), 6}}, []byte{
+		172, 16, 1, 1, 0, 5,
+		192, 168, 0, 3, 0, 6,
+	}, false},
+	{[]NodeAddr{{ParseIP("2001::1"), 7}}, nil, true},
+	{[]NodeAddr{{nil, 8}}, nil, true},
+}
+
+func TestMarshalCompactIPv4NodeAddrs(t *testing.T) {
+	for _, tc := range marshalIPv4SliceTests {
+		runFunc := assert.NotPanics
+		if tc.panics {
+			runFunc = assert.Panics
+		}
+		runFunc(t, func() {
+			out, err := tc.in.MarshalBinary()
+			require.NoError(t, err)
+			assert.Equal(t, tc.out, out, "for input %v, %v", tc.in)
+		})
 	}
 }

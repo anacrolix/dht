@@ -4,29 +4,29 @@
 package krpc
 
 import (
+	"bytes"
 	"testing"
 
 	"github.com/anacrolix/torrent/bencode"
 	qt "github.com/frankban/quicktest"
 )
 
+// Check that if we can unmarshal a Msg that we can marshal it back without an error. We
+// intentionally don't require that it marshals back to the same bytes as fields unknown to Msg may
+// have been dropped. But if it does, then I think that makes it an "interesting" case.
 func Fuzz(f *testing.F) {
 	f.Add([]byte("d1:rd2:id20:\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x01e1:t1:t1:y1:re"))
-	f.Fuzz(func(t *testing.T, b []byte) {
+	f.Fuzz(func(t *testing.T, in []byte) {
 		c := qt.New(t)
 		var m Msg
-		err := bencode.Unmarshal(b, &m)
-		if err != nil || m.T == "" || m.Y == "" {
+		err := bencode.Unmarshal(in, &m)
+		if err != nil {
 			t.Skip()
 		}
-		if m.R != nil {
-			if m.R.ID == [20]byte{} {
-				c.Skip()
-			}
-		}
-		b0, err := bencode.Marshal(m)
-		c.Logf("%q -> %q", b, b0)
+		out, err := bencode.Marshal(m)
 		c.Assert(err, qt.IsNil)
-		c.Assert(string(b0), qt.Equals, string(b))
+		if !bytes.Equal(in, out) {
+			t.Skip()
+		}
 	})
 }

@@ -619,10 +619,10 @@ func (s *Server) handleQuery(source Addr, m krpc.Msg) {
 		r.Sig = item.Sig
 
 		s.reply(source, m.T, r)
-	//case "sample_infohashes":
-	//// Nodes supporting this extension should always include the samples field in the response,
-	//// even when it is zero-length. This lets indexing nodes to distinguish nodes supporting this
-	//// extension from those that respond to unknown query types which contain a target field [2].
+	// case "sample_infohashes":
+	// // Nodes supporting this extension should always include the samples field in the response,
+	// // even when it is zero-length. This lets indexing nodes to distinguish nodes supporting this
+	// // extension from those that respond to unknown query types which contain a target field [2].
 	default:
 		// TODO: http://libtorrent.org/dht_extensions.html#forward-compatibility
 		s.sendError(source, m.T, krpc.ErrorMethodUnknown)
@@ -1375,9 +1375,9 @@ func (s *Server) TableMaintainer() {
 		s.mu.RLock()
 		for i := range s.table.buckets {
 			s.pingQuestionableNodesInBucket(i)
-			//if time.Since(b.lastChanged) < 15*time.Minute {
+			// if time.Since(b.lastChanged) < 15*time.Minute {
 			//	continue
-			//}
+			// }
 			if s.shouldStopRefreshingBucket(i) {
 				continue
 			}
@@ -1448,6 +1448,6 @@ func validNodeAddr(addr net.Addr) bool {
 	return true
 }
 
-//func (s *Server) refreshBucket(bucketIndex int) {
+// func (s *Server) refreshBucket(bucketIndex int) {
 //	targetId := s.table.randomIdForBucket(bucketIndex)
-//}
+// }

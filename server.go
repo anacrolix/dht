@@ -909,6 +909,7 @@ type QueryRateLimiting struct {
 	// Don't rate-limit any sends for a query. Note that there's still built-in waits before retries.
 	NotAny        bool
 	WaitOnRetries bool
+	NoWaitFirst   bool
 }
 
 type QueryInput struct {
@@ -994,8 +995,23 @@ func (s *Server) transactionQuerySender(
 			wrote, err := s.writeToNode(sendCtx, b, addr,
 				// We only wait for the first write by default if rate-limiting is enabled for this
 				// query.
-				*writes == 0 || rateLimiting.WaitOnRetries,
-				!rateLimiting.NotAny && !(rateLimiting.NotFirst && *writes == 0))
+				func() bool {
+					if *writes == 0 {
+						return !rateLimiting.NoWaitFirst
+					} else {
+						return rateLimiting.WaitOnRetries
+					}
+				}(),
+				func() bool {
+					if rateLimiting.NotAny {
+						return false
+					}
+					if *writes == 0 {
+						return !rateLimiting.NotFirst
+					}
+					return true
+				}(),
+			)
 			if wrote {
 				*writes++
 			}

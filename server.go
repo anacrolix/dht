@@ -912,6 +912,7 @@ type QueryRateLimiting struct {
 	NoWaitFirst   bool
 }
 
+// The zero value for this uses reasonable/traditional defaults on Server methods.
 type QueryInput struct {
 	MsgArgs      krpc.MsgArgs
 	RateLimiting QueryRateLimiting
@@ -1033,9 +1034,9 @@ func (s *Server) transactionQuerySender(
 }
 
 // Sends a ping query to the address given.
-func (s *Server) Ping(node *net.UDPAddr) QueryResult {
+func (s *Server) PingQueryInput(node *net.UDPAddr, qi QueryInput) QueryResult {
 	addr := NewAddr(node)
-	res := s.Query(context.TODO(), addr, "ping", QueryInput{})
+	res := s.Query(context.TODO(), addr, "ping", qi)
 	if res.Err == nil {
 		id := res.Reply.SenderID()
 		if id != nil {
@@ -1043,6 +1044,11 @@ func (s *Server) Ping(node *net.UDPAddr) QueryResult {
 		}
 	}
 	return res
+}
+
+// Sends a ping query to the address given.
+func (s *Server) Ping(node *net.UDPAddr) QueryResult {
+	return s.PingQueryInput(node, QueryInput{})
 }
 
 // Put adds a new item to node. You need to call Get first for a write token.

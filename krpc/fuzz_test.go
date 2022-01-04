@@ -18,7 +18,7 @@ func Fuzz(f *testing.F) {
 	f.Add([]byte("d1:rd2:id20:\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x01e1:t1:t1:y1:re"))
 	f.Fuzz(func(t *testing.T, in []byte) {
 		c := qt.New(t)
-		var m Msg
+		var m Msg[CompactIPv4NodeInfo]
 		err := bencode.Unmarshal(in, &m)
 		if err != nil {
 			t.Skip()

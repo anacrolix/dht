@@ -1,13 +1,6 @@
 package krpc
 
-import (
-	"net"
-	"testing"
-
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-)
-
+/*
 func TestUnmarshalSlice(t *testing.T) {
 	var data CompactIPv4NodeInfo
 	err := data.UnmarshalBencode([]byte("52:" +
@@ -89,3 +82,4 @@ func TestMarshalCompactIPv4NodeAddrs(t *testing.T) {
 		})
 	}
 }
+*/

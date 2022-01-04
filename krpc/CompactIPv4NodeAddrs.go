@@ -2,16 +2,23 @@ package krpc
 
 import "github.com/anacrolix/missinggo/slices"
 
+/*
+type CompactNodeAddr interface {
+	ElemSize() int
+	MarshalBinary() ([]byte, error)
+	MarshalBencode() ([]byte, error)
+	NodeAddrs() []NodeAddr
+	Index(x NodeAddr) int
+}
+*/
+
 type CompactIPv4NodeAddrs []NodeAddr
 
 func (CompactIPv4NodeAddrs) ElemSize() int { return 6 }
 
 func (me CompactIPv4NodeAddrs) MarshalBinary() ([]byte, error) {
 	return marshalBinarySlice(slices.Map(func(addr NodeAddr) NodeAddr {
-		if a:= addr.IP.To4(); a != nil {
-			addr.IP = a
-		}
-		return addr
+		return addr.Compacted()
 	}, me).(CompactIPv4NodeAddrs))
 }
 

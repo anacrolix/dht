@@ -39,19 +39,19 @@ import (
 // behaviour of the node. Zero valued Server does not have a valid ID and thus
 // is unable to function properly. Use `NewServer(nil)` to initialize a
 // default node.
-type Server struct {
+type Server[T krpc.CompactNodeInfo] struct {
 	id          int160.T
 	socket      net.PacketConn
 	resendDelay func() time.Duration
 
 	mu           sync.RWMutex
-	transactions map[transactionKey]*Transaction
+	transactions map[transactionKey]*Transaction[T]
 	nextT        uint64 // unique "t" field for outbound queries
 	table        table
 	closed       missinggo.Event
 	ipBlockList  iplist.Ranger
 	tokenServer  tokenServer // Manages tokens we issue to our queriers.
-	config       ServerConfig
+	config       ServerConfig[T]
 	stats        ServerStats
 	sendLimit    *rate.Limiter
 
@@ -61,7 +61,7 @@ type Server struct {
 	store *bep44.Wrapper
 }
 
-func (s *Server) numGoodNodes() (num int) {
+func (s *Server[T]) numGoodNodes() (num int) {
 	s.table.forNodes(func(n *node) bool {
 		if s.IsGood(n) {
 			num++
@@ -81,7 +81,7 @@ func prettySince(t time.Time) string {
 	return fmt.Sprintf("%s ago", d)
 }
 
-func (s *Server) WriteStatus(w io.Writer) {
+func (s *Server[T]) WriteStatus(w io.Writer) {
 	fmt.Fprintf(w, "Listening on %s\n", s.Addr())
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -129,7 +129,7 @@ func (s *Server) WriteStatus(w io.Writer) {
 	fmt.Fprintln(w)
 }
 
-func (s *Server) numNodes() (num int) {
+func (s *Server[T]) numNodes() (num int) {
 	s.table.forNodes(func(n *node) bool {
 		num++
 		return true
@@ -138,7 +138,7 @@ func (s *Server) numNodes() (num int) {
 }
 
 // Stats returns statistics for the server.
-func (s *Server) Stats() ServerStats {
+func (s *Server[T]) Stats() ServerStats {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	ss := s.stats
@@ -150,12 +150,12 @@ func (s *Server) Stats() ServerStats {
 
 // Addr returns the listen address for the server. Packets arriving to this address
 // are processed by the server (unless aliens are involved).
-func (s *Server) Addr() net.Addr {
+func (s *Server[T]) Addr() net.Addr {
 	return s.socket.LocalAddr()
 }
 
-func NewDefaultServerConfig() *ServerConfig {
-	return &ServerConfig{
+func NewDefaultServerConfig[T krpc.CompactIPv4NodeInfo]() *ServerConfig[T] {
+	return &ServerConfig[T]{
 		NoSecurity:    true,
 		StartingNodes: func() ([]Addr, error) { return GlobalBootstrapAddrs("udp") },
 		DefaultWant:   []krpc.Want{krpc.WantNodes, krpc.WantNodes6},
@@ -167,7 +167,7 @@ func NewDefaultServerConfig() *ServerConfig {
 
 // If the NodeId hasn't been specified, generate one and secure it against the PublicIP if
 // NoSecurity is not set.
-func (c *ServerConfig) InitNodeId() {
+func (c *ServerConfig[T]) InitNodeId() {
 	if missinggo.IsZeroValue(c.NodeId) {
 		c.NodeId = RandomNodeID()
 		if !c.NoSecurity && c.PublicIP != nil {
@@ -177,9 +177,9 @@ func (c *ServerConfig) InitNodeId() {
 }
 
 // NewServer initializes a new DHT node server.
-func NewServer(c *ServerConfig) (s *Server, err error) {
+func NewServer[T krpc.CompactIPv4NodeInfo](c *ServerConfig[T]) (s *Server[T], err error) {
 	if c == nil {
-		c = NewDefaultServerConfig()
+		c = NewDefaultServerConfig[T]()
 	}
 	if c.Conn == nil {
 		c.Conn, err = net.ListenPacket("udp", ":0")
@@ -203,7 +203,7 @@ func NewServer(c *ServerConfig) (s *Server, err error) {
 		c.SendLimiter = DefaultSendLimiter
 	}
 
-	s = &Server{
+	s = &Server[T]{
 		config:      *c,
 		ipBlockList: c.IPBlocklist,
 		tokenServer: tokenServer{
@@ -211,7 +211,7 @@ func NewServer(c *ServerConfig) (s *Server, err error) {
 			interval:         5 * time.Minute,
 			secret:           make([]byte, 20),
 		},
-		transactions: make(map[transactionKey]*Transaction),
+		transactions: make(map[transactionKey]*Transaction[T]),
 		table: table{
 			k: 8,
 		},
@@ -229,7 +229,7 @@ func NewServer(c *ServerConfig) (s *Server, err error) {
 	return
 }
 
-func (s *Server) serveUntilClosed() {
+func (s *Server[T]) serveUntilClosed() {
 	err := s.serve()
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -242,29 +242,29 @@ func (s *Server) serveUntilClosed() {
 }
 
 // Returns a description of the Server.
-func (s *Server) String() string {
+func (s *Server[T]) String() string {
 	return fmt.Sprintf("dht server on %s (node id %v)", s.socket.LocalAddr(), s.id)
 }
 
 // Packets to and from any address matching a range in the list are dropped.
-func (s *Server) SetIPBlockList(list iplist.Ranger) {
+func (s *Server[T]) SetIPBlockList(list iplist.Ranger) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.ipBlockList = list
 }
 
-func (s *Server) IPBlocklist() iplist.Ranger {
+func (s *Server[T]) IPBlocklist() iplist.Ranger {
 	return s.ipBlockList
 }
 
-func (s *Server) processPacket(b []byte, addr Addr) {
+func (s *Server[T]) processPacket(b []byte, addr Addr) {
 	// log.Printf("got packet %q", b)
 	if len(b) < 2 || b[0] != 'd' {
 		// KRPC messages are bencoded dicts.
 		readNotKRPCDict.Add(1)
 		return
 	}
-	var d krpc.Msg
+	var d krpc.Msg[T]
 	err := bencode.Unmarshal(b, &d)
 	if _, ok := err.(bencode.ErrUnusedTrailingBytes); ok {
 		// log.Printf("%s: received message packet with %d trailing bytes: %q", s, _err.NumUnusedBytes, b[len(b)-_err.NumUnusedBytes:])
@@ -324,7 +324,7 @@ func (s *Server) processPacket(b []byte, addr Addr) {
 	s.deleteTransaction(tk)
 }
 
-func (s *Server) serve() error {
+func (s *Server[T]) serve() error {
 	var b [0x10000]byte
 	for {
 		n, addr, err := s.socket.ReadFrom(b[:])
@@ -359,7 +359,7 @@ func (s *Server) serve() error {
 	}
 }
 
-func (s *Server) ipBlocked(ip net.IP) (blocked bool) {
+func (s *Server[T]) ipBlocked(ip net.IP) (blocked bool) {
 	if s.ipBlockList == nil {
 		return
 	}
@@ -368,7 +368,7 @@ func (s *Server) ipBlocked(ip net.IP) (blocked bool) {
 }
 
 // Adds directly to the node table.
-func (s *Server) AddNode(ni krpc.NodeInfo) error {
+func (s *Server[T]) AddNode(ni krpc.NodeInfo) error {
 	id := int160.FromByteArray(ni.ID)
 	if id.IsZero() {
 		go s.Ping(ni.Addr.UDP())
@@ -403,7 +403,7 @@ func shouldReturnNodes6(queryWants []krpc.Want, querySource net.IP) bool {
 	return querySource.To4() == nil
 }
 
-func (s *Server) makeReturnNodes(target int160.T, filter func(krpc.NodeAddr) bool) []krpc.NodeInfo {
+func (s *Server[T]) makeReturnNodes(target int160.T, filter func(krpc.NodeAddr) bool) []krpc.NodeInfo {
 	return s.closestGoodNodeInfos(8, target, filter)
 }
 
@@ -437,13 +437,13 @@ func filterPeers(querySourceIp net.IP, queryWants []krpc.Want, allPeers []krpc.N
 				return nil, false
 			}
 		}(peer.IP); ok {
-			filtered = append(filtered, krpc.NodeAddr{ip, peer.Port})
+			filtered = append(filtered, krpc.NewNodeIPAddr(ip, peer.Port))
 		}
 	}
 	return
 }
 
-func (s *Server) setReturnNodes(r *krpc.Return, queryMsg krpc.Msg, querySource Addr) *krpc.Error {
+func (s *Server[T]) setReturnNodes(r *krpc.Return[T], queryMsg krpc.Msg[T], querySource Addr) *krpc.Error {
 	if queryMsg.A == nil {
 		return &krpcErrMissingArguments
 	}
@@ -457,7 +457,7 @@ func (s *Server) setReturnNodes(r *krpc.Return, queryMsg krpc.Msg, querySource A
 	return nil
 }
 
-func (s *Server) handleQuery(source Addr, m krpc.Msg) {
+func (s *Server[T]) handleQuery(source Addr, m krpc.Msg[T]) {
 	go func() {
 		expvars.Add(fmt.Sprintf("received query %q", m.Q), 1)
 		if a := m.A; a != nil {
@@ -487,14 +487,14 @@ func (s *Server) handleQuery(source Addr, m krpc.Msg) {
 	args := m.A
 	switch m.Q {
 	case "ping":
-		s.reply(source, m.T, krpc.Return{})
+		s.reply(source, m.T, krpc.Return[T]{})
 	case "get_peers":
 		// Check for the naked m.A.Want deref below.
 		if m.A == nil {
 			s.sendError(source, m.T, krpcErrMissingArguments)
 			break
 		}
-		var r krpc.Return
+		var r krpc.Return[T]
 		if ps := s.config.PeerStore; ps != nil {
 			r.Values = filterPeers(source.IP(), m.A.Want, ps.GetPeers(peer_store.InfoHash(args.InfoHash)))
 			r.Token = func() *string {
@@ -510,7 +510,7 @@ func (s *Server) handleQuery(source Addr, m krpc.Msg) {
 		}
 		s.reply(source, m.T, r)
 	case "find_node":
-		var r krpc.Return
+		var r krpc.Return[T]
 		if err := s.setReturnNodes(&r, m, source); err != nil {
 			s.sendError(source, m.T, *err)
 			break
@@ -544,11 +544,11 @@ func (s *Server) handleQuery(source Addr, m krpc.Msg) {
 		if ps := s.config.PeerStore; ps != nil {
 			go ps.AddPeer(
 				peer_store.InfoHash(args.InfoHash),
-				krpc.NodeAddr{source.IP(), port},
+				krpc.NodeAddr{IP: source.IP(), Port: port},
 			)
 		}
 
-		s.reply(source, m.T, krpc.Return{})
+		s.reply(source, m.T, krpc.Return[T]{})
 	case "put":
 		if !s.validToken(args.Token, source) {
 			expvars.Add("received put with invalid token", 1)
@@ -575,11 +575,11 @@ func (s *Server) handleQuery(source Addr, m krpc.Msg) {
 			break
 		}
 
-		s.reply(source, m.T, krpc.Return{
+		s.reply(source, m.T, krpc.Return[T]{
 			ID: s.ID(),
 		})
 	case "get":
-		var r krpc.Return
+		var r krpc.Return[T]
 		if err := s.setReturnNodes(&r, m, source); err != nil {
 			s.sendError(source, m.T, *err)
 			break
@@ -629,9 +629,9 @@ func (s *Server) handleQuery(source Addr, m krpc.Msg) {
 	}
 }
 
-func (s *Server) sendError(addr Addr, t string, e krpc.Error) {
+func (s *Server[T]) sendError(addr Addr, t string, e krpc.Error) {
 	go func() {
-		m := krpc.Msg{
+		m := krpc.Msg[T]{
 			T: t,
 			Y: "e",
 			E: &e,
@@ -648,10 +648,10 @@ func (s *Server) sendError(addr Addr, t string, e krpc.Error) {
 	}()
 }
 
-func (s *Server) reply(addr Addr, t string, r krpc.Return) {
+func (s *Server[T]) reply(addr Addr, t string, r krpc.Return[T]) {
 	go func() {
 		r.ID = s.id.AsByteArray()
-		m := krpc.Msg{
+		m := krpc.Msg[T]{
 			T:  t,
 			Y:  "r",
 			R:  &r,
@@ -670,7 +670,7 @@ func (s *Server) reply(addr Addr, t string, r krpc.Return) {
 }
 
 // Adds a node if appropriate.
-func (s *Server) addNode(n *node) error {
+func (s *Server[T]) addNode(n *node) error {
 	if s.nodeIsBad(n) {
 		return errors.New("node is bad")
 	}
@@ -692,7 +692,7 @@ func (s *Server) addNode(n *node) error {
 	return nil
 }
 
-func (s *Server) NodeRespondedToPing(addr Addr, id int160.T) {
+func (s *Server[T]) NodeRespondedToPing(addr Addr, id int160.T) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if id == s.id {
@@ -706,7 +706,7 @@ func (s *Server) NodeRespondedToPing(addr Addr, id int160.T) {
 }
 
 // Updates the node, adding it if appropriate.
-func (s *Server) updateNode(addr Addr, id *krpc.ID, tryAdd bool, update func(*node)) error {
+func (s *Server[T]) updateNode(addr Addr, id *krpc.ID, tryAdd bool, update func(*node)) error {
 	if id == nil {
 		return errors.New("id is nil")
 	}
@@ -732,11 +732,11 @@ func (s *Server) updateNode(addr Addr, id *krpc.ID, tryAdd bool, update func(*no
 	return s.addNode(n)
 }
 
-func (s *Server) nodeIsBad(n *node) bool {
+func (s *Server[T]) nodeIsBad(n *node) bool {
 	return s.nodeErr(n) != nil
 }
 
-func (s *Server) nodeErr(n *node) error {
+func (s *Server[T]) nodeErr(n *node) error {
 	if n.Id == s.id {
 		return errors.New("is self")
 	}
@@ -752,7 +752,7 @@ func (s *Server) nodeErr(n *node) error {
 	return nil
 }
 
-func (s *Server) writeToNode(ctx context.Context, b []byte, node Addr, wait, rate bool) (wrote bool, err error) {
+func (s *Server[T]) writeToNode(ctx context.Context, b []byte, node Addr, wait, rate bool) (wrote bool, err error) {
 	func() {
 		// This is a pain. It would be better if the blocklist returned an error if it was closed
 		// instead.
@@ -810,18 +810,18 @@ func (s *Server) writeToNode(ctx context.Context, b []byte, node Addr, wait, rat
 	return
 }
 
-func (s *Server) nextTransactionID() string {
+func (s *Server[T]) nextTransactionID() string {
 	var b [binary.MaxVarintLen64]byte
 	n := binary.PutUvarint(b[:], s.nextT)
 	s.nextT++
 	return string(b[:n])
 }
 
-func (s *Server) deleteTransaction(k transactionKey) {
+func (s *Server[T]) deleteTransaction(k transactionKey) {
 	delete(s.transactions, k)
 }
 
-func (s *Server) addTransaction(k transactionKey, t *Transaction) {
+func (s *Server[T]) addTransaction(k transactionKey, t *Transaction[T]) {
 	if _, ok := s.transactions[k]; ok {
 		panic("transaction not unique")
 	}
@@ -830,23 +830,23 @@ func (s *Server) addTransaction(k transactionKey, t *Transaction) {
 
 // ID returns the 20-byte server ID. This is the ID used to communicate with the
 // DHT network.
-func (s *Server) ID() [20]byte {
+func (s *Server[T]) ID() [20]byte {
 	return s.id.AsByteArray()
 }
 
-func (s *Server) createToken(addr Addr) string {
+func (s *Server[T]) createToken(addr Addr) string {
 	return s.tokenServer.CreateToken(addr)
 }
 
-func (s *Server) validToken(token string, addr Addr) bool {
+func (s *Server[T]) validToken(token string, addr Addr) bool {
 	return s.tokenServer.ValidToken(token, addr)
 }
 
 type numWrites int
 
-func (s *Server) makeQueryBytes(q string, a krpc.MsgArgs, t string) []byte {
+func (s *Server[T]) makeQueryBytes(q string, a krpc.MsgArgs, t string) []byte {
 	a.ID = s.ID()
-	m := krpc.Msg{
+	m := krpc.Msg[T]{
 		T: t,
 		Y: "q",
 		Q: q,
@@ -864,13 +864,13 @@ func (s *Server) makeQueryBytes(q string, a krpc.MsgArgs, t string) []byte {
 	return b
 }
 
-type QueryResult struct {
-	Reply  krpc.Msg
+type QueryResult[T krpc.CompactNodeInfo] struct {
+	Reply  krpc.Msg[T]
 	Writes numWrites
 	Err    error
 }
 
-func (qr QueryResult) ToError() error {
+func (qr QueryResult[T]) ToError() error {
 	if qr.Err != nil {
 		return qr.Err
 	}
@@ -882,7 +882,7 @@ func (qr QueryResult) ToError() error {
 }
 
 // Converts a Server QueryResult to a traversal.QueryResult.
-func (me QueryResult) TraversalQueryResult(addr krpc.NodeAddr) (ret traversal.QueryResult) {
+func (me QueryResult[T]) TraversalQueryResult(addr krpc.NodeAddr) (ret traversal.QueryResult) {
 	r := me.Reply.R
 	if r == nil {
 		return
@@ -923,7 +923,7 @@ type QueryInput struct {
 // the appropriate argument values, if any. `a.ID` is clobbered by the Server. Responses to queries
 // made this way are not interpreted by the Server. More specific methods like FindNode and GetPeers
 // may make use of the response internally before passing it back to the caller.
-func (s *Server) Query(ctx context.Context, addr Addr, q string, input QueryInput) (ret QueryResult) {
+func (s *Server[T]) Query(ctx context.Context, addr Addr, q string, input QueryInput) (ret QueryResult[T]) {
 	if input.NumTries == 0 {
 		input.NumTries = defaultMaxQuerySends
 	}
@@ -932,9 +932,9 @@ func (s *Server) Query(ctx context.Context, addr Addr, q string, input QueryInpu
 			"Query(%v) returned after %v (err=%v, reply.Y=%v, reply.E=%v, writes=%v)",
 			q, time.Since(started), ret.Err, ret.Reply.Y, ret.Reply.E, ret.Writes)
 	}(time.Now())
-	replyChan := make(chan krpc.Msg, 1)
-	t := &Transaction{
-		onResponse: func(m krpc.Msg) {
+	replyChan := make(chan krpc.Msg[T], 1)
+	t := &Transaction[T]{
+		onResponse: func(m krpc.Msg[T]) {
 			replyChan <- m
 		},
 	}
@@ -981,7 +981,7 @@ func (s *Server) Query(ctx context.Context, addr Addr, q string, input QueryInpu
 	return
 }
 
-func (s *Server) transactionQuerySender(
+func (s *Server[T]) transactionQuerySender(
 	sendCtx context.Context,
 	b []byte,
 	writes *numWrites,
@@ -1034,7 +1034,7 @@ func (s *Server) transactionQuerySender(
 }
 
 // Sends a ping query to the address given.
-func (s *Server) PingQueryInput(node *net.UDPAddr, qi QueryInput) QueryResult {
+func (s *Server[T]) PingQueryInput(node *net.UDPAddr, qi QueryInput) QueryResult[T] {
 	addr := NewAddr(node)
 	res := s.Query(context.TODO(), addr, "ping", qi)
 	if res.Err == nil {
@@ -1047,14 +1047,14 @@ func (s *Server) PingQueryInput(node *net.UDPAddr, qi QueryInput) QueryResult {
 }
 
 // Sends a ping query to the address given.
-func (s *Server) Ping(node *net.UDPAddr) QueryResult {
+func (s *Server[T]) Ping(node *net.UDPAddr) QueryResult[T] {
 	return s.PingQueryInput(node, QueryInput{})
 }
 
 // Put adds a new item to node. You need to call Get first for a write token.
-func (s *Server) Put(ctx context.Context, node Addr, i bep44.Put, token string, rl QueryRateLimiting) QueryResult {
+func (s *Server[T]) Put(ctx context.Context, node Addr, i bep44.Put, token string, rl QueryRateLimiting) QueryResult[T] {
 	if err := s.store.Put(i.ToItem()); err != nil {
-		return QueryResult{
+		return QueryResult[T] {
 			Err: err,
 		}
 	}
@@ -1075,7 +1075,7 @@ func (s *Server) Put(ctx context.Context, node Addr, i bep44.Put, token string, 
 	return s.Query(ctx, node, "put", qi)
 }
 
-func (s *Server) announcePeer(node Addr, infoHash int160.T, port int, token string, impliedPort bool, rl QueryRateLimiting) (ret QueryResult) {
+func (s *Server[T]) announcePeer(node Addr, infoHash int160.T, port int, token string, impliedPort bool, rl QueryRateLimiting) (ret QueryResult[T]) {
 	if port == 0 && !impliedPort {
 		ret.Err = errors.New("no port specified")
 		return
@@ -1106,7 +1106,7 @@ func (s *Server) announcePeer(node Addr, infoHash int160.T, port int, token stri
 
 // Sends a find_node query to addr. targetID is the node we're looking for. The Server makes use of
 // some of the response fields.
-func (s *Server) FindNode(addr Addr, targetID int160.T, rl QueryRateLimiting) (ret QueryResult) {
+func (s *Server[T]) FindNode(addr Addr, targetID int160.T, rl QueryRateLimiting) (ret QueryResult[T]) {
 	ret = s.Query(context.TODO(), addr, "find_node", QueryInput{
 		MsgArgs: krpc.MsgArgs{
 			Target: targetID.AsByteArray(),
@@ -1118,21 +1118,21 @@ func (s *Server) FindNode(addr Addr, targetID int160.T, rl QueryRateLimiting) (r
 }
 
 // Returns how many nodes are in the node table.
-func (s *Server) NumNodes() int {
+func (s *Server[T]) NumNodes() int {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.numNodes()
 }
 
 // Returns non-bad nodes from the routing table.
-func (s *Server) Nodes() (nis []krpc.NodeInfo) {
+func (s *Server[T]) Nodes() (nis []krpc.NodeInfo) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.notBadNodes()
 }
 
 // Returns non-bad nodes from the routing table.
-func (s *Server) notBadNodes() (nis []krpc.NodeInfo) {
+func (s *Server[T]) notBadNodes() (nis []krpc.NodeInfo) {
 	s.table.forNodes(func(n *node) bool {
 		if s.nodeIsBad(n) {
 			return true
@@ -1147,14 +1147,14 @@ func (s *Server) notBadNodes() (nis []krpc.NodeInfo) {
 }
 
 // Stops the server network activity. This is all that's required to clean-up a Server.
-func (s *Server) Close() {
+func (s *Server[T]) Close() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.closed.Set()
 	go s.socket.Close()
 }
 
-func (s *Server) GetPeers(ctx context.Context, addr Addr, infoHash int160.T, scrape bool, rl QueryRateLimiting) (ret QueryResult) {
+func (s *Server[T]) GetPeers(ctx context.Context, addr Addr, infoHash int160.T, scrape bool, rl QueryRateLimiting) (ret QueryResult[T]) {
 	args := krpc.MsgArgs{
 		InfoHash: infoHash.AsByteArray(),
 		// TODO: Maybe IPv4-only Servers won't want IPv6 nodes?
@@ -1183,7 +1183,7 @@ func (s *Server) GetPeers(ctx context.Context, addr Addr, infoHash int160.T, scr
 // Get gets item information from a specific target ID. If seq is set to a specific value,
 // only items with seq bigger than the one provided will return a V, K and Sig, if any.
 // Get must be used to get a Put write token, when you want to write an item instead of read it.
-func (s *Server) Get(ctx context.Context, addr Addr, target bep44.Target, seq *int64, rl QueryRateLimiting) QueryResult {
+func (s *Server[T]) Get(ctx context.Context, addr Addr, target bep44.Target, seq *int64, rl QueryRateLimiting) QueryResult[T] {
 	return s.Query(ctx, addr, "get", QueryInput{
 		MsgArgs: krpc.MsgArgs{
 			ID:     s.ID(),
@@ -1195,7 +1195,7 @@ func (s *Server) Get(ctx context.Context, addr Addr, target bep44.Target, seq *i
 	})
 }
 
-func (s *Server) closestGoodNodeInfos(
+func (s *Server[T]) closestGoodNodeInfos(
 	k int,
 	targetID int160.T,
 	filter func(krpc.NodeAddr) bool,
@@ -1210,11 +1210,11 @@ func (s *Server) closestGoodNodeInfos(
 	return
 }
 
-func (s *Server) closestNodes(k int, target int160.T, filter func(*node) bool) []*node {
+func (s *Server[T]) closestNodes(k int, target int160.T, filter func(*node) bool) []*node {
 	return s.table.closestNodes(k, target, filter)
 }
 
-func (s *Server) TraversalStartingNodes() (nodes []addrMaybeId, err error) {
+func (s *Server[T]) TraversalStartingNodes() (nodes []addrMaybeId, err error) {
 	s.mu.RLock()
 	s.table.forNodes(func(n *node) bool {
 		nodes = append(nodes, addrMaybeId{n.Addr.KRPC(), &n.Id})
@@ -1246,7 +1246,7 @@ func (s *Server) TraversalStartingNodes() (nodes []addrMaybeId, err error) {
 	return
 }
 
-func (s *Server) AddNodesFromFile(fileName string) (added int, err error) {
+func (s *Server[T]) AddNodesFromFile(fileName string) (added int, err error) {
 	ns, err := ReadNodesFromFile(fileName)
 	if err != nil {
 		return
@@ -1259,15 +1259,15 @@ func (s *Server) AddNodesFromFile(fileName string) (added int, err error) {
 	return
 }
 
-func (s *Server) logger() log.Logger {
+func (s *Server[T]) logger() log.Logger {
 	return s.config.Logger
 }
 
-func (s *Server) PeerStore() peer_store.Interface {
+func (s *Server[T]) PeerStore() peer_store.Interface {
 	return s.config.PeerStore
 }
 
-func (s *Server) getQuestionableNode() (ret *node) {
+func (s *Server[T]) getQuestionableNode() (ret *node) {
 	s.table.forNodes(func(n *node) bool {
 		if s.IsQuestionable(n) {
 			ret = n
@@ -1278,7 +1278,7 @@ func (s *Server) getQuestionableNode() (ret *node) {
 	return
 }
 
-func (s *Server) shouldStopRefreshingBucket(bucketIndex int) bool {
+func (s *Server[T]) shouldStopRefreshingBucket(bucketIndex int) bool {
 	b := &s.table.buckets[bucketIndex]
 	// Stop if the bucket is full, and none of the nodes are bad.
 	return b.Len() == s.table.K() && b.EachNode(func(n *node) bool {
@@ -1286,7 +1286,7 @@ func (s *Server) shouldStopRefreshingBucket(bucketIndex int) bool {
 	})
 }
 
-func (s *Server) refreshBucket(bucketIndex int) *traversal.Stats {
+func (s *Server[T]) refreshBucket(bucketIndex int) *traversal.Stats {
 	s.mu.RLock()
 	id := s.table.randomIdForBucket(bucketIndex)
 	op := traversal.Start(traversal.OperationInput{
@@ -1328,17 +1328,17 @@ wait:
 	return op.Stats()
 }
 
-func (s *Server) shouldBootstrap() bool {
+func (s *Server[T]) shouldBootstrap() bool {
 	return s.lastBootstrap.IsZero() || time.Since(s.lastBootstrap) > 30*time.Minute
 }
 
-func (s *Server) shouldBootstrapUnlocked() bool {
+func (s *Server[T]) shouldBootstrapUnlocked() bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.shouldBootstrap()
 }
 
-func (s *Server) pingQuestionableNodesInBucket(bucketIndex int) {
+func (s *Server[T]) pingQuestionableNodesInBucket(bucketIndex int) {
 	b := &s.table.buckets[bucketIndex]
 	var wg sync.WaitGroup
 	b.EachNode(func(n *node) bool {
@@ -1363,7 +1363,7 @@ func (s *Server) pingQuestionableNodesInBucket(bucketIndex int) {
 // refreshing buckets. This should be invoked on a running Server when the caller is satisfied with
 // having set it up. It is not necessary to explicitly Bootstrap the Server once this routine has
 // started.
-func (s *Server) TableMaintainer() {
+func (s *Server[T]) TableMaintainer() {
 	for {
 		if s.shouldBootstrapUnlocked() {
 			stats, err := s.Bootstrap()
@@ -1401,7 +1401,7 @@ func (s *Server) TableMaintainer() {
 	}
 }
 
-func (s *Server) questionableNodePing(ctx context.Context, addr Addr, id krpc.ID) QueryResult {
+func (s *Server[T]) questionableNodePing(ctx context.Context, addr Addr, id krpc.ID) QueryResult[T] {
 	// A ping query that will be certain to try at least 3 times.
 	res := s.Query(ctx, addr, "ping", QueryInput{
 		RateLimiting: QueryRateLimiting{
@@ -1422,7 +1422,7 @@ func (s *Server) questionableNodePing(ctx context.Context, addr Addr, id krpc.ID
 }
 
 // Whether we should consider a node for contact based on its address and possible ID.
-func (s *Server) TraversalNodeFilter(node addrMaybeId) bool {
+func (s *Server[T]) TraversalNodeFilter(node addrMaybeId) bool {
 	if !validNodeAddr(node.Addr.UDP()) {
 		return false
 	}
@@ -1448,6 +1448,6 @@ func validNodeAddr(addr net.Addr) bool {
 	return true
 }
 
-// func (s *Server) refreshBucket(bucketIndex int) {
+// func (s *Server[T]) refreshBucket(bucketIndex int) {
 //	targetId := s.table.randomIdForBucket(bucketIndex)
 // }

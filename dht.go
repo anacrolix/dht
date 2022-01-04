@@ -34,7 +34,7 @@ type StartingNodesGetter func() ([]Addr, error)
 
 // ServerConfig allows setting up a  configuration of the `Server` instance to be created with
 // NewServer.
-type ServerConfig struct {
+type ServerConfig[T krpc.CompactNodeInfo] struct {
 	// Set NodeId Manually. Caller must ensure that if NodeId does not conform
 	// to DHT Security Extensions, that NoSecurity is also set.
 	NodeId krpc.ID
@@ -55,7 +55,7 @@ type ServerConfig struct {
 	PublicIP net.IP
 
 	// Hook received queries. Return false if you don't want to propagate to the default handlers.
-	OnQuery func(query *krpc.Msg, source net.Addr) (propagate bool)
+	OnQuery func(query *krpc.Msg[T], source net.Addr) (propagate bool)
 	// Called when a peer successfully announces to us.
 	OnAnnouncePeer func(infoHash metainfo.Hash, ip net.IP, port int, portOk bool)
 	// How long to wait before resending queries that haven't received a response. Defaults to a

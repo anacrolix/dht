@@ -12,7 +12,7 @@ import (
 type TraversalStats = traversal.Stats
 
 // Populates the node table.
-func (s *Server) Bootstrap() (_ TraversalStats, err error) {
+func (s *Server[T]) Bootstrap() (_ TraversalStats, err error) {
 	s.mu.Lock()
 	if s.bootstrappingNow {
 		s.mu.Unlock()

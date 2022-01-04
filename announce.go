@@ -18,41 +18,41 @@ import (
 
 // Maintains state for an ongoing Announce operation. An Announce is started by calling
 // Server.Announce.
-type Announce struct {
-	Peers chan PeersValues
+type Announce[T krpc.CompactNodeInfo] struct {
+	Peers chan PeersValues[T]
 
-	values chan PeersValues // Responses are pushed to this channel.
+	values chan PeersValues[T] // Responses are pushed to this channel.
 
-	server   *Server
+	server   *Server[T]
 	infoHash int160.T // Target
 
-	announcePeerOpts *AnnouncePeerOpts
+	announcePeerOpts *AnnouncePeerOpts[T]
 	scrape           bool
 
 	traversal *traversal.Operation
 }
 
-func (a *Announce) String() string {
+func (a *Announce[T]) String() string {
 	return fmt.Sprintf("%[1]T %[1]p of %v on %v", a, a.infoHash, a.server)
 }
 
 // Returns the number of distinct remote addresses the announce has queried.
-func (a *Announce) NumContacted() uint32 {
+func (a *Announce[T]) NumContacted() uint32 {
 	return atomic.LoadUint32(&a.traversal.Stats().NumAddrsTried)
 }
 
 // Server.Announce option
-type AnnounceOpt func(a *Announce)
+type AnnounceOpt[T krpc.CompactNodeInfo] func(a *Announce[T])
 
 // Scrape BEP 33 bloom filters in queries.
-func Scrape() AnnounceOpt {
-	return func(a *Announce) {
+func Scrape[T krpc.CompactNodeInfo]() AnnounceOpt[T] {
+	return func(a *Announce[T]) {
 		a.scrape = true
 	}
 }
 
 // Arguments for announce_peer from a Server.Announce.
-type AnnouncePeerOpts struct {
+type AnnouncePeerOpts[T krpc.CompactNodeInfo] struct {
 	// The peer port that we're announcing.
 	Port int
 	// The peer port should be determined by the receiver to be the source port of the query packet.
@@ -60,8 +60,8 @@ type AnnouncePeerOpts struct {
 }
 
 // Finish an Announce get_peers traversal with an announce of a local peer.
-func AnnouncePeer(opts AnnouncePeerOpts) AnnounceOpt {
-	return func(a *Announce) {
+func AnnouncePeer[T krpc.CompactNodeInfo](opts AnnouncePeerOpts[T]) AnnounceOpt[T] {
+	return func(a *Announce[T]) {
 		a.announcePeerOpts = &opts
 	}
 }
@@ -70,23 +70,24 @@ func AnnouncePeer(opts AnnouncePeerOpts) AnnounceOpt {
 // Traverses the DHT graph toward nodes that store peers for the infohash, streaming them to the
 // caller, and announcing the local node to each responding node if port is non-zero or impliedPort
 // is true.
-func (s *Server) Announce(infoHash [20]byte, port int, impliedPort bool, opts ...AnnounceOpt) (_ *Announce, err error) {
+func (s *Server[T]) Announce(infoHash [20]byte, port int, impliedPort bool, opts ...AnnounceOpt[T]) (_ *Announce[T], err error) {
 	if port != 0 || impliedPort {
-		opts = append([]AnnounceOpt{AnnouncePeer(AnnouncePeerOpts{
+		ap := AnnouncePeer(AnnouncePeerOpts[T]{
 			Port:        port,
 			ImpliedPort: impliedPort,
-		})}, opts...)
+		})
+		opts = append([]AnnounceOpt[T]{ap}, opts...)
 	}
 	return s.AnnounceTraversal(infoHash, opts...)
 }
 
 // Traverses the DHT graph toward nodes that store peers for the infohash, streaming them to the
 // caller.
-func (s *Server) AnnounceTraversal(infoHash [20]byte, opts ...AnnounceOpt) (_ *Announce, err error) {
+func (s *Server[T]) AnnounceTraversal(infoHash [20]byte, opts ...AnnounceOpt[T]) (_ *Announce[T], err error) {
 	infoHashInt160 := int160.FromByteArray(infoHash)
-	a := &Announce{
-		Peers:    make(chan PeersValues),
-		values:   make(chan PeersValues),
+	a := &Announce[T]{
+		Peers:    make(chan PeersValues[T]),
+		values:   make(chan PeersValues[T]),
 		server:   s,
 		infoHash: infoHashInt160,
 	}
@@ -132,7 +133,7 @@ func (s *Server) AnnounceTraversal(infoHash [20]byte, opts ...AnnounceOpt) (_ *A
 	return a, nil
 }
 
-func (a *Announce) announceClosest() {
+func (a *Announce[T]) announceClosest() {
 	var wg sync.WaitGroup
 	a.traversal.Closest().Range(func(elem dhtutil.Elem) {
 		wg.Add(1)
@@ -147,7 +148,7 @@ func (a *Announce) announceClosest() {
 	wg.Wait()
 }
 
-func (a *Announce) announcePeer(peer dhtutil.Elem) error {
+func (a *Announce[T]) announcePeer(peer dhtutil.Elem) error {
 	return a.server.announcePeer(
 		NewAddr(peer.Addr.UDP()),
 		a.infoHash,
@@ -158,10 +159,10 @@ func (a *Announce) announcePeer(peer dhtutil.Elem) error {
 	).Err
 }
 
-func (a *Announce) getPeers(ctx context.Context, addr krpc.NodeAddr) (tqr traversal.QueryResult) {
+func (a *Announce[T]) getPeers(ctx context.Context, addr krpc.NodeAddr) (tqr traversal.QueryResult) {
 	res := a.server.GetPeers(ctx, NewAddr(addr.UDP()), a.infoHash, a.scrape, QueryRateLimiting{})
 	if r := res.Reply.R; r != nil {
-		peersValues := PeersValues{
+		peersValues := PeersValues[T]{
 			Peers: r.Values,
 			NodeInfo: krpc.NodeInfo{
 				Addr: addr,
@@ -189,17 +190,17 @@ func (a *Announce) getPeers(ctx context.Context, addr krpc.NodeAddr) (tqr traver
 // Corresponds to the "values" key in a get_peers KRPC response. A list of
 // peers that a node has reported as being in the swarm for a queried info
 // hash.
-type PeersValues struct {
+type PeersValues[T krpc.CompactNodeInfo] struct {
 	Peers         []Peer // Peers given in get_peers response.
 	krpc.NodeInfo        // The node that gave the response.
-	krpc.Return
+	krpc.Return[T]
 }
 
 // Stop the announce.
-func (a *Announce) Close() {
+func (a *Announce[T]) Close() {
 	a.traversal.Stop()
 }
 
-func (a *Announce) logger() log.Logger {
+func (a *Announce[T]) logger() log.Logger {
 	return a.server.logger()
 }

@@ -13,11 +13,11 @@ var TransactionTimeout = errors.New("transaction timed out")
 
 // Transaction keeps track of a message exchange between nodes, such as a
 // query message and a response message.
-type Transaction struct {
-	onResponse func(krpc.Msg)
+type Transaction[T krpc.CompactNodeInfo] struct {
+	onResponse func(krpc.Msg[T])
 }
 
-func (t *Transaction) handleResponse(m krpc.Msg) {
+func (t *Transaction[T]) handleResponse(m krpc.Msg[T]) {
 	t.onResponse(m)
 }
 

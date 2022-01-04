@@ -16,12 +16,12 @@ import (
 	"github.com/anacrolix/torrent/bencode"
 )
 
-func testMarshalUnmarshalMsg(t *testing.T, m Msg, expected string) {
+func testMarshalUnmarshalMsg[T CompactNodeInfo](t *testing.T, m Msg[T], expected string) {
 	c := qt.New(t)
 	b, err := bencode.Marshal(m)
 	c.Assert(err, qt.IsNil)
 	c.Assert(string(b), qt.Equals, expected)
-	var _m Msg
+	var _m Msg[T]
 	err = bencode.Unmarshal([]byte(expected), &_m)
 	c.Assert(err, qt.IsNil)
 	c.Assert(_m, qt.ContentEquals, m)
@@ -43,8 +43,8 @@ func TestMarshalUnmarshalMsg(t *testing.T) {
 	//	"y": "r"
 	//}
 	// Test BEP 51 features
-	testMarshalUnmarshalMsg(t, Msg{
-		R: &Return{
+	testMarshalUnmarshalMsg(t, Msg[CompactIPv4NodeInfo]{
+		R: &Return[CompactIPv4NodeInfo]{
 			ID: IdFromString("hellohellohellohello"),
 			Bep51Return: Bep51Return{
 				Interval: func() *int64 { var ret int64 = 420; return &ret }(),
@@ -55,27 +55,27 @@ func TestMarshalUnmarshalMsg(t *testing.T) {
 		T: "hello",
 		Y: "r",
 	}, `d1:rd2:id20:hellohellohellohello8:intervali420e7:samples0:e1:t5:hello1:y1:re`)
-	testMarshalUnmarshalMsg(t, Msg{}, "d1:t0:1:y0:e")
-	testMarshalUnmarshalMsg(t, Msg{
+	testMarshalUnmarshalMsg(t, Msg[CompactIPv4NodeInfo]{}, "d1:t0:1:y0:e")
+	testMarshalUnmarshalMsg(t, Msg[CompactIPv4NodeInfo]{
 		Y: "q",
 		Q: "ping",
 		T: "hi",
 	}, "d1:q4:ping1:t2:hi1:y1:qe")
-	testMarshalUnmarshalMsg(t, Msg{
+	testMarshalUnmarshalMsg(t, Msg[CompactIPv4NodeInfo]{
 		Y: "e",
 		T: "42",
 		E: &Error{Code: 200, Msg: "fuck"},
 	}, "d1:eli200e4:fucke1:t2:421:y1:ee")
-	testMarshalUnmarshalMsg(t, Msg{
+	testMarshalUnmarshalMsg(t, Msg[CompactIPv4NodeInfo]{
 		Y: "r",
 		T: "\x8c%",
-		R: &Return{},
+		R: &Return[CompactIPv4NodeInfo]{},
 	}, "d1:rd2:id20:\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00e1:t2:\x8c%1:y1:re")
 	testMarshalUnmarshalMsg(t,
-		Msg{
+		Msg[CompactIPv4NodeInfo]{
 			Y: "r",
 			T: "\x8c%",
-			R: &Return{
+			R: &Return[CompactIPv4NodeInfo]{
 				Nodes: CompactIPv4NodeInfo{
 					NodeInfo{
 						Addr: NodeAddr{
@@ -87,10 +87,10 @@ func TestMarshalUnmarshalMsg(t *testing.T) {
 			},
 		},
 		"d1:rd2:id20:\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x005:nodes26:\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x01\x02\x03\x04\x124e1:t2:\x8c%1:y1:re")
-	testMarshalUnmarshalMsg(t, Msg{
+	testMarshalUnmarshalMsg(t, Msg[CompactIPv4NodeInfo]{
 		Y: "r",
 		T: "\x8c%",
-		R: &Return{
+		R: &Return[CompactIPv4NodeInfo]{
 			Values: []NodeAddr{
 				{
 					IP:   net.IPv4(1, 2, 3, 4).To4(),
@@ -99,10 +99,10 @@ func TestMarshalUnmarshalMsg(t *testing.T) {
 			},
 		},
 	}, "d1:rd2:id20:\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x006:valuesl6:\x01\x02\x03\x04\x56\x78ee1:t2:\x8c%1:y1:re")
-	testMarshalUnmarshalMsg(t, Msg{
+	testMarshalUnmarshalMsg(t, Msg[CompactIPv4NodeInfo]{
 		Y: "r",
 		T: "\x03",
-		R: &Return{
+		R: &Return[CompactIPv4NodeInfo]{
 			ID: IdFromString("\xeb\xff6isQ\xffJ\xec)ͺ\xab\xf2\xfb\xe3F|\xc2g"),
 		},
 		IP: NodeAddr{
@@ -115,7 +115,7 @@ func TestMarshalUnmarshalMsg(t *testing.T) {
 	rand.Read(k[:])
 	var sig [64]byte
 	rand.Read(sig[:])
-	testMarshalUnmarshalMsg(t, Msg{
+	testMarshalUnmarshalMsg(t, Msg[CompactIPv4NodeInfo]{
 		A: &MsgArgs{
 			V:    nil,
 			Seq:  new(int64),
@@ -126,8 +126,8 @@ func TestMarshalUnmarshalMsg(t *testing.T) {
 		},
 	}, "d1:ad2:id20:\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x001:k32:"+
 		string(k[:])+"3:seqi0e3:sig64:"+string(sig[:])+"e1:t0:1:y0:e")
-	testMarshalUnmarshalMsg(t, Msg{
-		R: &Return{
+	testMarshalUnmarshalMsg(t, Msg[CompactIPv4NodeInfo]{
+		R: &Return[CompactIPv4NodeInfo]{
 			Bep44Return: Bep44Return{
 				V:   []interface{}{"tee", "hee"},
 				Seq: new(int64),
@@ -140,19 +140,19 @@ func TestMarshalUnmarshalMsg(t *testing.T) {
 }
 
 func TestMsgReadOnly(t *testing.T) {
-	testMarshalUnmarshalMsg(t, Msg{ReadOnly: true}, "d2:roi1e1:t0:1:y0:e")
-	testMarshalUnmarshalMsg(t, Msg{ReadOnly: false}, "d1:t0:1:y0:e")
-	var m Msg
+	testMarshalUnmarshalMsg(t, Msg[CompactIPv4NodeInfo]{ReadOnly: true}, "d2:roi1e1:t0:1:y0:e")
+	testMarshalUnmarshalMsg(t, Msg[CompactIPv4NodeInfo]{ReadOnly: false}, "d1:t0:1:y0:e")
+	var m Msg[CompactIPv4NodeInfo]
 	require.NoError(t, bencode.Unmarshal([]byte("de"), &m))
-	require.EqualValues(t, Msg{}, m)
+	require.EqualValues(t, Msg[CompactIPv4NodeInfo]{}, m)
 	require.NoError(t, bencode.Unmarshal([]byte("d2:roi1ee"), &m))
-	require.EqualValues(t, Msg{ReadOnly: true}, m)
+	require.EqualValues(t, Msg[CompactIPv4NodeInfo]{ReadOnly: true}, m)
 	require.NoError(t, bencode.Unmarshal([]byte("d2:roi0ee"), &m))
-	require.EqualValues(t, Msg{}, m)
+	require.EqualValues(t, Msg[CompactIPv4NodeInfo]{}, m)
 }
 
 func TestUnmarshalGetPeersResponse(t *testing.T) {
-	var msg Msg
+	var msg Msg[CompactIPv4NodeInfo]
 	err := bencode.Unmarshal([]byte("d1:rd6:valuesl6:\x01\x02\x03\x04\x05\x066:\x07\x08\x09\x0a\x0b\x0ce5:nodes52:\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x02\x03\x04\x05\x06\x07\x08\x09\x02\x03\x04\x05\x06\x07\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x02\x03\x04\x05\x06\x07\x08\x09\x02\x03\x04\x05\x06\x07ee"), &msg)
 	require.NoError(t, err)
 	assert.Len(t, msg.R.Values, 2)
@@ -197,7 +197,7 @@ func TestEmptyScrapeBloomFilterEstimatedCount(t *testing.T) {
 	assert.EqualValues(t, 0, math.Floor(f.EstimateCount()))
 }
 
-func marshalAndReturnUnmarshaledMsg(t *testing.T, m Msg, expected string) (ret Msg) {
+func marshalAndReturnUnmarshaledMsg[T CompactNodeInfo](t *testing.T, m Msg[T], expected string) (ret Msg[T]) {
 	c := qt.New(t)
 	b, err := bencode.Marshal(m)
 	c.Assert(err, qt.IsNil)
@@ -209,14 +209,14 @@ func marshalAndReturnUnmarshaledMsg(t *testing.T, m Msg, expected string) (ret M
 
 func TestBep51EmptySampleField(t *testing.T) {
 	testMarshalUnmarshalMsg(t,
-		Msg{
-			R: &Return{},
+		Msg[CompactIPv4NodeInfo]{
+			R: &Return[CompactIPv4NodeInfo]{},
 		},
 		"d1:rd2:id20:\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00e1:t0:1:y0:e",
 	)
 	samples := marshalAndReturnUnmarshaledMsg(t,
-		Msg{
-			R: &Return{
+		Msg[CompactIPv4NodeInfo]{
+			R: &Return[CompactIPv4NodeInfo]{
 				Bep51Return: Bep51Return{
 					Samples: &CompactInfohashes{},
 				},

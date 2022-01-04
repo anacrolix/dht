@@ -21,9 +21,10 @@ func (me NodeInfo) String() string {
 
 func RandomNodeInfo(ipLen int) (ni NodeInfo) {
 	rand.Read(ni.ID[:])
-	ni.Addr.IP = make(net.IP, ipLen)
-	rand.Read(ni.Addr.IP)
-	ni.Addr.Port = rand.Intn(math.MaxUint16 + 1)
+	ip := make(net.IP, ipLen)
+	rand.Read(ip)
+	port := rand.Intn(math.MaxUint16 + 1)
+	ni.Addr = NewNodeIPAddr(ip, port)
 	return
 }
 

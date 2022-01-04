@@ -22,7 +22,7 @@ type node struct {
 	failedLastQuestionablePing bool
 }
 
-func (s *Server) IsQuestionable(n *node) bool {
+func (s *Server[T]) IsQuestionable(n *node) bool {
 	return !s.IsGood(n) && !s.nodeIsBad(n)
 }
 
@@ -47,7 +47,7 @@ func (n *node) NodeInfo() (ret krpc.NodeInfo) {
 }
 
 // Per the spec in BEP 5.
-func (s *Server) IsGood(n *node) bool {
+func (s *Server[T]) IsGood(n *node) bool {
 	if s.nodeIsBad(n) {
 		return false
 	}

@@ -77,7 +77,7 @@ type Return struct {
 
 	// K closest nodes to the requested target. Included in responses to queries that imply
 	// traversal, for example get_peers, find_nodes, get, sample_infohashes.
-	Nodes  CompactIPv4NodeInfo `bencode:"nodes,omitempty"`
+	Nodes  CompactNodeInfo     `bencode:"nodes,omitempty"`
 	Nodes6 CompactIPv6NodeInfo `bencode:"nodes6,omitempty"`
 
 	Token  *string    `bencode:"token,omitempty"`  // Token for future announce_peer or put (BEP 44)

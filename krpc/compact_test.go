@@ -9,7 +9,7 @@ import (
 )
 
 func TestUnmarshalSlice(t *testing.T) {
-	var data CompactIPv4NodeInfo
+	var data CompactNodeInfo
 	err := data.UnmarshalBencode([]byte("52:" +
 		"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x01\x02\x03\x04\x05\x06" +
 		"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x02\x03\x04\x05\x06\x07"))
@@ -20,7 +20,7 @@ func TestUnmarshalSlice(t *testing.T) {
 }
 
 var nodeAddrIndexTests4 = []struct {
-	v   CompactIPv4NodeAddrs
+	v   CompactNodeAddrs
 	a   NodeAddr
 	out int
 }{
@@ -62,7 +62,7 @@ func TestNodeAddrIndex6(t *testing.T) {
 }
 
 var marshalIPv4SliceTests = []struct {
-	in     CompactIPv4NodeAddrs
+	in     CompactNodeAddrs
 	out    []byte
 	panics bool
 }{

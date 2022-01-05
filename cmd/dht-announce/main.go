@@ -1,13 +1,14 @@
 package main
 
 import (
+	"context"
 	"net"
 	"os"
 	"os/signal"
 	"sync"
-	"time"
 
 	"github.com/anacrolix/log"
+	"github.com/davecgh/go-spew/spew"
 
 	_ "github.com/anacrolix/envpprof"
 	"github.com/anacrolix/tagflag"
@@ -31,11 +32,12 @@ func mainErr() int {
 		Infohash [][20]byte
 	}{}
 	tagflag.Parse(&flags)
+	if !flags.Debug {
+		log.Default = log.Default.FilterLevel(log.Info)
+	}
 	s, err := dht.NewServer(func() *dht.ServerConfig {
 		sc := dht.NewDefaultServerConfig()
-		if flags.Debug {
-			sc.Logger = log.Default
-		}
+		sc.Logger = log.Default
 		return sc
 	}())
 	if err != nil {
@@ -44,13 +46,8 @@ func mainErr() int {
 	}
 	defer s.Close()
 	var wg sync.WaitGroup
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, os.Interrupt)
-	stop := make(chan struct{})
-	go func() {
-		<-sigChan
-		close(stop)
-	}()
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer cancel()
 	addrs := make(map[[20]byte]map[string]struct{}, len(flags.Infohash))
 	for _, ih := range flags.Infohash {
 		// PSA: Go sucks.
@@ -68,30 +65,39 @@ func mainErr() int {
 		addrs[ih] = make(map[string]struct{})
 		go func(ih [20]byte) {
 			defer wg.Done()
-			for ps := range a.Peers {
-				for _, p := range ps.Peers {
-					s := p.String()
-					if _, ok := addrs[ih][s]; !ok {
-						log.Printf("got peer %s for %x from %s", p, ih, ps.NodeInfo)
-						addrs[ih][s] = struct{}{}
+			defer a.Close()
+		getPeers:
+			for {
+				select {
+				case <-ctx.Done():
+					a.StopTraversing()
+					break getPeers
+				case ps, ok := <-a.Peers:
+					if !ok {
+						break getPeers
+					}
+					for _, p := range ps.Peers {
+						s := p.String()
+						if _, ok := addrs[ih][s]; !ok {
+							log.Printf("got peer %s for %x from %s", p, ih, ps.NodeInfo)
+							addrs[ih][s] = struct{}{}
+						}
+					}
+					if bf := ps.BFpe; bf != nil {
+						log.Printf("%v claims %v peers for %x", ps.NodeInfo, bf.EstimateCount(), ih)
+					}
+					if bf := ps.BFsd; bf != nil {
+						log.Printf("%v claims %v seeds for %x", ps.NodeInfo, bf.EstimateCount(), ih)
 					}
 				}
-				if bf := ps.BFpe; bf != nil {
-					log.Printf("%v claims %v peers for %x", ps.NodeInfo, bf.EstimateCount(), ih)
-				}
-				if bf := ps.BFsd; bf != nil {
-					log.Printf("%v claims %v seeds for %x", ps.NodeInfo, bf.EstimateCount(), ih)
-				}
 			}
-			time.Sleep(time.Second)
+			log.Levelf(log.Debug, "finishing traversal")
+			<-a.Finished()
 			log.Printf("%v contacted %v nodes", a, a.NumContacted())
 		}(ih)
-		go func() {
-			<-stop
-			a.Close()
-		}()
 	}
 	wg.Wait()
+	spew.Dump(s.Stats())
 	for _, ih := range flags.Infohash {
 		ips := make(map[string]struct{}, len(addrs[ih]))
 		for s := range addrs[ih] {

@@ -8,6 +8,8 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/anacrolix/chansync"
+	"github.com/anacrolix/chansync/events"
 	"github.com/anacrolix/dht/v2/traversal"
 	"github.com/anacrolix/log"
 
@@ -28,8 +30,11 @@ type Announce struct {
 
 	announcePeerOpts *AnnouncePeerOpts
 	scrape           bool
+	peerAnnounced    chansync.SetOnce
 
 	traversal *traversal.Operation
+
+	closed chansync.SetOnce
 }
 
 func (a *Announce) String() string {
@@ -127,6 +132,7 @@ func (s *Server) AnnounceTraversal(infoHash [20]byte, opts ...AnnounceOpt) (_ *A
 		if a.announcePeerOpts != nil {
 			a.announceClosest()
 		}
+		a.peerAnnounced.Set()
 		close(a.values)
 	}()
 	return a, nil
@@ -148,7 +154,17 @@ func (a *Announce) announceClosest() {
 }
 
 func (a *Announce) announcePeer(peer dhtutil.Elem) error {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go func() {
+		select {
+		case <-a.closed.Done():
+			cancel()
+		case <-ctx.Done():
+		}
+	}()
 	return a.server.announcePeer(
+		ctx,
 		NewAddr(peer.Addr.UDP()),
 		a.infoHash,
 		a.announcePeerOpts.Port,
@@ -197,9 +213,22 @@ type PeersValues struct {
 
 // Stop the announce.
 func (a *Announce) Close() {
-	a.traversal.Stop()
+	a.StopTraversing()
+	// This will prevent peer announces from proceeding.
+	a.closed.Set()
 }
 
 func (a *Announce) logger() log.Logger {
 	return a.server.logger()
+}
+
+// Halts traversal, but won't block peer announcing.
+func (a *Announce) StopTraversing() {
+	a.traversal.Stop()
+}
+
+// Traversal and peer announcing steps are done.
+func (a *Announce) Finished() events.Done {
+	// This is the last step in an announce.
+	return a.peerAnnounced.Done()
 }

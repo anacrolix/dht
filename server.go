@@ -1075,13 +1075,18 @@ func (s *Server) Put(ctx context.Context, node Addr, i bep44.Put, token string, 
 	return s.Query(ctx, node, "put", qi)
 }
 
-func (s *Server) announcePeer(node Addr, infoHash int160.T, port int, token string, impliedPort bool, rl QueryRateLimiting) (ret QueryResult) {
+func (s *Server) announcePeer(
+	ctx context.Context,
+	node Addr, infoHash int160.T, port int, token string, impliedPort bool, rl QueryRateLimiting,
+) (
+	ret QueryResult,
+) {
 	if port == 0 && !impliedPort {
 		ret.Err = errors.New("no port specified")
 		return
 	}
 	ret = s.Query(
-		context.TODO(), node, "announce_peer",
+		ctx, node, "announce_peer",
 		QueryInput{
 			MsgArgs: krpc.MsgArgs{
 				ImpliedPort: impliedPort,

@@ -7,7 +7,7 @@ type (
 )
 
 func (CompactNodeInfo) ElemSize() int {
-	return 26
+	return 20 + nodeAddrNumBytes
 }
 
 // func (me *CompactIPv4NodeInfo) Scrub() {

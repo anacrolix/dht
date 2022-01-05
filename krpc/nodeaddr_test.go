@@ -23,14 +23,14 @@ var naEqualTests = []struct {
 	a, b NodeAddr
 	out  bool
 }{
-	{NodeAddr{IPv4(172, 16, 1, 1), 11}, NodeAddr{IPv4(172, 16, 1, 1), 11}, true},
-	{NodeAddr{IPv4(172, 16, 1, 1), 11}, NodeAddr{IPv4(172, 16, 1, 1), 22}, false},
-	{NodeAddr{IPv4(172, 16, 1, 1), 11}, NodeAddr{IPv4(192, 168, 0, 3), 11}, false},
-	{NodeAddr{IPv4(172, 16, 1, 1), 11}, NodeAddr{IPv4(192, 168, 0, 3), 22}, false},
-	{NodeAddr{ParseIP("2001:db8:1:2::1"), 11}, NodeAddr{ParseIP("2001:db8:1:2::1"), 11}, true},
-	{NodeAddr{ParseIP("2001:db8:1:2::1"), 11}, NodeAddr{ParseIP("2001:db8:1:2::1"), 22}, false},
-	{NodeAddr{ParseIP("2001:db8:1:2::1"), 11}, NodeAddr{ParseIP("fe80::420b"), 11}, false},
-	{NodeAddr{ParseIP("2001:db8:1:2::1"), 11}, NodeAddr{ParseIP("fe80::420b"), 22}, false},
+	{NodeAddr{IP: IPv4(172, 16, 1, 1), Port: 11}, NodeAddr{IP: IPv4(172, 16, 1, 1), Port: 11}, true},
+	{NodeAddr{IP: IPv4(172, 16, 1, 1), Port: 11}, NodeAddr{IP: IPv4(172, 16, 1, 1), Port: 22}, false},
+	{NodeAddr{IP: IPv4(172, 16, 1, 1), Port: 11}, NodeAddr{IP: IPv4(192, 168, 0, 3), Port: 11}, false},
+	{NodeAddr{IP: IPv4(172, 16, 1, 1), Port: 11}, NodeAddr{IP: IPv4(192, 168, 0, 3), Port: 22}, false},
+	{NodeAddr{IP: ParseIP("2001:db8:1:2::1"), Port: 11}, NodeAddr{IP: ParseIP("2001:db8:1:2::1"), Port: 11}, true},
+	{NodeAddr{IP: ParseIP("2001:db8:1:2::1"), Port: 11}, NodeAddr{IP: ParseIP("2001:db8:1:2::1"), Port: 22}, false},
+	{NodeAddr{IP: ParseIP("2001:db8:1:2::1"), Port: 11}, NodeAddr{IP: ParseIP("fe80::420b"), Port: 11}, false},
+	{NodeAddr{IP: ParseIP("2001:db8:1:2::1"), Port: 11}, NodeAddr{IP: ParseIP("fe80::420b"), Port: 22}, false},
 }
 
 func TestNodeAddrEqual(t *testing.T) {

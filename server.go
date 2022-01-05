@@ -437,7 +437,7 @@ func filterPeers(querySourceIp net.IP, queryWants []krpc.Want, allPeers []krpc.N
 				return nil, false
 			}
 		}(peer.IP); ok {
-			filtered = append(filtered, krpc.NodeAddr{ip, peer.Port})
+			filtered = append(filtered, krpc.NewNodeIPAddr(ip, peer.Port))
 		}
 	}
 	return
@@ -544,7 +544,7 @@ func (s *Server) handleQuery(source Addr, m krpc.Msg) {
 		if ps := s.config.PeerStore; ps != nil {
 			go ps.AddPeer(
 				peer_store.InfoHash(args.InfoHash),
-				krpc.NodeAddr{source.IP(), port},
+				krpc.NewNodeIPAddr(source.IP(), port),
 			)
 		}
 

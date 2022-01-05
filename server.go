@@ -1094,8 +1094,9 @@ func (s *Server) announcePeer(node Addr, infoHash int160.T, port int, token stri
 	if ret.Err != nil {
 		return
 	}
-	if ret.Err = ret.Reply.Error(); ret.Err != nil {
+	if krpcError := ret.Reply.Error(); krpcError != nil {
 		announceErrors.Add(1)
+		ret.Err = krpcError
 		return
 	}
 	s.mu.Lock()

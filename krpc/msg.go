@@ -121,6 +121,8 @@ func (m Msg) SenderID() *ID {
 	return nil
 }
 
+// This does not return an error, but (*Error)(nil) is still a non-nil error. You have been warned!
+// This language is evil.
 func (m Msg) Error() *Error {
 	if m.Y != "e" {
 		return nil

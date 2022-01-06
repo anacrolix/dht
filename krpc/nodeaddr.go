@@ -23,6 +23,8 @@ func SetNetworkType(netType int) {
 
 	if networkType == I2PNet {
 		nodeAddrNumBytes = i2pAddrSize
+	} else {
+		nodeAddrNumBytes = ipv4AddrSize
 	}
 }
 
@@ -69,7 +71,7 @@ func (me NodeAddr) String() string {
 }
 
 func (me NodeAddr) Host() string {
-	if networkType == I2PNet {
+	if me.hostType == I2PAddr {
 		return me.I2PAddress.String()
 	}
 	return me.IP.String()

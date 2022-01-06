@@ -33,6 +33,11 @@ func (i2p I2PDest) Compact() I2PDest {
 		return i2p
 	}
 
+	//invalid destination
+	if len(i2p) < 387 || len(i2p) > 475 {
+		return I2PDest{}
+	}
+
 	sum := sha256.Sum256(i2p)
 	addr := make(I2PDest, 32)
 	copy(addr[:], sum[:])

@@ -19,7 +19,7 @@ func (CompactNodeInfo) ElemSize() int {
 
 func (me CompactNodeInfo) MarshalBinary() ([]byte, error) {
 	return marshalBinarySlice(slices.Map(func(ni NodeInfo) NodeInfo {
-		ni.Addr.IP = ni.Addr.IP.To4()
+		ni.Addr = ni.Addr.Compacted()
 		return ni
 	}, me).(CompactNodeInfo))
 }

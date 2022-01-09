@@ -3,7 +3,6 @@ package krpc
 import (
 	"bytes"
 	"encoding"
-	"encoding/binary"
 	"fmt"
 	"math"
 	"math/rand"
@@ -21,9 +20,10 @@ func (me NodeInfo) String() string {
 
 func RandomNodeInfo(ipLen int) (ni NodeInfo) {
 	rand.Read(ni.ID[:])
-	ni.Addr.IP = make(net.IP, ipLen)
-	rand.Read(ni.Addr.IP)
-	ni.Addr.Port = rand.Intn(math.MaxUint16 + 1)
+	ip := make(net.IP, ipLen)
+	rand.Read(ip)
+	port := rand.Intn(math.MaxUint16 + 1)
+	ni.Addr = NewNodeIPAddr(ip, port)
 	return
 }
 
@@ -35,8 +35,16 @@ var _ interface {
 func (ni NodeInfo) MarshalBinary() ([]byte, error) {
 	var w bytes.Buffer
 	w.Write(ni.ID[:])
-	w.Write(ni.Addr.IP)
-	binary.Write(&w, binary.BigEndian, uint16(ni.Addr.Port))
+	addrBytes, err := ni.Addr.MarshalBinary()
+	if err != nil {
+		return nil, err
+	}
+
+	_, err = w.Write(addrBytes)
+	if err != nil {
+		return nil, err
+	}
+
 	return w.Bytes(), nil
 }
 

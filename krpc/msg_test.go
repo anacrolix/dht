@@ -76,7 +76,7 @@ func TestMarshalUnmarshalMsg(t *testing.T) {
 			Y: "r",
 			T: "\x8c%",
 			R: &Return{
-				Nodes: CompactIPv4NodeInfo{
+				Nodes: CompactNodeInfo{
 					NodeInfo{
 						Addr: NodeAddr{
 							IP:   net.IPv4(1, 2, 3, 4).To4(),

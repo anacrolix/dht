@@ -28,7 +28,7 @@ func TestSetNilBigInt(t *testing.T) {
 }
 
 func TestMarshalCompactNodeInfo(t *testing.T) {
-	cni := krpc.CompactIPv4NodeInfo{krpc.NodeInfo{
+	cni := krpc.CompactNodeInfo{krpc.NodeInfo{
 		ID: [20]byte{'a', 'b', 'c'},
 	}}
 	addr, err := net.ResolveUDPAddr("udp4", "1.2.3.4:5")

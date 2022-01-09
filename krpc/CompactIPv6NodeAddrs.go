@@ -7,9 +7,8 @@ type CompactIPv6NodeAddrs []NodeAddr
 func (CompactIPv6NodeAddrs) ElemSize() int { return 18 }
 
 func (me CompactIPv6NodeAddrs) MarshalBinary() ([]byte, error) {
-	return marshalBinarySlice(slices.Map(func(na NodeAddr) NodeAddr {
-		na.IP = na.IP.To16()
-		return na
+	return marshalBinarySlice(slices.Map(func(addr NodeAddr) NodeAddr {
+		return addr.Compacted()
 	}, me).(CompactIPv6NodeAddrs))
 }
 

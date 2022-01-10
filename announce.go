@@ -115,10 +115,13 @@ func (s *Server) AnnounceTraversal(infoHash [20]byte, opts ...AnnounceOpt) (_ *A
 		for {
 			select {
 			case psv := <-a.values:
+				// We received a new value. Handle it before checking if
+				// traversal stopped
+				a.Peers <- psv
 				select {
-				case a.Peers <- psv:
 				case <-a.traversal.Stopped():
 					return
+				default:
 				}
 			case <-a.traversal.Stopped():
 				return

@@ -23,8 +23,6 @@ import (
 type Announce struct {
 	Peers chan PeersValues
 
-	values chan PeersValues // Responses are pushed to this channel.
-
 	server   *Server
 	infoHash int160.T // Target
 
@@ -91,7 +89,6 @@ func (s *Server) AnnounceTraversal(infoHash [20]byte, opts ...AnnounceOpt) (_ *A
 	infoHashInt160 := int160.FromByteArray(infoHash)
 	a := &Announce{
 		Peers:    make(chan PeersValues),
-		values:   make(chan PeersValues),
 		server:   s,
 		infoHash: infoHashInt160,
 	}
@@ -109,25 +106,6 @@ func (s *Server) AnnounceTraversal(infoHash [20]byte, opts ...AnnounceOpt) (_ *A
 		return
 	}
 	a.traversal.AddNodes(nodes)
-	// Function ferries from values to Peers until discovery is halted.
-	go func() {
-		defer close(a.Peers)
-		for {
-			select {
-			case psv := <-a.values:
-				// We received a new value. Handle it before checking if
-				// traversal stopped
-				a.Peers <- psv
-				select {
-				case <-a.traversal.Stopped():
-					return
-				default:
-				}
-			case <-a.traversal.Stopped():
-				return
-			}
-		}
-	}()
 	go func() {
 		<-a.traversal.Stalled()
 		a.traversal.Stop()
@@ -136,7 +114,7 @@ func (s *Server) AnnounceTraversal(infoHash [20]byte, opts ...AnnounceOpt) (_ *A
 			a.announceClosest()
 		}
 		a.peerAnnounced.Set()
-		close(a.values)
+		close(a.Peers)
 	}()
 	return a, nil
 }
@@ -189,7 +167,7 @@ func (a *Announce) getPeers(ctx context.Context, addr krpc.NodeAddr) (tqr traver
 			Return: *r,
 		}
 		select {
-		case a.values <- peersValues:
+		case a.Peers <- peersValues:
 		case <-a.traversal.Stopped():
 		}
 		if r.Token != nil {

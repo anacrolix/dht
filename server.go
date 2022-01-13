@@ -437,7 +437,7 @@ func filterPeers(querySourceIp net.IP, queryWants []krpc.Want, allPeers []krpc.N
 				return nil, false
 			}
 		}(peer.IP); ok {
-			filtered = append(filtered, krpc.NodeAddr{ip, peer.Port})
+			filtered = append(filtered, krpc.NodeAddr{IP: ip, Port: peer.Port})
 		}
 	}
 	return
@@ -544,7 +544,7 @@ func (s *Server) handleQuery(source Addr, m krpc.Msg) {
 		if ps := s.config.PeerStore; ps != nil {
 			go ps.AddPeer(
 				peer_store.InfoHash(args.InfoHash),
-				krpc.NodeAddr{source.IP(), port},
+				krpc.NodeAddr{IP: source.IP(), Port: port},
 			)
 		}
 
@@ -1223,7 +1223,7 @@ func (s *Server) closestNodes(k int, target int160.T, filter func(*node) bool) [
 func (s *Server) TraversalStartingNodes() (nodes []addrMaybeId, err error) {
 	s.mu.RLock()
 	s.table.forNodes(func(n *node) bool {
-		nodes = append(nodes, addrMaybeId{n.Addr.KRPC(), &n.Id})
+		nodes = append(nodes, addrMaybeId{Addr: n.Addr.KRPC(), Id: &n.Id})
 		return true
 	})
 	s.mu.RUnlock()
@@ -1243,7 +1243,7 @@ func (s *Server) TraversalStartingNodes() (nodes []addrMaybeId, err error) {
 			// log.Printf("resolved %v addresses", len(addrs))
 		}
 		for _, a := range addrs {
-			nodes = append(nodes, addrMaybeId{a.KRPC(), nil})
+			nodes = append(nodes, addrMaybeId{Addr: a.KRPC(), Id: nil})
 		}
 	}
 	if len(nodes) == 0 {

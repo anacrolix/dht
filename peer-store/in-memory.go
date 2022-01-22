@@ -8,7 +8,6 @@ import (
 	"sync"
 	"time"
 
-	debug_writer "github.com/anacrolix/confluence/debug-writer"
 	"github.com/anacrolix/dht/v2/int160"
 	"github.com/anacrolix/dht/v2/krpc"
 	"github.com/anacrolix/multiless"
@@ -24,8 +23,12 @@ type InMemory struct {
 // A uniqueness key for entries to the entry details
 type indexValue = map[string]NodeAndTime
 
+type debugWriterInterface interface {
+	WriteDebug(w io.Writer)
+}
+
 var _ interface {
-	debug_writer.Interface
+	debugWriterInterface
 } = (*InMemory)(nil)
 
 func (me *InMemory) GetPeers(ih InfoHash) (ret []krpc.NodeAddr) {

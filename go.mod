@@ -4,7 +4,6 @@ require (
 	filippo.io/edwards25519 v1.0.0-rc.1
 	github.com/anacrolix/args v0.4.1-0.20211104085705-59f0fe94eb8f
 	github.com/anacrolix/chansync v0.3.0
-	github.com/anacrolix/confluence v1.9.0
 	github.com/anacrolix/envpprof v1.1.1
 	github.com/anacrolix/log v0.10.0
 	github.com/anacrolix/missinggo v1.3.0
@@ -17,6 +16,7 @@ require (
 	github.com/anacrolix/torrent v1.35.1-0.20211104090255-eaeb38b18c6a
 	github.com/benbjohnson/immutable v0.3.0
 	github.com/bradfitz/iter v0.0.0-20191230175014-e8f45d346db8
+	github.com/davecgh/go-spew v1.1.1
 	github.com/docopt/docopt-go v0.0.0-20180111231733-ee0de3bc6815
 	github.com/frankban/quicktest v1.14.0
 	github.com/multiformats/go-base36 v0.1.0
@@ -35,7 +35,6 @@ require (
 	github.com/anacrolix/upnp v0.1.2-0.20200416075019-5e9378ed1425 // indirect
 	github.com/anacrolix/utp v0.1.0 // indirect
 	github.com/bits-and-blooms/bitset v1.2.0 // indirect
-	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/dustin/go-humanize v1.0.0 // indirect
 	github.com/edsrzf/mmap-go v1.0.0 // indirect
 	github.com/elliotchance/orderedmap v1.4.0 // indirect

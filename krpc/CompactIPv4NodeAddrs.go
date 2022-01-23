@@ -8,7 +8,7 @@ func (CompactIPv4NodeAddrs) ElemSize() int { return 6 }
 
 func (me CompactIPv4NodeAddrs) MarshalBinary() ([]byte, error) {
 	return marshalBinarySlice(slices.Map(func(addr NodeAddr) NodeAddr {
-		if a:= addr.IP.To4(); a != nil {
+		if a := addr.IP.To4(); a != nil {
 			addr.IP = a
 		}
 		return addr

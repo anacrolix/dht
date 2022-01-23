@@ -190,7 +190,7 @@ func NewServer(c *ServerConfig) (s *Server, err error) {
 	c.InitNodeId()
 	// If Logger is empty, emulate the old behaviour: Everything is logged to the default location,
 	// and there are no debug messages.
-	if c.Logger.LoggerImpl == nil {
+	if c.Logger.IsZero() {
 		c.Logger = log.Default.FilterLevel(log.Info)
 	}
 	// Add log.Debug by default.
@@ -1235,7 +1235,7 @@ func (s *Server) TraversalStartingNodes() (nodes []addrMaybeId, err error) {
 		// resolution attempts. This would require that we're unable to get replies because we can't
 		// resolve, transmit or receive on the network. Nodes currently don't get expired from the
 		// table, so once we have some entries, we should never have to fallback.
-		s.logger().WithValues(log.Warning).Printf("falling back on starting nodes")
+		s.logger().Levelf(log.Debug, "falling back on starting nodes")
 		addrs, err := s.config.StartingNodes()
 		if err != nil {
 			return nil, errors.Wrap(err, "getting starting nodes")
@@ -1387,10 +1387,10 @@ func (s *Server) TableMaintainer() {
 			if s.shouldStopRefreshingBucket(i) {
 				continue
 			}
-			s.logger().WithLevel(log.Info).Printf("refreshing bucket %v", i)
+			s.logger().Levelf(log.Info, "refreshing bucket %v", i)
 			s.mu.RUnlock()
 			stats := s.refreshBucket(i)
-			s.logger().WithLevel(log.Info).Printf("finished refreshing bucket %v: %v", i, stats)
+			s.logger().Levelf(log.Info, "finished refreshing bucket %v: %v", i, stats)
 			s.mu.RLock()
 			if !s.shouldStopRefreshingBucket(i) {
 				// Presumably we couldn't fill the bucket anymore, so assume we're as deep in the

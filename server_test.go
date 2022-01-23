@@ -13,8 +13,9 @@ import (
 func TestPutGet(t *testing.T) {
 	require := require.New(t)
 
-	s1 := newServer(t)
-	s2 := newServer(t)
+	l := log.Default.WithNames(t.Name())
+	s1 := newServer(t, l.WithNames("s1"))
+	s2 := newServer(t, l.WithNames("s2"))
 
 	s2Addr := NewAddr(s2.Addr())
 
@@ -87,12 +88,12 @@ func TestPutGet(t *testing.T) {
 	require.Equal(int64(2), *qr.Reply.R.Seq)
 }
 
-func newServer(t *testing.T) *Server {
+func newServer(t *testing.T, l log.Logger) *Server {
 	cfg := NewDefaultServerConfig()
 	cfg.WaitToReply = true
 
 	cfg.Conn = mustListen("localhost:0")
-	cfg.Logger = log.Default.FilterLevel(log.Debug)
+	cfg.Logger = l
 	s, err := NewServer(cfg)
 	if err != nil {
 		panic(err)

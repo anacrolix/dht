@@ -165,15 +165,31 @@ func NewDefaultServerConfig() *ServerConfig {
 	}
 }
 
-// If the NodeId hasn't been specified, generate one and secure it against the PublicIP if
-// NoSecurity is not set.
-func (c *ServerConfig) InitNodeId() {
-	if missinggo.IsZeroValue(c.NodeId) {
-		c.NodeId = RandomNodeID()
-		if !c.NoSecurity && c.PublicIP != nil {
+// If the NodeId hasn't been specified, generate a suitable one. deterministic if c.Conn and
+// c.PublicIP are non-nil.
+func (c *ServerConfig) InitNodeId() (deterministic bool) {
+	if c.NodeId.IsZero() {
+		var secure bool
+		if c.Conn != nil && c.PublicIP != nil {
+			// Is this sufficient for a deterministic node ID?
+			c.NodeId = HashTuple(
+				[]byte(c.Conn.LocalAddr().Network()),
+				[]byte(c.Conn.LocalAddr().String()),
+				c.PublicIP,
+			)
+			// Since we have a public IP we can secure, and the choice must not be influenced by the
+			// NoSecure configuration option.
+			secure = true
+			deterministic = true
+		} else {
+			c.NodeId = RandomNodeID()
+			secure = !c.NoSecurity && c.PublicIP != nil
+		}
+		if secure {
 			SecureNodeId(&c.NodeId, c.PublicIP)
 		}
 	}
+	return
 }
 
 // NewServer initializes a new DHT node server.

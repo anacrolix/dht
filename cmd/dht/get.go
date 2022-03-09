@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"os"
 
@@ -13,9 +14,10 @@ import (
 )
 
 type GetCmd struct {
-	Target []krpc.ID `arg:"positional"`
-	Seq    *int64
-	Salt   string
+	Target          []krpc.ID `arg:"positional"`
+	Seq             *int64
+	Salt            string
+	ExtractInfohash bool `help:"extract and print the mutable torrent infohash in hex"`
 }
 
 func get(cmd *GetCmd) (err error) {
@@ -32,8 +34,12 @@ func get(cmd *GetCmd) (err error) {
 		v, _, err := getput.Get(context.Background(), t, s, cmd.Seq, []byte(cmd.Salt))
 		if err != nil {
 			log.Printf("error getting %v: %v", t, err)
+			continue
+		}
+		log.Printf("got result [seq=%v, mutable=%v]", v.Seq, v.Mutable)
+		if cmd.ExtractInfohash {
+			fmt.Printf("%x\n", v.V.(map[string]interface{})["ih"].(string))
 		} else {
-			log.Printf("got result [seq=%v, mutable=%v]", v.Seq, v.Mutable)
 			os.Stdout.Write(bencode.MustMarshal(v.V))
 			os.Stdout.WriteString("\n")
 		}

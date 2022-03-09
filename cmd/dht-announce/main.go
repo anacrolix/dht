@@ -28,6 +28,7 @@ func mainErr() int {
 		Port   int
 		Debug  bool
 		Scrape bool
+		Addr   string
 		tagflag.StartPos
 		Infohash [][20]byte
 	}{}
@@ -37,6 +38,13 @@ func mainErr() int {
 	}
 	s, err := dht.NewServer(func() *dht.ServerConfig {
 		sc := dht.NewDefaultServerConfig()
+		if flags.Addr != "" {
+			conn, err := net.ListenPacket("udp", flags.Addr)
+			if err != nil {
+				panic(err)
+			}
+			sc.Conn = conn
+		}
 		sc.Logger = log.Default
 		return sc
 	}())
@@ -44,6 +52,7 @@ func mainErr() int {
 		log.Printf("error creating server: %s", err)
 		return 1
 	}
+	log.Printf("dht server at %v", s)
 	defer s.Close()
 	var wg sync.WaitGroup
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)

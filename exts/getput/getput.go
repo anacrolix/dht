@@ -25,7 +25,7 @@ type PutGetResult struct {
 
 type GetResult struct {
 	Seq     int64
-	V       interface{}
+	V       bencode.Bytes
 	Mutable bool
 }
 
@@ -48,8 +48,7 @@ func Get(
 			}
 			if r := res.Reply.R; r != nil {
 				rv := r.V
-				bv := bencode.MustMarshal(rv)
-				// spew.Dump(r)
+				bv := rv
 				if sha1.Sum(bv) == target {
 					select {
 					case vChan <- GetResult{

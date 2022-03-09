@@ -38,7 +38,12 @@ func get(cmd *GetCmd) (err error) {
 		}
 		log.Printf("got result [seq=%v, mutable=%v]", v.Seq, v.Mutable)
 		if cmd.ExtractInfohash {
-			fmt.Printf("%x\n", v.V.(map[string]interface{})["ih"].(string))
+			var payload krpc.Bep46Payload
+			err = bencode.Unmarshal(v.V, &payload)
+			if err != nil {
+				return fmt.Errorf("unmarshalling bep46 payload: %w", err)
+			}
+			fmt.Printf("%x\n", payload.Ih)
 		} else {
 			os.Stdout.Write(bencode.MustMarshal(v.V))
 			os.Stdout.WriteString("\n")

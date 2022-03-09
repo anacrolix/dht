@@ -630,7 +630,7 @@ func (s *Server) handleQuery(source Addr, m krpc.Msg) {
 			break
 		}
 
-		r.V = item.V
+		r.V = bencode.MustMarshal(item.V)
 		r.K = item.K
 		r.Sig = item.Sig
 

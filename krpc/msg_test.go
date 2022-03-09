@@ -129,7 +129,7 @@ func TestMarshalUnmarshalMsg(t *testing.T) {
 	testMarshalUnmarshalMsg(t, Msg{
 		R: &Return{
 			Bep44Return: Bep44Return{
-				V:   []interface{}{"tee", "hee"},
+				V:   bencode.MustMarshal([]interface{}{"tee", "hee"}),
 				Seq: new(int64),
 				K:   k,
 				Sig: sig,

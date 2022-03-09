@@ -7,6 +7,7 @@ import (
 
 	"github.com/anacrolix/dht/v2/bep44"
 	"github.com/anacrolix/log"
+	"github.com/anacrolix/torrent/bencode"
 	"github.com/stretchr/testify/require"
 )
 
@@ -34,7 +35,9 @@ func TestPutGet(t *testing.T) {
 
 	qr = s1.Get(context.TODO(), s2Addr, immuItem.Target(), nil, QueryRateLimiting{})
 	require.NoError(qr.ToError())
-	require.Equal("Hello World! immu", qr.Reply.R.V)
+	var vStr string // heueahea
+	require.NoError(bencode.Unmarshal(qr.Reply.R.V, &vStr))
+	require.Equal("Hello World! immu", vStr)
 
 	_, priv, err := ed25519.GenerateKey(nil)
 	require.NoError(err)
@@ -56,7 +59,8 @@ func TestPutGet(t *testing.T) {
 
 	qr = s1.Get(context.TODO(), s2Addr, mutItem.Target(), nil, QueryRateLimiting{})
 	require.NoError(qr.ToError())
-	require.Equal("Hello World!", qr.Reply.R.V)
+	require.NoError(bencode.Unmarshal(qr.Reply.R.V, &vStr))
+	require.Equal("Hello World!", vStr)
 
 	ii, err := s2.store.Get(immuItem.Target())
 	require.NoError(err)
@@ -78,7 +82,8 @@ func TestPutGet(t *testing.T) {
 
 	qr = s1.Get(context.TODO(), s2Addr, mutItem.Target(), nil, QueryRateLimiting{})
 	require.NoError(qr.ToError())
-	require.Equal("Bye World!", qr.Reply.R.V)
+	require.NoError(bencode.Unmarshal(qr.Reply.R.V, &vStr))
+	require.Equal("Bye World!", vStr)
 
 	seqPtr := new(int64)
 	*seqPtr = 3

@@ -37,7 +37,12 @@ func putMutableInfohash(cmd *PutMutableInfohash, ih torrent.InfoHash) (err error
 		Cas:  cmd.Cas,
 		Seq:  cmd.Seq,
 	}
-	privKey := ed25519.NewKeyFromSeed(cmd.Key.Bytes)
+	seed := cmd.Key.Bytes
+	if len(seed) != ed25519.SeedSize {
+		err = fmt.Errorf("seed size %v: expected %v", len(seed), ed25519.SeedSize)
+		return
+	}
+	privKey := ed25519.NewKeyFromSeed(seed)
 	put.K = (*[32]byte)(privKey.Public().(ed25519.PublicKey))
 	put.Sign(privKey)
 	target := put.Target()

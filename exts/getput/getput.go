@@ -16,13 +16,6 @@ import (
 	"github.com/anacrolix/torrent/bencode"
 )
 
-type PutGetResult struct {
-	GetV           interface{}
-	GetBytes       []byte
-	TraversalStats *traversal.Stats
-	SuccessfulPuts []krpc.NodeAddr
-}
-
 type GetResult struct {
 	Seq     int64
 	V       bencode.Bytes

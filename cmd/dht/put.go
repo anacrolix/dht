@@ -65,7 +65,10 @@ func put(cmd *PutCmd) (err error) {
 		target := put.Target()
 		log.Printf("putting %q to %x", v, target)
 		var stats *traversal.Stats
-		stats, err = getput.Put(context.Background(), target, s, put)
+		stats, err = getput.Put(context.Background(), target, s, put.Salt, func(seq int64) bep44.Put {
+			// Ignore best seen seq
+			return put
+		})
 		if err != nil {
 			err = fmt.Errorf("in traversal: %w", err)
 			return

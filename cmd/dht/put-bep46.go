@@ -19,10 +19,11 @@ import (
 )
 
 type PutMutableInfohash struct {
-	Key  targets.Hex
-	Seq  int64
-	Cas  int64
-	Salt string
+	Key     targets.Hex
+	Seq     int64
+	Cas     int64
+	Salt    string
+	AutoSeq bool
 }
 
 func putMutableInfohash(cmd *PutMutableInfohash, ih torrent.InfoHash) (err error) {
@@ -44,11 +45,17 @@ func putMutableInfohash(cmd *PutMutableInfohash, ih torrent.InfoHash) (err error
 	}
 	privKey := ed25519.NewKeyFromSeed(seed)
 	put.K = (*[32]byte)(privKey.Public().(ed25519.PublicKey))
-	put.Sign(privKey)
 	target := put.Target()
 	log.Printf("putting %q to %x", put.V, target)
 	var stats *traversal.Stats
-	stats, err = getput.Put(context.Background(), target, s, put)
+	stats, err = getput.Put(context.Background(), target, s, put.Salt, func(seq int64) bep44.Put {
+		// Increment best seen seq by one.
+		if cmd.AutoSeq {
+			put.Seq = seq + 1
+		}
+		put.Sign(privKey)
+		return put
+	})
 	if err != nil {
 		err = fmt.Errorf("in traversal: %w", err)
 		return

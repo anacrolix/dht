@@ -22,15 +22,13 @@ type GetResult struct {
 	Mutable bool
 }
 
-func Get(
-	ctx context.Context, target bep44.Target, s *dht.Server, seq *int64, salt []byte,
+func startGetTraversal(
+	target bep44.Target, s *dht.Server, seq *int64, salt []byte,
 ) (
-	ret GetResult, stats *traversal.Stats, err error,
+	vChan chan GetResult, op *traversal.Operation, err error,
 ) {
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
-	vChan := make(chan GetResult)
-	op := traversal.Start(traversal.OperationInput{
+	vChan = make(chan GetResult)
+	op = traversal.Start(traversal.OperationInput{
 		Alpha:  15,
 		Target: target,
 		DoQuery: func(ctx context.Context, addr krpc.NodeAddr) traversal.QueryResult {
@@ -63,15 +61,29 @@ func Get(
 					log.Printf("get response item hash didn't match target: %q", rv)
 				}
 			}
-			return res.TraversalQueryResult(addr)
+			tqr := res.TraversalQueryResult(addr)
+			// Is this to filter nodes that provide tokens?
+			//if tqr.ClosestData == nil {
+			//	tqr.ResponseFrom = nil
+			//}
+			return tqr
 		},
 		NodeFilter: s.TraversalNodeFilter,
 	})
 	nodes, err := s.TraversalStartingNodes()
+	op.AddNodes(nodes)
+	return
+}
+
+func Get(
+	ctx context.Context, target bep44.Target, s *dht.Server, seq *int64, salt []byte,
+) (
+	ret GetResult, stats *traversal.Stats, err error,
+) {
+	vChan, op, err := startGetTraversal(target, s, seq, salt)
 	if err != nil {
 		return
 	}
-	op.AddNodes(nodes)
 	ret.Seq = math.MinInt64
 	gotValue := false
 receiveResults:
@@ -99,40 +111,39 @@ receiveResults:
 	return
 }
 
+type seqToPut = func(seq int64) bep44.Put
+
 func Put(
-	ctx context.Context, target krpc.ID, s *dht.Server, put bep44.Put,
+	ctx context.Context, target krpc.ID, s *dht.Server, salt []byte, seqToPut seqToPut,
 ) (
 	stats *traversal.Stats, err error,
 ) {
-	op := traversal.Start(traversal.OperationInput{
-		Alpha:  15,
-		Target: target,
-		DoQuery: func(ctx context.Context, addr krpc.NodeAddr) traversal.QueryResult {
-			res := s.Get(ctx, dht.NewAddr(addr.UDP()), target, nil, dht.QueryRateLimiting{})
-			err := res.ToError()
-			if err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, dht.TransactionTimeout) {
-				// log.Printf("error querying %v: %v", addr, err)
-			}
-			tqr := res.TraversalQueryResult(addr)
-			if tqr.ClosestData == nil {
-				tqr.ResponseFrom = nil
-			}
-			return tqr
-		},
-		NodeFilter: s.TraversalNodeFilter,
-	})
-	nodes, err := s.TraversalStartingNodes()
+	vChan, op, err := startGetTraversal(target, s,
+		// When we do a get traversal for a put, we don't care what seq the peers have?
+		nil,
+		// This is duplicated with the put, but we need it to filter responses for autoSeq.
+		salt)
 	if err != nil {
 		return
 	}
-	op.AddNodes(nodes)
+	var autoSeq int64
+notDone:
 	select {
+	case v := <-vChan:
+		if v.Mutable && v.Seq > autoSeq {
+			autoSeq = v.Seq
+		}
+		// There are more optimizations that can be done here. We can set CAS automatically, and we
+		// can skip updating the sequence number if the existing content already matches (and
+		// presumably republish the existing seq).
+		goto notDone
 	case <-op.Stalled():
 	case <-ctx.Done():
 		err = ctx.Err()
 	}
 	op.Stop()
 	var wg sync.WaitGroup
+	put := seqToPut(autoSeq)
 	op.Closest().Range(func(elem k_nearest_nodes.Elem) {
 		wg.Add(1)
 		go func() {

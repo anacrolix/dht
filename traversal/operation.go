@@ -19,7 +19,9 @@ import (
 type QueryResult struct {
 	// A node that should be considered for a closest entry.
 	ResponseFrom *krpc.NodeInfo
-	// Data associated with a closest node.
+	// Data associated with a closest node. Is this ever not a string? I think using generics for
+	// this leaks throughout the entire Operation. Hardly worth it. It's still possible to handle
+	// invalid token types at runtime.
 	ClosestData interface{}
 	Nodes       []krpc.NodeInfo
 	Nodes6      []krpc.NodeInfo

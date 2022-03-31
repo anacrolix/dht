@@ -62,10 +62,12 @@ func startGetTraversal(
 				}
 			}
 			tqr := res.TraversalQueryResult(addr)
-			// Is this to filter nodes that provide tokens?
-			//if tqr.ClosestData == nil {
-			//	tqr.ResponseFrom = nil
-			//}
+			// Filter replies from nodes that don't have a string token. This doesn't look prettier
+			// with generics. "The token value should be a short binary string." ¯\_(ツ)_/¯ (BEP 5).
+			tqr.ClosestData, _ = tqr.ClosestData.(string)
+			if tqr.ClosestData == nil {
+				tqr.ResponseFrom = nil
+			}
 			return tqr
 		},
 		NodeFilter: s.TraversalNodeFilter,
@@ -148,6 +150,7 @@ notDone:
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
+			// This is enforced by startGetTraversal.
 			token := elem.Data.(string)
 			res := s.Put(ctx, dht.NewAddr(elem.Addr.UDP()), put, token, dht.QueryRateLimiting{})
 			err := res.ToError()

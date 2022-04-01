@@ -79,6 +79,7 @@ type Operation struct {
 	stopped      chansync.SetOnce
 }
 
+// I don't think you should access this until the Stopped event.
 func (op *Operation) Stats() *Stats {
 	return &op.stats
 }

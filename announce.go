@@ -44,6 +44,10 @@ func (a *Announce) NumContacted() uint32 {
 	return atomic.LoadUint32(&a.traversal.Stats().NumAddrsTried)
 }
 
+func (a *Announce) TraversalStats() TraversalStats {
+	return *a.traversal.Stats()
+}
+
 // Server.Announce option
 type AnnounceOpt func(a *Announce)
 

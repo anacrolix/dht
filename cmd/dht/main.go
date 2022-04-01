@@ -3,7 +3,10 @@ package main
 import (
 	"context"
 	"fmt"
-	"log"
+	"os"
+	"os/signal"
+
+	"github.com/anacrolix/log"
 
 	"github.com/anacrolix/args"
 	"github.com/anacrolix/dht/v2"
@@ -12,7 +15,10 @@ import (
 )
 
 func main() {
-	log.SetFlags(log.Flags() | log.Lshortfile)
+	logger := log.Default.WithNames("main")
+	ctx := log.ContextWithLogger(context.Background(), logger)
+	ctx, stopSignalNotify := signal.NotifyContext(ctx, os.Interrupt)
+	defer stopSignalNotify()
 	var s *dht.Server
 	args.Main{
 		Params: []args.Param{
@@ -51,6 +57,27 @@ func main() {
 				ctx.Parse(args.FromStruct(&pa)...)
 				ctx.Defer(func() error {
 					return ping(pa, s)
+				})
+				return nil
+			}),
+			args.Subcommand("get-peers", func(sub args.SubCmdCtx) (err error) {
+				var subArgs = struct {
+					AnnouncePort int
+					Scrape       bool
+					InfoHash     torrent.InfoHash
+				}{}
+				sub.Parse(args.FromStruct(&subArgs)...)
+				var announceOpts []dht.AnnounceOpt
+				if subArgs.AnnouncePort != 0 {
+					announceOpts = append(announceOpts, dht.AnnouncePeer(dht.AnnouncePeerOpts{
+						Port: subArgs.AnnouncePort,
+					}))
+				}
+				if subArgs.Scrape {
+					announceOpts = append(announceOpts, dht.Scrape())
+				}
+				sub.Defer(func() error {
+					return GetPeers(ctx, s, subArgs.InfoHash, announceOpts...)
 				})
 				return nil
 			}),

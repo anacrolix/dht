@@ -5,7 +5,7 @@ require (
 	github.com/anacrolix/args v0.5.0
 	github.com/anacrolix/chansync v0.3.0
 	github.com/anacrolix/envpprof v1.1.1
-	github.com/anacrolix/log v0.11.0
+	github.com/anacrolix/log v0.13.1
 	github.com/anacrolix/missinggo v1.3.0
 	github.com/anacrolix/missinggo/v2 v2.5.2
 	github.com/anacrolix/multiless v0.2.0
@@ -23,6 +23,7 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/rs/dnscache v0.0.0-20210201191234-295bba877686
 	github.com/stretchr/testify v1.7.0
+	golang.org/x/exp v0.0.0-20220328175248-053ad81199eb
 	golang.org/x/time v0.0.0-20210723032227-1f47c861a9ac
 )
 
@@ -79,4 +80,4 @@ require (
 	zombiezen.com/go/sqlite v0.8.0 // indirect
 )
 
-go 1.17
+go 1.18

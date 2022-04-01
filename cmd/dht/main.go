@@ -2,11 +2,16 @@ package main
 
 import (
 	"context"
+	"crypto/ed25519"
+	"errors"
 	"fmt"
 	"os"
 	"os/signal"
 
+	"github.com/anacrolix/args/targets"
+	"github.com/anacrolix/dht/v2/bep44"
 	"github.com/anacrolix/log"
+	"github.com/anacrolix/torrent/bencode"
 
 	"github.com/anacrolix/args"
 	"github.com/anacrolix/dht/v2"
@@ -22,6 +27,49 @@ func main() {
 	var s *dht.Server
 	args.Main{
 		Params: []args.Param{
+			args.Subcommand("derive-put-target", func(sub args.SubCmdCtx) (err error) {
+				var put bep44.Put
+				if !sub.Parse(
+					args.Subcommand("mutable", func(sub args.SubCmdCtx) (err error) {
+						var subArgs struct {
+							Private bool
+							// We want "required" but it's not supported I think.
+							Key  targets.Hex `arity:"+"`
+							Salt string
+						}
+						sub.Parse(args.FromStruct(&subArgs)...)
+						put.Salt = []byte(subArgs.Salt)
+						put.K = (*[32]byte)(subArgs.Key.Bytes)
+						if subArgs.Private {
+							privKey := ed25519.NewKeyFromSeed(subArgs.Key.Bytes)
+							pubKey := privKey.Public().(ed25519.PublicKey)
+							log.Printf("public key: %x", pubKey)
+							put.K = (*[32]byte)(pubKey)
+						}
+						return nil
+					}),
+					args.Subcommand("immutable", func(sub args.SubCmdCtx) (err error) {
+						var subArgs struct {
+							String bool
+							Value  string `arg:"positional"`
+						}
+						sub.Parse(args.FromStruct(&subArgs)...)
+						if subArgs.String {
+							put.V = subArgs.Value
+						} else {
+							err = bencode.Unmarshal([]byte(subArgs.Value), &put.V)
+							if err != nil {
+								err = fmt.Errorf("parsing value bencode: %w", err)
+							}
+						}
+						return
+					}),
+				).RanSubCmd {
+					return errors.New("expected subcommand")
+				}
+				fmt.Printf("%x\n", put.Target())
+				return nil
+			}),
 			args.Subcommand("put", func(ctx args.SubCmdCtx) (err error) {
 				var putOpt PutCmd
 				ctx.Parse(args.FromStruct(&putOpt)...)

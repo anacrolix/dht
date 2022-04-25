@@ -6,6 +6,7 @@ import (
 	"errors"
 	"log"
 	"math"
+	"os"
 	"sync"
 
 	"github.com/anacrolix/dht/v2"
@@ -15,6 +16,12 @@ import (
 	"github.com/anacrolix/dht/v2/traversal"
 	"github.com/anacrolix/torrent/bencode"
 )
+
+type Logger interface {
+	Printf(fmt string, args ...interface{})
+}
+
+var MyLogger Logger = log.New(os.Stderr, "", log.LstdFlags)
 
 type GetResult struct {
 	Seq     int64
@@ -58,7 +65,7 @@ func startGetTraversal(
 					case <-ctx.Done():
 					}
 				} else if rv != nil {
-					log.Printf("get response item hash didn't match target: %q", rv)
+					MyLogger.Printf("get response item hash didn't match target: %q", rv)
 				}
 			}
 			tqr := res.TraversalQueryResult(addr)
@@ -95,7 +102,7 @@ receiveResults:
 			err = errors.New("value not found")
 		}
 	case v := <-vChan:
-		log.Printf("received %#v", v)
+		MyLogger.Printf("received %#v", v)
 		gotValue = true
 		if !v.Mutable {
 			ret = v
@@ -155,9 +162,9 @@ notDone:
 			res := s.Put(ctx, dht.NewAddr(elem.Addr.UDP()), put, token, dht.QueryRateLimiting{})
 			err := res.ToError()
 			if err != nil {
-				log.Printf("error putting to %v [token=%q]: %v", elem.Addr, token, err)
+				MyLogger.Printf("error putting to %v [token=%q]: %v", elem.Addr, token, err)
 			} else {
-				log.Printf("put to %v [token=%q]", elem.Addr, token)
+				MyLogger.Printf("put to %v [token=%q]", elem.Addr, token)
 			}
 		}()
 	})

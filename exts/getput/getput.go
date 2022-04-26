@@ -4,9 +4,10 @@ import (
 	"context"
 	"crypto/sha1"
 	"errors"
-	"log"
 	"math"
 	"sync"
+
+	"github.com/anacrolix/log"
 
 	"github.com/anacrolix/dht/v2"
 	"github.com/anacrolix/dht/v2/bep44"
@@ -32,10 +33,11 @@ func startGetTraversal(
 		Alpha:  15,
 		Target: target,
 		DoQuery: func(ctx context.Context, addr krpc.NodeAddr) traversal.QueryResult {
+			logger := log.ContextLogger(ctx)
 			res := s.Get(ctx, dht.NewAddr(addr.UDP()), target, seq, dht.QueryRateLimiting{})
 			err := res.ToError()
 			if err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, dht.TransactionTimeout) {
-				// log.Printf("error querying %v: %v", addr, err)
+				logger.Levelf(log.Debug, "error querying %v: %v", addr, err)
 			}
 			if r := res.Reply.R; r != nil {
 				rv := r.V
@@ -58,7 +60,7 @@ func startGetTraversal(
 					case <-ctx.Done():
 					}
 				} else if rv != nil {
-					log.Printf("get response item hash didn't match target: %q", rv)
+					logger.Levelf(log.Debug, "get response item hash didn't match target: %q", rv)
 				}
 			}
 			tqr := res.TraversalQueryResult(addr)
@@ -95,7 +97,7 @@ receiveResults:
 			err = errors.New("value not found")
 		}
 	case v := <-vChan:
-		log.Printf("received %#v", v)
+		log.ContextLogger(ctx).Levelf(log.Debug, "received %#v", v)
 		gotValue = true
 		if !v.Mutable {
 			ret = v
@@ -120,6 +122,7 @@ func Put(
 ) (
 	stats *traversal.Stats, err error,
 ) {
+	logger := log.ContextLogger(ctx)
 	vChan, op, err := startGetTraversal(target, s,
 		// When we do a get traversal for a put, we don't care what seq the peers have?
 		nil,
@@ -155,9 +158,9 @@ notDone:
 			res := s.Put(ctx, dht.NewAddr(elem.Addr.UDP()), put, token, dht.QueryRateLimiting{})
 			err := res.ToError()
 			if err != nil {
-				log.Printf("error putting to %v [token=%q]: %v", elem.Addr, token, err)
+				logger.Levelf(log.Warning, "error putting to %v [token=%q]: %v", elem.Addr, token, err)
 			} else {
-				log.Printf("put to %v [token=%q]", elem.Addr, token)
+				logger.Levelf(log.Debug, "put to %v [token=%q]", elem.Addr, token)
 			}
 		}()
 	})

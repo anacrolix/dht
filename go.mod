@@ -5,7 +5,7 @@ require (
 	github.com/anacrolix/args v0.5.0
 	github.com/anacrolix/chansync v0.3.0
 	github.com/anacrolix/envpprof v1.1.1
-	github.com/anacrolix/log v0.13.1
+	github.com/anacrolix/log v0.13.2-0.20220426014722-7b7d13a55d55
 	github.com/anacrolix/missinggo v1.3.0
 	github.com/anacrolix/missinggo/v2 v2.5.2
 	github.com/anacrolix/multiless v0.2.0

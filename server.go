@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -15,7 +16,6 @@ import (
 	"github.com/anacrolix/log"
 	"github.com/anacrolix/missinggo/v2"
 	"github.com/anacrolix/sync"
-	"github.com/pkg/errors"
 	"golang.org/x/time/rate"
 
 	"github.com/anacrolix/torrent/iplist"
@@ -1254,7 +1254,7 @@ func (s *Server) TraversalStartingNodes() (nodes []addrMaybeId, err error) {
 		s.logger().Levelf(log.Debug, "falling back on starting nodes")
 		addrs, err := s.config.StartingNodes()
 		if err != nil {
-			return nil, errors.Wrap(err, "getting starting nodes")
+			return nil, fmt.Errorf("getting starting nodes: %w", err)
 		} else {
 			// log.Printf("resolved %v addresses", len(addrs))
 		}

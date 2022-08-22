@@ -345,6 +345,9 @@ func (s *Server) serve() error {
 	for {
 		n, addr, err := s.socket.ReadFrom(b[:])
 		if err != nil {
+			if ignoreReadFromError(err) {
+				continue
+			}
 			return err
 		}
 		expvars.Add("packets read", 1)

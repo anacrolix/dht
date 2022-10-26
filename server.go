@@ -1373,7 +1373,7 @@ func (s *Server) pingQuestionableNodesInBucket(bucketIndex int) {
 				defer wg.Done()
 				err := s.questionableNodePing(context.TODO(), n.Addr, n.Id.AsByteArray()).Err
 				if err != nil {
-					log.Printf("error pinging questionable node in bucket %v: %v", bucketIndex, err)
+					s.logger().WithDefaultLevel(log.Debug).Printf("error pinging questionable node in bucket %v: %v", bucketIndex, err)
 				}
 			}()
 		}

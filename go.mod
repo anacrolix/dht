@@ -85,3 +85,5 @@ require (
 )
 
 go 1.18
+
+exclude github.com/benbjohnson/immutable v0.4.0

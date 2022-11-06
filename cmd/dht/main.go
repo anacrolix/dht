@@ -8,15 +8,15 @@ import (
 	"os"
 	"os/signal"
 
-	"github.com/anacrolix/args/targets"
-	"github.com/anacrolix/dht/v2/bep44"
-	"github.com/anacrolix/log"
-	"github.com/anacrolix/torrent/bencode"
-
 	"github.com/anacrolix/args"
-	"github.com/anacrolix/dht/v2"
+	"github.com/anacrolix/args/targets"
+	"github.com/anacrolix/log"
 	"github.com/anacrolix/publicip"
-	"github.com/anacrolix/torrent"
+	"github.com/anacrolix/torrent/bencode"
+	"github.com/anacrolix/torrent/types/infohash"
+
+	"github.com/anacrolix/dht/v2"
+	"github.com/anacrolix/dht/v2/bep44"
 )
 
 func main() {
@@ -83,7 +83,7 @@ func main() {
 			}),
 			args.Subcommand("put-mutable-infohash", func(ctx args.SubCmdCtx) (err error) {
 				var putOpt PutMutableInfohash
-				var ih torrent.InfoHash
+				var ih infohash.T
 				ctx.Parse(append(
 					args.FromStruct(&putOpt),
 					args.Opt(args.OptOpt{
@@ -112,7 +112,7 @@ func main() {
 				var subArgs = struct {
 					AnnouncePort int
 					Scrape       bool
-					InfoHash     torrent.InfoHash
+					InfoHash     infohash.T
 				}{}
 				sub.Parse(args.FromStruct(&subArgs)...)
 				var announceOpts []dht.AnnounceOpt

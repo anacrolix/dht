@@ -9,13 +9,14 @@ import (
 	"log"
 
 	"github.com/anacrolix/args/targets"
+	"github.com/anacrolix/torrent/types/infohash"
+	"github.com/multiformats/go-base36"
+
 	"github.com/anacrolix/dht/v2"
 	"github.com/anacrolix/dht/v2/bep44"
 	"github.com/anacrolix/dht/v2/exts/getput"
 	"github.com/anacrolix/dht/v2/krpc"
 	"github.com/anacrolix/dht/v2/traversal"
-	"github.com/anacrolix/torrent"
-	"github.com/multiformats/go-base36"
 )
 
 type PutMutableInfohash struct {
@@ -26,7 +27,7 @@ type PutMutableInfohash struct {
 	AutoSeq bool
 }
 
-func putMutableInfohash(cmd *PutMutableInfohash, ih torrent.InfoHash) (err error) {
+func putMutableInfohash(cmd *PutMutableInfohash, ih infohash.T) (err error) {
 	s, err := dht.NewServer(nil)
 	if err != nil {
 		return

@@ -23,9 +23,11 @@ func dnsResolverRefresher() {
 }
 
 // https://github.com/anacrolix/dht/issues/43
-func initDnsResolver() {
+func initDnsResolver(resolver dnscache.DNSResolver) {
 	dnsResolverInit.Do(func() {
-		dnsResolver = &dnscache.Resolver{}
+		dnsResolver = &dnscache.Resolver{
+			Resolver: resolver,
+		}
 		go dnsResolverRefresher()
 	})
 }

@@ -16,6 +16,7 @@ import (
 	"github.com/anacrolix/missinggo/v2"
 	"github.com/anacrolix/torrent/iplist"
 	"github.com/anacrolix/torrent/metainfo"
+	"github.com/rs/dnscache"
 	"golang.org/x/time/rate"
 )
 
@@ -39,6 +40,8 @@ type ServerConfig struct {
 	// to DHT Security Extensions, that NoSecurity is also set.
 	NodeId krpc.ID
 	Conn   net.PacketConn
+	// Custom DNS resolver to use for bootstrap nodes.
+	DNSResolver dnscache.DNSResolver
 	// Don't respond to queries from other nodes.
 	Passive bool
 	// Whether to wait for rate limiting to allow us to reply.
@@ -112,8 +115,8 @@ var DefaultGlobalBootstrapHostPorts = []string{
 	"router.bittorrent.cloud:42069",
 }
 
-func GlobalBootstrapAddrs(network string) (addrs []Addr, err error) {
-	initDnsResolver()
+func GlobalBootstrapAddrs(network string, resolver dnscache.DNSResolver) (addrs []Addr, err error) {
+	initDnsResolver(resolver)
 	for _, s := range DefaultGlobalBootstrapHostPorts {
 		host, port, err := net.SplitHostPort(s)
 		if err != nil {

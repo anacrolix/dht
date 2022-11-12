@@ -156,12 +156,11 @@ func (s *Server) Addr() net.Addr {
 
 func NewDefaultServerConfig() *ServerConfig {
 	return &ServerConfig{
-		NoSecurity:    true,
-		StartingNodes: func() ([]Addr, error) { return GlobalBootstrapAddrs("udp") },
-		DefaultWant:   []krpc.Want{krpc.WantNodes, krpc.WantNodes6},
-		Store:         bep44.NewMemory(),
-		Exp:           2 * time.Hour,
-		SendLimiter:   DefaultSendLimiter,
+		NoSecurity:  true,
+		DefaultWant: []krpc.Want{krpc.WantNodes, krpc.WantNodes6},
+		Store:       bep44.NewMemory(),
+		Exp:         2 * time.Hour,
+		SendLimiter: DefaultSendLimiter,
 	}
 }
 
@@ -211,6 +210,15 @@ func NewServer(c *ServerConfig) (s *Server, err error) {
 	}
 	// Add log.Debug by default.
 	c.Logger = c.Logger.WithDefaultLevel(log.Debug)
+
+	// If DNSResolver is empty, use the default resolver
+	if c.DNSResolver == nil {
+		c.DNSResolver = net.DefaultResolver
+	}
+	// If StartingNodes is empty, use the default list with the provided DNSResolver
+	if c.StartingNodes == nil {
+		c.StartingNodes = func() ([]Addr, error) { return GlobalBootstrapAddrs("udp", c.DNSResolver) }
+	}
 
 	if c.Store == nil {
 		c.Store = bep44.NewMemory()

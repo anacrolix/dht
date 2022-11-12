@@ -223,7 +223,7 @@ func TestResolveBadAddr(t *testing.T) {
 }
 
 func TestGlobalBootstrapAddrs(t *testing.T) {
-	addrs, err := GlobalBootstrapAddrs("udp")
+	addrs, err := GlobalBootstrapAddrs("udp", net.DefaultResolver)
 	if err != nil {
 		t.Skip(err)
 	}

@@ -115,7 +115,11 @@ var DefaultGlobalBootstrapHostPorts = []string{
 	"router.bittorrent.cloud:42069",
 }
 
-func GlobalBootstrapAddrs(network string, resolver dnscache.DNSResolver) (addrs []Addr, err error) {
+func GlobalBootstrapAddrs(network string) (addrs []Addr, err error) {
+	return GlobalBootstrapAddrsWithResolver(network, net.DefaultResolver)
+}
+
+func GlobalBootstrapAddrsWithResolver(network string, resolver dnscache.DNSResolver) (addrs []Addr, err error) {
 	initDnsResolver(resolver)
 	for _, s := range DefaultGlobalBootstrapHostPorts {
 		host, port, err := net.SplitHostPort(s)

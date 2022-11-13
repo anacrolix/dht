@@ -217,7 +217,7 @@ func NewServer(c *ServerConfig) (s *Server, err error) {
 	}
 	// If StartingNodes is empty, use the default list with the provided DNSResolver
 	if c.StartingNodes == nil {
-		c.StartingNodes = func() ([]Addr, error) { return GlobalBootstrapAddrs("udp", c.DNSResolver) }
+		c.StartingNodes = func() ([]Addr, error) { return GlobalBootstrapAddrsWithResolver("udp", c.DNSResolver) }
 	}
 
 	if c.Store == nil {

@@ -16,13 +16,11 @@ import (
 	"github.com/anacrolix/log"
 	"github.com/anacrolix/missinggo/v2"
 	"github.com/anacrolix/sync"
-	"golang.org/x/time/rate"
-
+	"github.com/anacrolix/torrent/bencode"
 	"github.com/anacrolix/torrent/iplist"
 	"github.com/anacrolix/torrent/logonce"
 	"github.com/anacrolix/torrent/metainfo"
-
-	"github.com/anacrolix/torrent/bencode"
+	"golang.org/x/time/rate"
 
 	"github.com/anacrolix/dht/v2/bep44"
 	"github.com/anacrolix/dht/v2/int160"

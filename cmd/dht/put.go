@@ -8,11 +8,12 @@ import (
 	"log"
 
 	"github.com/anacrolix/args/targets"
+	"github.com/anacrolix/torrent/bencode"
+
 	"github.com/anacrolix/dht/v2"
 	"github.com/anacrolix/dht/v2/bep44"
 	"github.com/anacrolix/dht/v2/exts/getput"
 	"github.com/anacrolix/dht/v2/traversal"
-	"github.com/anacrolix/torrent/bencode"
 )
 
 type PutCmd struct {

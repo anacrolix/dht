@@ -1404,10 +1404,10 @@ func (s *Server) TableMaintainer() {
 			if s.shouldStopRefreshingBucket(i) {
 				continue
 			}
-			s.logger().Levelf(log.Info, "refreshing bucket %v", i)
+			s.logger().Levelf(log.Debug, "refreshing bucket %v", i)
 			s.mu.RUnlock()
 			stats := s.refreshBucket(i)
-			s.logger().Levelf(log.Info, "finished refreshing bucket %v: %v", i, stats)
+			s.logger().Levelf(log.Debug, "finished refreshing bucket %v: %v", i, stats)
 			s.mu.RLock()
 			if !s.shouldStopRefreshingBucket(i) {
 				// Presumably we couldn't fill the bucket anymore, so assume we're as deep in the

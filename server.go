@@ -1387,13 +1387,14 @@ func (s *Server) pingQuestionableNodesInBucket(bucketIndex int) {
 // having set it up. It is not necessary to explicitly Bootstrap the Server once this routine has
 // started.
 func (s *Server) TableMaintainer() {
+	logger := s.logger()
 	for {
 		if s.shouldBootstrapUnlocked() {
 			stats, err := s.Bootstrap()
 			if err != nil {
-				log.Printf("error bootstrapping during bucket refresh: %v", err)
+				logger.Levelf(log.Error,"error bootstrapping during bucket refresh: %v", err)
 			}
-			log.Printf("bucket refresh bootstrap stats: %v", stats)
+			logger.Levelf(log.Debug,"bucket refresh bootstrap stats: %v", stats)
 		}
 		s.mu.RLock()
 		for i := range s.table.buckets {
@@ -1404,10 +1405,10 @@ func (s *Server) TableMaintainer() {
 			if s.shouldStopRefreshingBucket(i) {
 				continue
 			}
-			s.logger().Levelf(log.Debug, "refreshing bucket %v", i)
+			logger.Levelf(log.Debug, "refreshing bucket %v", i)
 			s.mu.RUnlock()
 			stats := s.refreshBucket(i)
-			s.logger().Levelf(log.Debug, "finished refreshing bucket %v: %v", i, stats)
+			logger.Levelf(log.Debug, "finished refreshing bucket %v: %v", i, stats)
 			s.mu.RLock()
 			if !s.shouldStopRefreshingBucket(i) {
 				// Presumably we couldn't fill the bucket anymore, so assume we're as deep in the

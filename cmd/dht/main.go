@@ -112,7 +112,7 @@ func main() {
 				var subArgs = struct {
 					AnnouncePort int
 					Scrape       bool
-					InfoHash     infohash.T
+					InfoHash     infohash.T `arity:"+"`
 				}{}
 				sub.Parse(args.FromStruct(&subArgs)...)
 				var announceOpts []dht.AnnounceOpt

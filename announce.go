@@ -103,6 +103,10 @@ func (s *Server) AnnounceTraversal(infoHash [20]byte, opts ...AnnounceOpt) (_ *A
 		Target:     infoHash,
 		DoQuery:    a.getPeers,
 		NodeFilter: s.TraversalNodeFilter,
+		DataFilter: func(data any) bool {
+			_, ok := data.(string)
+			return ok
+		},
 	})
 	nodes, err := s.TraversalStartingNodes()
 	if err != nil {
@@ -159,7 +163,7 @@ func (a *Announce) announcePeer(peer dhtutil.Elem) error {
 	).Err
 }
 
-func (a *Announce) getPeers(ctx context.Context, addr krpc.NodeAddr) (tqr traversal.QueryResult) {
+func (a *Announce) getPeers(ctx context.Context, addr krpc.NodeAddr) traversal.QueryResult {
 	res := a.server.GetPeers(ctx, NewAddr(addr.UDP()), a.infoHash, a.scrape, QueryRateLimiting{})
 	if r := res.Reply.R; r != nil {
 		peersValues := PeersValues{
@@ -174,17 +178,8 @@ func (a *Announce) getPeers(ctx context.Context, addr krpc.NodeAddr) (tqr traver
 		case a.Peers <- peersValues:
 		case <-a.traversal.Stopped():
 		}
-		if r.Token != nil {
-			tqr.ClosestData = *r.Token
-			tqr.ResponseFrom = &krpc.NodeInfo{
-				ID:   r.ID,
-				Addr: addr,
-			}
-		}
-		tqr.Nodes = r.Nodes
-		tqr.Nodes6 = r.Nodes6
 	}
-	return
+	return res.TraversalQueryResult(addr)
 }
 
 // Corresponds to the "values" key in a get_peers KRPC response. A list of

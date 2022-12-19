@@ -43,7 +43,7 @@ type Server struct {
 	resendDelay func() time.Duration
 
 	mu           sync.RWMutex
-	transactions map[transactionKey]*Transaction
+	transactions map[transactionKey]*transaction
 	nextT        uint64 // unique "t" field for outbound queries
 	table        table
 	closed       missinggo.Event
@@ -225,7 +225,7 @@ func NewServer(c *ServerConfig) (s *Server, err error) {
 			interval:         5 * time.Minute,
 			secret:           make([]byte, 20),
 		},
-		transactions: make(map[transactionKey]*Transaction),
+		transactions: make(map[transactionKey]*transaction),
 		table: table{
 			k: 8,
 		},
@@ -838,7 +838,7 @@ func (s *Server) deleteTransaction(k transactionKey) {
 	delete(s.transactions, k)
 }
 
-func (s *Server) addTransaction(k transactionKey, t *Transaction) {
+func (s *Server) addTransaction(k transactionKey, t *transaction) {
 	if _, ok := s.transactions[k]; ok {
 		panic("transaction not unique")
 	}
@@ -950,7 +950,7 @@ func (s *Server) Query(ctx context.Context, addr Addr, q string, input QueryInpu
 			q, time.Since(started), ret.Err, ret.Reply.Y, ret.Reply.E, ret.Writes)
 	}(time.Now())
 	replyChan := make(chan krpc.Msg, 1)
-	t := &Transaction{
+	t := &transaction{
 		onResponse: func(m krpc.Msg) {
 			replyChan <- m
 		},

@@ -5,6 +5,7 @@ import (
 	"crypto/ed25519"
 	"errors"
 	"fmt"
+	"net"
 	"os"
 	"os/signal"
 
@@ -19,14 +20,24 @@ import (
 	"github.com/anacrolix/dht/v2/bep44"
 )
 
+type serverParams struct {
+	Network string
+	Secure  bool
+}
+
 func main() {
 	logger := log.Default.WithNames("main")
 	ctx := log.ContextWithLogger(context.Background(), logger)
 	ctx, stopSignalNotify := signal.NotifyContext(ctx, os.Interrupt)
 	defer stopSignalNotify()
 	var s *dht.Server
+	serverArgs := serverParams{
+		Network: "udp",
+		Secure:  false,
+	}
 	args.Main{
-		Params: []args.Param{
+		Params: append(
+			args.FromStruct(&serverArgs),
 			args.Subcommand("derive-put-target", func(sub args.SubCmdCtx) (err error) {
 				var put bep44.Put
 				if !sub.Parse(
@@ -102,6 +113,7 @@ func main() {
 			}),
 			args.Subcommand("ping", func(ctx args.SubCmdCtx) (err error) {
 				var pa pingArgs
+				pa.Network = serverArgs.Network
 				ctx.Parse(args.FromStruct(&pa)...)
 				ctx.Defer(func() error {
 					return ping(pa, s)
@@ -129,14 +141,20 @@ func main() {
 				})
 				return nil
 			}),
-		},
+		),
 		AfterParse: func() (err error) {
 			cfg := dht.NewDefaultServerConfig()
-			all, err := publicip.GetAll(context.TODO())
+			conn, err := net.ListenPacket(serverArgs.Network, ":0")
+			if err != nil {
+				err = fmt.Errorf("listening: %w", err)
+				return
+			}
+			cfg.Conn = conn
+			all, err := publicip.Get(context.TODO(), serverArgs.Network)
 			if err == nil {
-				cfg.PublicIP = all[0].IP
+				cfg.PublicIP = all[0]
 				log.Printf("public ip: %q", cfg.PublicIP)
-				cfg.NoSecurity = false
+				cfg.NoSecurity = !serverArgs.Secure
 			}
 			s, err = dht.NewServer(cfg)
 			if err != nil {

@@ -292,7 +292,7 @@ func (s *Server) processPacket(b []byte, addr Addr) {
 				if int(se.Offset) == len(b) {
 					return
 				}
-				// Some messages seem to drop to nul chars abrubtly.
+				// Some messages seem to drop to nul chars abruptly.
 				if int(se.Offset) < len(b) && b[se.Offset] == 0 {
 					return
 				}
@@ -1392,9 +1392,9 @@ func (s *Server) TableMaintainer() {
 		if s.shouldBootstrapUnlocked() {
 			stats, err := s.Bootstrap()
 			if err != nil {
-				logger.Levelf(log.Error,"error bootstrapping during bucket refresh: %v", err)
+				logger.Levelf(log.Error, "error bootstrapping during bucket refresh: %v", err)
 			}
-			logger.Levelf(log.Debug,"bucket refresh bootstrap stats: %v", stats)
+			logger.Levelf(log.Debug, "bucket refresh bootstrap stats: %v", stats)
 		}
 		s.mu.RLock()
 		for i := range s.table.buckets {

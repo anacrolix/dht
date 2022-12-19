@@ -13,6 +13,7 @@ import (
 )
 
 type pingArgs struct {
+	Network  string
 	Timeout  time.Duration `help:"sets a timeout for all queries"`
 	Defaults bool          `help:"include all the default bootstrap nodes"`
 	Nodes    []string      `arg:"positional" arity:"*" help:"nodes to ping e.g. router.bittorrent.com:6881"`
@@ -26,7 +27,7 @@ func ping(args pingArgs, s *dht.Server) error {
 	}
 	for _, a := range append(args.Nodes, defaults...) {
 		func(a string) {
-			ua, err := net.ResolveUDPAddr("udp", a)
+			ua, err := net.ResolveUDPAddr(args.Network, a)
 			if err != nil {
 				log.Fatal(err)
 			}

@@ -9,6 +9,7 @@ import (
 	"net"
 	"time"
 
+	"github.com/anacrolix/dht/v2/transactions"
 	"github.com/anacrolix/log"
 	"github.com/anacrolix/missinggo/v2"
 	"github.com/anacrolix/torrent/iplist"
@@ -25,11 +26,7 @@ func defaultQueryResendDelay() time.Duration {
 	return 2 * time.Second
 }
 
-// Uniquely identifies a transaction to us.
-type transactionKey struct {
-	RemoteAddr string // host:port
-	T          string // The KRPC transaction ID.
-}
+type transactionKey = transactions.Key
 
 type StartingNodesGetter func() ([]Addr, error)
 

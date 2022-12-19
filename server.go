@@ -3,7 +3,6 @@ package dht
 import (
 	"context"
 	"crypto/rand"
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
@@ -13,6 +12,7 @@ import (
 	"text/tabwriter"
 	"time"
 
+	"github.com/anacrolix/dht/v2/transactions"
 	"github.com/anacrolix/log"
 	"github.com/anacrolix/missinggo/v2"
 	"github.com/anacrolix/sync"
@@ -43,7 +43,7 @@ type Server struct {
 	resendDelay func() time.Duration
 
 	mu           sync.RWMutex
-	transactions map[transactionKey]*transaction
+	transactions transactions.Dispatcher[*transaction]
 	nextT        uint64 // unique "t" field for outbound queries
 	table        table
 	closed       missinggo.Event
@@ -84,7 +84,7 @@ func (s *Server) WriteStatus(w io.Writer) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	fmt.Fprintf(w, "Nodes in table: %d good, %d total\n", s.numGoodNodes(), s.numNodes())
-	fmt.Fprintf(w, "Ongoing transactions: %d\n", len(s.transactions))
+	fmt.Fprintf(w, "Ongoing transactions: %d\n", s.transactions.NumActive())
 	fmt.Fprintf(w, "Server node ID: %x\n", s.id.Bytes())
 	for i, b := range s.table.buckets {
 		if b.Len() == 0 && b.lastChanged.IsZero() {
@@ -142,7 +142,7 @@ func (s *Server) Stats() ServerStats {
 	ss := s.stats
 	ss.GoodNodes = s.numGoodNodes()
 	ss.Nodes = s.numNodes()
-	ss.OutstandingTransactions = len(s.transactions)
+	ss.OutstandingTransactions = s.transactions.NumActive()
 	return ss
 }
 
@@ -225,7 +225,6 @@ func NewServer(c *ServerConfig) (s *Server, err error) {
 			interval:         5 * time.Minute,
 			secret:           make([]byte, 20),
 		},
-		transactions: make(map[transactionKey]*transaction),
 		table: table{
 			k: 8,
 		},
@@ -322,11 +321,11 @@ func (s *Server) processPacket(b []byte, addr Addr) {
 		RemoteAddr: addr.String(),
 		T:          d.T,
 	}
-	t, ok := s.transactions[tk]
-	if !ok {
+	if !s.transactions.Have(tk) {
 		s.logger().Printf("received response for untracked transaction %q from %v", d.T, addr)
 		return
 	}
+	t := s.transactions.Pop(tk)
 	// s.logger().Printf("received response for transaction %q from %v", d.T, addr)
 	go t.handleResponse(d)
 	s.updateNode(addr, d.SenderID(), !d.ReadOnly, func(n *node) {
@@ -334,8 +333,6 @@ func (s *Server) processPacket(b []byte, addr Addr) {
 		n.failedLastQuestionablePing = false
 		n.numReceivesFrom++
 	})
-	// Ensure we don't provide more than one response to a transaction.
-	s.deleteTransaction(tk)
 }
 
 func (s *Server) serve() error {
@@ -828,21 +825,17 @@ func (s *Server) writeToNode(ctx context.Context, b []byte, node Addr, wait, rat
 }
 
 func (s *Server) nextTransactionID() string {
-	var b [binary.MaxVarintLen64]byte
-	n := binary.PutUvarint(b[:], s.nextT)
-	s.nextT++
-	return string(b[:n])
+	return transactions.DefaultIdIssuer.Issue()
 }
 
 func (s *Server) deleteTransaction(k transactionKey) {
-	delete(s.transactions, k)
+	if s.transactions.Have(k) {
+		s.transactions.Pop(k)
+	}
 }
 
 func (s *Server) addTransaction(k transactionKey, t *transaction) {
-	if _, ok := s.transactions[k]; ok {
-		panic("transaction not unique")
-	}
-	s.transactions[k] = t
+	s.transactions.Add(k, t)
 }
 
 // ID returns the 20-byte server ID. This is the ID used to communicate with the

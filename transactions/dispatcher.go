@@ -32,3 +32,9 @@ func (me *Dispatcher[S]) Have(key Key) bool {
 	_, ok := me.txns[key]
 	return ok
 }
+
+func (me *Dispatcher[S]) Delete(key Key) bool {
+	have := me.Have(key)
+	delete(me.txns, key)
+	return have
+}

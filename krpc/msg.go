@@ -25,7 +25,15 @@ type Msg struct {
 	E        *Error   `bencode:"e,omitempty"` // ERROR type only
 	IP       NodeAddr `bencode:"ip,omitempty"`
 	ReadOnly bool     `bencode:"ro,omitempty"` // BEP 43. Sender does not respond to queries.
+	// https://www.libtorrent.org/dht_extensions.html
+	ClientId string `bencode:"v,omitempty"`
 }
+
+const (
+	YQuery    = "q"
+	YResponse = "r"
+	YError    = "e"
+)
 
 type MsgArgs struct {
 	ID       ID `bencode:"id"`                  // ID of the querying Node

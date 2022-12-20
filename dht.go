@@ -45,6 +45,10 @@ type ServerConfig struct {
 	// Whether to wait for rate limiting to allow us to reply.
 	WaitToReply bool
 
+	// Called when there are no good nodes to use in the routing table. This might be called any
+	// time when there are no nodes, including during bootstrap if one is performed. Typically it
+	// returns the resolve addresses of bootstrap or "router" nodes that are designed to kick-start
+	// a routing table.
 	StartingNodes StartingNodesGetter
 	// Disable the DHT security extension: http://www.libtorrent.org/dht_sec.html.
 	NoSecurity bool
@@ -59,8 +63,8 @@ type ServerConfig struct {
 	OnQuery func(query *krpc.Msg, source net.Addr) (propagate bool)
 	// Called when a peer successfully announces to us.
 	OnAnnouncePeer func(infoHash metainfo.Hash, ip net.IP, port int, portOk bool)
-	// How long to wait before resending queries that haven't received a response. Defaults to a
-	// random value between 4.5 and 5.5s.
+	// How long to wait before resending queries that haven't received a response. Defaults to 2s.
+	// After the last send, a query is aborted after this time.
 	QueryResendDelay func() time.Duration
 	// TODO: Expose Peers, to return NodeInfo for received get_peers queries.
 	PeerStore peer_store.Interface
@@ -113,9 +117,17 @@ var DefaultGlobalBootstrapHostPorts = []string{
 	"router.bittorrent.cloud:42069",
 }
 
-func GlobalBootstrapAddrs(network string) (addrs []Addr, err error) {
+// Returns the resolved addresses of the default global bootstrap nodes. Network is unused but was
+// historically passed by anacrolix/torrent.
+func GlobalBootstrapAddrs(network string) ([]Addr, error) {
+	return ResolveHostPorts(DefaultGlobalBootstrapHostPorts)
+}
+
+// Resolves host:port strings to dht.Addrs, using the dht DNS resolver cache. Suitable for use with
+// ServerConfig.BootstrapAddrs.
+func ResolveHostPorts(hostPorts []string) (addrs []Addr, err error) {
 	initDnsResolver()
-	for _, s := range DefaultGlobalBootstrapHostPorts {
+	for _, s := range hostPorts {
 		host, port, err := net.SplitHostPort(s)
 		if err != nil {
 			panic(err)

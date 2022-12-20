@@ -8,6 +8,7 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"time"
 
 	"github.com/anacrolix/args"
 	"github.com/anacrolix/args/targets"
@@ -15,14 +16,18 @@ import (
 	"github.com/anacrolix/publicip"
 	"github.com/anacrolix/torrent/bencode"
 	"github.com/anacrolix/torrent/types/infohash"
+	"github.com/davecgh/go-spew/spew"
 
 	"github.com/anacrolix/dht/v2"
 	"github.com/anacrolix/dht/v2/bep44"
+	"github.com/anacrolix/dht/v2/krpc"
 )
 
 type serverParams struct {
-	Network string
-	Secure  bool
+	Network          string
+	Secure           bool
+	BootstrapAddr    []string
+	QueryResendDelay time.Duration
 }
 
 func main() {
@@ -141,9 +146,65 @@ func main() {
 				})
 				return nil
 			}),
+			args.Subcommand("query", func(sub args.SubCmdCtx) (err error) {
+				var subArgs = struct {
+					Addr   string `arg:"positional"`
+					Q      string `arg:"positional"`
+					Target krpc.ID
+				}{}
+				sub.Parse(args.FromStruct(&subArgs)...)
+				sub.Defer(func() error {
+					addr, err := net.ResolveUDPAddr(serverArgs.Network, subArgs.Addr)
+					if err != nil {
+						return err
+					}
+					input := dht.QueryInput{}
+					input.MsgArgs.Target = subArgs.Target
+					res := s.Query(ctx, dht.NewAddr(addr), subArgs.Q, input)
+					spew.Dump(res)
+					return nil
+				})
+				return nil
+			}),
+			args.Subcommand("ping-nodes", func(sub args.SubCmdCtx) (err error) {
+				var subArgs = struct {
+					Timeout time.Duration
+					Addr    string `arg:"positional"`
+					Q       string `arg:"positional"`
+					Target  krpc.ID
+				}{}
+				sub.Parse(args.FromStruct(&subArgs)...)
+				sub.Defer(func() error {
+					addr, err := net.ResolveUDPAddr(serverArgs.Network, subArgs.Addr)
+					if err != nil {
+						return err
+					}
+					input := dht.QueryInput{}
+					input.MsgArgs.Target = subArgs.Target
+					res := s.Query(ctx, dht.NewAddr(addr), subArgs.Q, input)
+					err = res.ToError()
+					if err != nil {
+						return err
+					}
+					return ping(pingArgs{
+						Network: serverArgs.Network,
+						Nodes: func() (ret []string) {
+							res.Reply.R.ForAllNodes(func(info krpc.NodeInfo) {
+								ret = append(ret, info.Addr.String())
+							})
+							return
+						}(),
+						Timeout: subArgs.Timeout,
+					}, s)
+				})
+				return nil
+			}),
 		),
 		AfterParse: func() (err error) {
 			cfg := dht.NewDefaultServerConfig()
+			if serverArgs.QueryResendDelay != 0 {
+				cfg.QueryResendDelay = func() time.Duration { return serverArgs.QueryResendDelay }
+			}
 			conn, err := net.ListenPacket(serverArgs.Network, ":0")
 			if err != nil {
 				err = fmt.Errorf("listening: %w", err)
@@ -155,6 +216,11 @@ func main() {
 				cfg.PublicIP = all[0]
 				log.Printf("public ip: %q", cfg.PublicIP)
 				cfg.NoSecurity = !serverArgs.Secure
+			}
+			if len(serverArgs.BootstrapAddr) != 0 {
+				cfg.StartingNodes = func() ([]dht.Addr, error) {
+					return dht.ResolveHostPorts(serverArgs.BootstrapAddr)
+				}
 			}
 			s, err = dht.NewServer(cfg)
 			if err != nil {

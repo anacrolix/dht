@@ -8,7 +8,6 @@ import (
 	"github.com/bradfitz/iter"
 	qt "github.com/frankban/quicktest"
 
-	"github.com/anacrolix/dht/v2/int160"
 	"github.com/anacrolix/dht/v2/krpc"
 )
 
@@ -19,16 +18,17 @@ func TestNoIdFarther(tb *testing.T) {
 	target := krpc.RandomNodeID().Int160()
 	b := a
 	c.Assert(a.CloserThan(b, target), qt.IsFalse)
-	b.Id = nil
+	b.Id.SetNone()
 	c.Assert(a.CloserThan(b, target), qt.IsTrue)
 	c.Assert(b.CloserThan(a, target), qt.IsFalse)
 	c.Assert(b.CloserThan(b, target), qt.IsFalse)
-	b.Id = new(int160.T)
-	*b.Id = *a.Id
+	b.Id.SetSomeZeroValue()
+	b.Id = a.Id
 	c.Assert(a.CloserThan(b, target), qt.IsFalse)
+	id := a.Id.UnwrapPtr()
 	for i := range iter.N(160) {
-		if target.GetBit(i) != a.Id.GetBit(i) {
-			a.Id.SetBit(i, target.GetBit(i))
+		if target.GetBit(i) != id.GetBit(i) {
+			id.SetBit(i, target.GetBit(i))
 			break
 		}
 	}
@@ -45,12 +45,12 @@ func TestCloserThanId(tb *testing.T) {
 	target := krpc.RandomNodeID().Int160()
 	c.Assert(a.CloserThan(a, target), qt.IsFalse)
 	b := a
-	b.Id = new(int160.T)
-	*b.Id = *a.Id
+	b.Id.SetSomeZeroValue()
+	b.Id = a.Id
 	c.Assert(a.CloserThan(b, target), qt.IsFalse)
 	for i := range iter.N(160) {
-		if target.GetBit(i) != a.Id.GetBit(i) {
-			a.Id.SetBit(i, target.GetBit(i))
+		if target.GetBit(i) != a.Id.UnwrapPtr().GetBit(i) {
+			a.Id.UnwrapPtr().SetBit(i, target.GetBit(i))
 			break
 		}
 	}
@@ -68,13 +68,13 @@ func BenchmarkDeterministicAddr(tb *testing.B) {
 			Addr: krpc.NodeAddr{
 				IP:   ip,
 				Port: rand.Int(),
-			},
+			}.ToNodeAddrPort(),
 		}
 		b := AddrMaybeId{
 			Addr: krpc.NodeAddr{
 				IP:   ip,
 				Port: rand.Int(),
-			},
+			}.ToNodeAddrPort(),
 		}
 		if a.CloserThan(b, target) != a.CloserThan(b, target) {
 			tb.Fatal("not deterministic")

@@ -138,7 +138,7 @@ func (op *Operation) AddNodes(nodes []types.AddrMaybeId) (added int) {
 	return op.unqueried.Len() - before
 }
 
-func (op *Operation) markQueried(addr krpc.NodeAddr) {
+func (op *Operation) markQueried(addr krpc.NodeAddrPort) {
 	op.queried[addrString(addr.String())] = struct{}{}
 }
 
@@ -160,10 +160,12 @@ func (op *Operation) haveQuery() bool {
 		return true
 	}
 	cu := op.closestUnqueried()
-	if cu.Id == nil {
+	if !cu.Id.Ok {
 		return false
 	}
-	return cu.Id.Distance(op.targetInt160).Cmp(op.closest.Farthest().ID.Int160().Distance(op.targetInt160)) <= 0
+	cuDist := cu.Id.Value.Distance(op.targetInt160)
+	farDist := op.closest.Farthest().ID.Int160().Distance(op.targetInt160)
+	return cuDist.Cmp(farDist) <= 0
 }
 
 func (op *Operation) run() {
@@ -202,7 +204,7 @@ func (op *Operation) addClosest(node krpc.NodeInfo, data interface{}) {
 		return
 	}
 	op.closest = op.closest.Push(k_nearest_nodes.Elem{
-		Key:  node,
+		Key:  node.ToNodeInfoAddrPort(),
 		Data: data,
 	})
 }
@@ -232,7 +234,7 @@ func (op *Operation) startQuery() {
 				cancel()
 			}
 		}()
-		res := op.input.DoQuery(ctx, a.Addr)
+		res := op.input.DoQuery(ctx, a.Addr.ToNodeAddr())
 		cancel()
 		if res.ResponseFrom != nil {
 			func() {

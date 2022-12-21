@@ -1,6 +1,8 @@
 package testutil
 
 import (
+	"github.com/anacrolix/generics"
+
 	"github.com/anacrolix/dht/v2/int160"
 	"github.com/anacrolix/dht/v2/krpc"
 	"github.com/anacrolix/dht/v2/types"
@@ -16,12 +18,12 @@ type addrMaybeId = types.AddrMaybeId
 
 var SampleAddrMaybeIds = []addrMaybeId{
 	{},
-	{Id: new(int160.T)},
-	{Id: Int160WithBitSet(13)},
-	{Id: Int160WithBitSet(12)},
-	{Addr: krpc.NodeAddr{Port: 1}},
+	{Id: generics.Some(int160.T{})},
+	{Id: generics.Some(*Int160WithBitSet(13))},
+	{Id: generics.Some(*Int160WithBitSet(12))},
+	{Addr: krpc.NodeAddr{Port: 1}.ToNodeAddrPort()},
 	{
-		Id:   Int160WithBitSet(14),
-		Addr: krpc.NodeAddr{Port: 1},
+		Id:   generics.Some(*Int160WithBitSet(14)),
+		Addr: krpc.NodeAddr{Port: 1}.ToNodeAddrPort(),
 	},
 }

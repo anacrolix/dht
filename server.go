@@ -13,6 +13,7 @@ import (
 	"text/tabwriter"
 	"time"
 
+	"github.com/anacrolix/generics"
 	"github.com/anacrolix/log"
 	"github.com/anacrolix/missinggo/v2"
 	"github.com/anacrolix/sync"
@@ -1240,7 +1241,9 @@ func (s *Server) closestNodes(k int, target int160.T, filter func(*node) bool) [
 func (s *Server) TraversalStartingNodes() (nodes []addrMaybeId, err error) {
 	s.mu.RLock()
 	s.table.forNodes(func(n *node) bool {
-		nodes = append(nodes, addrMaybeId{Addr: n.Addr.KRPC(), Id: &n.Id})
+		nodes = append(nodes, addrMaybeId{
+			Addr: n.Addr.KRPC().ToNodeAddrPort(),
+			Id:   generics.Some(n.Id)})
 		return true
 	})
 	s.mu.RUnlock()
@@ -1260,7 +1263,7 @@ func (s *Server) TraversalStartingNodes() (nodes []addrMaybeId, err error) {
 			// log.Printf("resolved %v addresses", len(addrs))
 		}
 		for _, a := range addrs {
-			nodes = append(nodes, addrMaybeId{Addr: a.KRPC(), Id: nil})
+			nodes = append(nodes, addrMaybeId{Addr: a.KRPC().ToNodeAddrPort()})
 		}
 	}
 	if len(nodes) == 0 {
@@ -1450,13 +1453,13 @@ func (s *Server) TraversalNodeFilter(node addrMaybeId) bool {
 	if !validNodeAddr(node.Addr.UDP()) {
 		return false
 	}
-	if s.ipBlocked(node.Addr.IP) {
+	if s.ipBlocked(node.Addr.IP()) {
 		return false
 	}
-	if node.Id == nil {
+	if !node.Id.Ok {
 		return true
 	}
-	return s.config.NoSecurity || NodeIdSecure(node.Id.AsByteArray(), node.Addr.IP)
+	return s.config.NoSecurity || NodeIdSecure(node.Id.Value.AsByteArray(), node.Addr.IP())
 }
 
 func validNodeAddr(addr net.Addr) bool {

@@ -18,6 +18,7 @@ import (
 	"github.com/anacrolix/dht/v2/bep44"
 	"github.com/anacrolix/dht/v2/krpc"
 	peer_store "github.com/anacrolix/dht/v2/peer-store"
+	"github.com/anacrolix/dht/v2/transactions"
 )
 
 func defaultQueryResendDelay() time.Duration {
@@ -25,11 +26,7 @@ func defaultQueryResendDelay() time.Duration {
 	return 2 * time.Second
 }
 
-// Uniquely identifies a transaction to us.
-type transactionKey struct {
-	RemoteAddr string // host:port
-	T          string // The KRPC transaction ID.
-}
+type transactionKey = transactions.Key
 
 type StartingNodesGetter func() ([]Addr, error)
 

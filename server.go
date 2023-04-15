@@ -577,7 +577,10 @@ func (s *Server) handleQuery(source Addr, m krpc.Msg) {
 			Salt: args.Salt,
 			Sig:  args.Sig,
 			Cas:  args.Cas,
-			Seq:  *args.Seq,
+		}
+
+		if args.Seq != nil {
+			i.Seq = *args.Seq
 		}
 
 		if err := s.store.Put(i); err != nil {

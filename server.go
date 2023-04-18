@@ -571,22 +571,28 @@ func (s *Server) handleQuery(source Addr, m krpc.Msg) {
 		}
 		expvars.Add("received put with valid token", 1)
 
+		if args.Seq == nil {
+			s.sendError(source, m.T, krpc.Error{
+				Code: krpc.ErrorCodeProtocolError,
+				Msg:  "expected seq argument",
+			})
+			return
+		}
+
 		i := &bep44.Item{
 			V:    args.V,
 			K:    args.K,
 			Salt: args.Salt,
 			Sig:  args.Sig,
 			Cas:  args.Cas,
-		}
-
-		if args.Seq != nil {
-			i.Seq = *args.Seq
+			Seq:  *args.Seq,
 		}
 
 		if err := s.store.Put(i); err != nil {
 			kerr, ok := err.(krpc.Error)
 			if !ok {
 				s.sendError(source, m.T, krpc.ErrorMethodUnknown)
+				break
 			}
 
 			s.sendError(source, m.T, kerr)

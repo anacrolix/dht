@@ -13,7 +13,6 @@ Here I'll describe what some of the provided commands in `./cmd` do.
 ### dht
 
 Supports various commands operating on the DHT.
-Pings DHT nodes with the given network addresses.
 
     % go run github.com/anacrolix/dht/v2/cmd/dht --help
     valid arguments at this point:

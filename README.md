@@ -10,12 +10,30 @@ Get the library package with `go get github.com/anacrolix/dht/v2`, or the provid
 
 Here I'll describe what some of the provided commands in `./cmd` do.
 
-### dht-ping
+### dht
 
+Supports various commands operating on the DHT.
 Pings DHT nodes with the given network addresses.
 
-    $ go run ./cmd/dht-ping router.bittorrent.com:6881 router.utorrent.com:6881
-    2015/04/01 17:21:23 main.go:33: dht server on [::]:60058
-    32f54e697351ff4aec29cdbaabf2fbe3467cc267 (router.bittorrent.com:6881): 648.218621ms
-    ebff36697351ff4aec29cdbaabf2fbe3467cc267 (router.utorrent.com:6881): 873.864706ms
-    2/2 responses (100.000000%)
+    % go run github.com/anacrolix/dht/v2/cmd/dht --help
+    valid arguments at this point:
+      --help|-h
+      --network <string>
+      --secure
+      --bootstrap-addr <[]string>
+      --query-resend-delay <time.Duration>
+      derive-put-target
+      put
+      put-mutable-infohash
+      get
+      ping
+      get-peers
+      query
+      ping-nodes
+
+## Downstream projects
+
+Projects that uses this repo in novel ways.
+
+* [cove](https://coveapp.info): Torrent browser with streaming, DHT search, video transcoding and casting.
+* [btlink](https://github.com/anacrolix/btlink): btlink supports DNS records stored on the DHT.

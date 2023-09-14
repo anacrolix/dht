@@ -3,9 +3,8 @@ package krpc
 import (
 	"testing"
 
-	qt "github.com/frankban/quicktest"
-
 	"github.com/anacrolix/torrent/bencode"
+	qt "github.com/frankban/quicktest"
 )
 
 func TestUnmarshalCompactInfohashes(t *testing.T) {

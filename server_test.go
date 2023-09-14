@@ -5,10 +5,11 @@ import (
 	"crypto/ed25519"
 	"testing"
 
-	"github.com/anacrolix/dht/v2/bep44"
 	"github.com/anacrolix/log"
 	"github.com/anacrolix/torrent/bencode"
 	"github.com/stretchr/testify/require"
+
+	"github.com/anacrolix/dht/v2/bep44"
 )
 
 func TestPutGet(t *testing.T) {

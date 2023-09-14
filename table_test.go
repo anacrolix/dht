@@ -4,9 +4,10 @@ import (
 	"net"
 	"testing"
 
-	"github.com/anacrolix/dht/v2/int160"
 	qt "github.com/frankban/quicktest"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/anacrolix/dht/v2/int160"
 )
 
 func TestTable(t *testing.T) {

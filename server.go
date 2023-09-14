@@ -1327,6 +1327,10 @@ func (s *Server) refreshBucket(bucketIndex int) *traversal.Stats {
 		K: s.table.K(),
 		DoQuery: func(ctx context.Context, addr krpc.NodeAddr) traversal.QueryResult {
 			res := s.FindNode(NewAddr(addr.UDP()), id, QueryRateLimiting{})
+			err := res.Err
+			if err != nil && !errors.Is(err, TransactionTimeout) {
+				s.logger().Levelf(log.Warning, "error doing find node while refreshing bucket: %v", err)
+			}
 			return res.TraversalQueryResult(addr)
 		},
 		NodeFilter: s.TraversalNodeFilter,

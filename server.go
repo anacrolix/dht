@@ -1307,6 +1307,9 @@ func (s *Server) getQuestionableNode() (ret *node) {
 }
 
 func (s *Server) shouldStopRefreshingBucket(bucketIndex int) bool {
+	if s.closed.IsSet() {
+		return true
+	}
 	b := &s.table.buckets[bucketIndex]
 	// Stop if the bucket is full, and none of the nodes are bad.
 	return b.Len() == s.table.K() && b.EachNode(func(n *node) bool {
@@ -1348,12 +1351,14 @@ wait:
 		}
 		op.AddNodes(types.AddrMaybeIdSliceFromNodeInfoSlice(s.notBadNodes()))
 		bucketChanged := b.changed.Signaled()
+		serverClosed := s.closed.C()
 		s.mu.RUnlock()
 		select {
 		case <-op.Stalled():
 			s.mu.RLock()
 			break wait
 		case <-bucketChanged:
+		case <-serverClosed:
 		}
 		s.mu.RLock()
 	}

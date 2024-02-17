@@ -49,14 +49,13 @@ func putMutableInfohash(cmd *PutMutableInfohash, ih infohash.T) (err error) {
 	target := put.Target()
 	log.Printf("putting %q to %x", put.V, target)
 	var stats *traversal.Stats
-	stats, err = getput.Put(context.Background(), target, s, put.Salt, func(seq int64) bep44.Put {
-		// Increment best seen seq by one.
-		if cmd.AutoSeq {
-			put.Seq = seq + 1
-		}
-		put.Sign(privKey)
-		return put
-	})
+	stats, err = getput.Put(
+		context.Background(),
+		target,
+		s,
+		put.Salt,
+		makeSeqToPut(cmd.AutoSeq, true, put, privKey),
+	)
 	if err != nil {
 		err = fmt.Errorf("in traversal: %w", err)
 		return

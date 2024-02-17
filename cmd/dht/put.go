@@ -5,6 +5,7 @@ import (
 	"crypto/ed25519"
 	"errors"
 	"fmt"
+	g "github.com/anacrolix/generics"
 	"log"
 
 	"github.com/anacrolix/args/targets"
@@ -24,6 +25,20 @@ type PutCmd struct {
 	Cas     int64
 	Salt    string
 	Mutable bool
+	AutoSeq bool
+}
+
+func makeSeqToPut(autoSeq, mutable bool, put bep44.Put, privKey ed25519.PrivateKey) getput.SeqToPut {
+	return func(seq int64) bep44.Put {
+		// Increment best seen seq by one.
+		if autoSeq {
+			put.Seq = seq + 1
+		}
+		if mutable {
+			put.Sign(privKey)
+		}
+		return put
+	}
 }
 
 func put(cmd *PutCmd) (err error) {
@@ -58,18 +73,21 @@ func put(cmd *PutCmd) (err error) {
 			Cas:  cmd.Cas,
 			Seq:  cmd.Seq,
 		}
+		var privKey g.Option[ed25519.PrivateKey]
 		if mutable {
-			privKey := ed25519.NewKeyFromSeed(cmd.Key.Bytes)
-			put.K = (*[32]byte)(privKey.Public().(ed25519.PublicKey))
-			put.Sign(privKey)
+			privKey.Set(ed25519.NewKeyFromSeed(cmd.Key.Bytes))
+			put.K = (*[32]byte)(privKey.Value.Public().(ed25519.PublicKey))
 		}
 		target := put.Target()
 		log.Printf("putting %q to %x", v, target)
 		var stats *traversal.Stats
-		stats, err = getput.Put(context.Background(), target, s, put.Salt, func(seq int64) bep44.Put {
-			// Ignore best seen seq
-			return put
-		})
+		stats, err = getput.Put(
+			context.Background(),
+			target,
+			s,
+			put.Salt,
+			makeSeqToPut(cmd.AutoSeq, mutable, put, privKey.Value),
+		)
 		if err != nil {
 			err = fmt.Errorf("in traversal: %w", err)
 			return

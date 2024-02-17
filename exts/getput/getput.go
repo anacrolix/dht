@@ -115,10 +115,10 @@ receiveResults:
 	return
 }
 
-type seqToPut = func(seq int64) bep44.Put
+type SeqToPut func(seq int64) bep44.Put
 
 func Put(
-	ctx context.Context, target krpc.ID, s *dht.Server, salt []byte, seqToPut seqToPut,
+	ctx context.Context, target krpc.ID, s *dht.Server, salt []byte, seqToPut SeqToPut,
 ) (
 	stats *traversal.Stats, err error,
 ) {

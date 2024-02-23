@@ -1332,7 +1332,7 @@ func (s *Server) refreshBucket(bucketIndex int) *traversal.Stats {
 			res := s.FindNode(NewAddr(addr.UDP()), id, QueryRateLimiting{})
 			err := res.Err
 			if err != nil && !errors.Is(err, TransactionTimeout) {
-				s.logger().Levelf(log.Warning, "error doing find node while refreshing bucket: %v", err)
+				s.logger().Levelf(log.Debug, "error doing find node while refreshing bucket: %v", err)
 			}
 			return res.TraversalQueryResult(addr)
 		},

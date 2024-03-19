@@ -50,7 +50,7 @@ func (me *InMemory) GetPeers(ih InfoHash) (ret []krpc.NodeAddr) {
 func (me *InMemory) AddPeer(ih InfoHash, na krpc.NodeAddr) {
 	bs := make([]byte, 2)
 	binary.BigEndian.PutUint16(bs, uint16(na.Port))
-	key := append(na.IP, bs...)
+	key := string(append(na.IP, bs...))
 	//key := string(na.IP)
 	me.mu.Lock()
 	defer me.mu.Unlock()

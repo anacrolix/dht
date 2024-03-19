@@ -12,10 +12,10 @@ import (
 	"github.com/anacrolix/chansync/events"
 	"github.com/anacrolix/log"
 
-	"github.com/anacrolix/dht/v2/int160"
-	dhtutil "github.com/anacrolix/dht/v2/k-nearest-nodes"
-	"github.com/anacrolix/dht/v2/krpc"
-	"github.com/anacrolix/dht/v2/traversal"
+	"github.com/obitoquilt/dht/v2/int160"
+	dhtutil "github.com/obitoquilt/dht/v2/k-nearest-nodes"
+	"github.com/obitoquilt/dht/v2/krpc"
+	"github.com/obitoquilt/dht/v2/traversal"
 )
 
 // Maintains state for an ongoing Announce operation. An Announce is started by calling

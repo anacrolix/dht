@@ -3,7 +3,7 @@ package peer_store
 import (
 	"github.com/anacrolix/torrent/metainfo"
 
-	"github.com/anacrolix/dht/v2/krpc"
+	"github.com/obitoquilt/dht/v2/krpc"
 )
 
 type InfoHash = metainfo.Hash

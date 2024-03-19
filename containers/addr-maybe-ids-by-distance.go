@@ -4,8 +4,8 @@ import (
 	"github.com/anacrolix/missinggo/v2/iter"
 	"github.com/anacrolix/stm/stmutil"
 
-	"github.com/anacrolix/dht/v2/int160"
-	"github.com/anacrolix/dht/v2/types"
+	"github.com/obitoquilt/dht/v2/int160"
+	"github.com/obitoquilt/dht/v2/types"
 )
 
 type addrMaybeId = types.AddrMaybeId

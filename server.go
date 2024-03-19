@@ -22,13 +22,13 @@ import (
 	"github.com/anacrolix/torrent/metainfo"
 	"golang.org/x/time/rate"
 
-	"github.com/anacrolix/dht/v2/bep44"
-	"github.com/anacrolix/dht/v2/int160"
-	"github.com/anacrolix/dht/v2/krpc"
-	peer_store "github.com/anacrolix/dht/v2/peer-store"
-	"github.com/anacrolix/dht/v2/transactions"
-	"github.com/anacrolix/dht/v2/traversal"
-	"github.com/anacrolix/dht/v2/types"
+	"github.com/obitoquilt/dht/v2/bep44"
+	"github.com/obitoquilt/dht/v2/int160"
+	"github.com/obitoquilt/dht/v2/krpc"
+	peer_store "github.com/obitoquilt/dht/v2/peer-store"
+	"github.com/obitoquilt/dht/v2/transactions"
+	"github.com/obitoquilt/dht/v2/traversal"
+	"github.com/obitoquilt/dht/v2/types"
 )
 
 // A Server defines parameters for a DHT node server that is able to send

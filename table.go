@@ -4,7 +4,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/anacrolix/dht/v2/int160"
+	"github.com/obitoquilt/dht/v2/int160"
 )
 
 // Node table, with indexes on distance from root ID to bucket, and node addr.

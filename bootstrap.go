@@ -5,8 +5,8 @@ import (
 	"errors"
 	"time"
 
-	"github.com/anacrolix/dht/v2/krpc"
-	"github.com/anacrolix/dht/v2/traversal"
+	"github.com/obitoquilt/dht/v2/krpc"
+	"github.com/obitoquilt/dht/v2/traversal"
 )
 
 type TraversalStats = traversal.Stats

@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/anacrolix/dht/v2"
+	"github.com/obitoquilt/dht/v2"
 )
 
 type pingArgs struct {

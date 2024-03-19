@@ -12,7 +12,7 @@ import (
 	"github.com/anacrolix/tagflag"
 	"github.com/davecgh/go-spew/spew"
 
-	"github.com/anacrolix/dht/v2"
+	"github.com/obitoquilt/dht/v2"
 )
 
 func main() {

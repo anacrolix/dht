@@ -8,7 +8,7 @@ import (
 
 	"github.com/anacrolix/torrent/bencode"
 
-	"github.com/anacrolix/dht/v2/int160"
+	"github.com/obitoquilt/dht/v2/int160"
 )
 
 func RandomNodeID() (id ID) {

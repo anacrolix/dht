@@ -6,8 +6,8 @@ import (
 	"github.com/anacrolix/generics"
 	"github.com/anacrolix/multiless"
 
-	"github.com/anacrolix/dht/v2/int160"
-	"github.com/anacrolix/dht/v2/krpc"
+	"github.com/obitoquilt/dht/v2/int160"
+	"github.com/obitoquilt/dht/v2/krpc"
 )
 
 func AddrMaybeIdSliceFromNodeInfoSlice(nis []krpc.NodeInfo) (ret []AddrMaybeId) {

@@ -3,9 +3,9 @@ package testutil
 import (
 	"github.com/anacrolix/generics"
 
-	"github.com/anacrolix/dht/v2/int160"
-	"github.com/anacrolix/dht/v2/krpc"
-	"github.com/anacrolix/dht/v2/types"
+	"github.com/obitoquilt/dht/v2/int160"
+	"github.com/obitoquilt/dht/v2/krpc"
+	"github.com/obitoquilt/dht/v2/types"
 )
 
 func Int160WithBitSet(bit int) *int160.T {

@@ -8,8 +8,8 @@ import (
 
 	"github.com/docopt/docopt-go"
 
-	"github.com/anacrolix/dht/v2"
-	"github.com/anacrolix/dht/v2/krpc"
+	"github.com/obitoquilt/dht/v2"
+	"github.com/obitoquilt/dht/v2/krpc"
 )
 
 func main() {

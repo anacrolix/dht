@@ -5,7 +5,7 @@ import (
 	"net"
 	"testing"
 
-	"github.com/anacrolix/dht/v2/krpc"
+	"github.com/obitoquilt/dht/v2/krpc"
 	"github.com/stretchr/testify/assert"
 )
 

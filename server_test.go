@@ -9,7 +9,7 @@ import (
 	"github.com/anacrolix/torrent/bencode"
 	"github.com/stretchr/testify/require"
 
-	"github.com/anacrolix/dht/v2/bep44"
+	"github.com/obitoquilt/dht/v2/bep44"
 )
 
 func TestPutGet(t *testing.T) {

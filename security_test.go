@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/anacrolix/dht/v2/krpc"
+	"github.com/obitoquilt/dht/v2/krpc"
 )
 
 func TestDHTSec(t *testing.T) {

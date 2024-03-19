@@ -12,7 +12,7 @@ import (
 	"github.com/anacrolix/log"
 	"github.com/anacrolix/tagflag"
 
-	"github.com/anacrolix/dht/v2"
+	"github.com/obitoquilt/dht/v2"
 )
 
 var (

@@ -1,4 +1,4 @@
-module github.com/anacrolix/dht/v2
+module github.com/obitoquilt/dht/v2
 
 require (
 	filippo.io/edwards25519 v1.0.0-rc.1

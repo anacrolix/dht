@@ -20,6 +20,7 @@ import (
 type GetResult struct {
 	Seq     int64
 	V       bencode.Bytes
+	Sig     [64]byte
 	Mutable bool
 }
 
@@ -46,6 +47,7 @@ func startGetTraversal(
 					select {
 					case vChan <- GetResult{
 						V:       rv,
+						Sig:     r.Sig,
 						Mutable: false,
 					}:
 					case <-ctx.Done():
@@ -55,6 +57,7 @@ func startGetTraversal(
 					case vChan <- GetResult{
 						Seq:     *r.Seq,
 						V:       rv,
+						Sig:     r.Sig,
 						Mutable: true,
 					}:
 					case <-ctx.Done():

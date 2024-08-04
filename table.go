@@ -57,8 +57,8 @@ func (tbl *table) bucketForID(id int160.T) *bucket {
 }
 
 func (tbl *table) numNodes() (num int) {
-	for _, b := range tbl.buckets {
-		num += b.Len()
+	for i := range tbl.buckets {
+		num += tbl.buckets[i].Len()
 	}
 	return
 }
@@ -74,8 +74,8 @@ func (tbl *table) bucketIndex(id int160.T) int {
 }
 
 func (tbl *table) forNodes(f func(*node) bool) bool {
-	for _, b := range tbl.buckets {
-		if !b.EachNode(f) {
+	for i := range tbl.buckets {
+		if !tbl.buckets[i].EachNode(f) {
 			return false
 		}
 	}

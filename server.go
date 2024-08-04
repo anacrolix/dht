@@ -87,7 +87,9 @@ func (s *Server) WriteStatus(w io.Writer) {
 	fmt.Fprintf(w, "Nodes in table: %d good, %d total\n", s.numGoodNodes(), s.numNodes())
 	fmt.Fprintf(w, "Ongoing transactions: %d\n", s.transactions.NumActive())
 	fmt.Fprintf(w, "Server node ID: %x\n", s.id.Bytes())
-	for i, b := range s.table.buckets {
+	buckets := &s.table.buckets
+	for i := range s.table.buckets {
+		b := &buckets[i]
 		if b.Len() == 0 && b.lastChanged.IsZero() {
 			continue
 		}

@@ -1182,7 +1182,15 @@ func (s *Server) Close() {
 	go s.socket.Close()
 }
 
-func (s *Server) GetPeers(ctx context.Context, addr Addr, infoHash int160.T, scrape bool, rl QueryRateLimiting) (ret QueryResult) {
+func (s *Server) GetPeers(
+	ctx context.Context,
+	addr Addr,
+	infoHash int160.T,
+	// Be advised that if you set this, you might not get any "Return.values" back. That wasn't my
+	// reading of BEP 33 but there you go.
+	scrape bool,
+	rl QueryRateLimiting,
+) (ret QueryResult) {
 	args := krpc.MsgArgs{
 		InfoHash: infoHash.AsByteArray(),
 		// TODO: Maybe IPv4-only Servers won't want IPv6 nodes?

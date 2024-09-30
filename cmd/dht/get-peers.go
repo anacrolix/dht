@@ -8,7 +8,7 @@ import (
 
 	"github.com/anacrolix/log"
 	"golang.org/x/exp/constraints"
-	"golang.org/x/exp/slices"
+	"slices"
 
 	"github.com/anacrolix/dht/v2"
 )
@@ -61,10 +61,11 @@ getPeers:
 			Frequency: count,
 		})
 	}
-	slices.SortFunc(addrCountSlice, func(a, b addrFreq) bool {
+	slices.SortFunc(addrCountSlice, func(a, b addrFreq) int {
+		// Looks like I got sick of anacrolix/multiless.
 		return ordered(a.Frequency, b.Frequency).Then(
-			lesser(a.Addr.Addr(), b.Addr.Addr())).ThenLess(
-			a.Addr.Port() < b.Addr.Port())
+			lesser(a.Addr.Addr(), b.Addr.Addr())).Then(
+			ordered(a.Addr.Port(), b.Addr.Port())).ToInt()
 	})
 	je := json.NewEncoder(os.Stdout)
 	je.SetIndent("", "  ")
@@ -123,10 +124,12 @@ func (me Ordering) Then(other Ordering) Ordering {
 	}
 }
 
-func (me Ordering) ThenLess(less bool) bool {
+func (me Ordering) ToInt() int {
 	if me.equal {
-		return less
+		return 0
+	} else if me.less {
+		return -1
 	} else {
-		return me.less
+		return 1
 	}
 }

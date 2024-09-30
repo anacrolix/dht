@@ -34,7 +34,7 @@ func (s *Server) BootstrapContext(ctx context.Context) (_ TraversalStats, err er
 	// Track number of responses, for STM use. (It's available via atomic in TraversalStats but that
 	// won't let wake up STM transactions that are observing the value.)
 	t := traversal.Start(traversal.OperationInput{
-		Target: krpc.ID(s.id.AsByteArray()),
+		Target: s.id.AsByteArray(),
 		K:      16,
 		DoQuery: func(ctx context.Context, addr krpc.NodeAddr) traversal.QueryResult {
 			return s.FindNode(NewAddr(addr.UDP()), s.id, QueryRateLimiting{}).TraversalQueryResult(addr)

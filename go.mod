@@ -5,7 +5,7 @@ go 1.18
 require (
 	filippo.io/edwards25519 v1.0.0-rc.1
 	github.com/anacrolix/args v0.5.1-0.20220509024600-c3b77d0b61ac
-	github.com/anacrolix/bargle/v2 v2.0.0-20240804050250-9655b61917bc
+	github.com/anacrolix/bargle/v2 v2.0.0-20240909020204-5265698a6040
 	github.com/anacrolix/chansync v0.3.0
 	github.com/anacrolix/envpprof v1.2.1
 	github.com/anacrolix/generics v0.0.0-20230816105729-c755655aee45

@@ -59,6 +59,8 @@ github.com/anacrolix/backtrace v0.0.0-20221205112523-22a61db8f82e h1:A0Ty9UeyBDI
 github.com/anacrolix/backtrace v0.0.0-20221205112523-22a61db8f82e/go.mod h1:4YFqy+788tLJWtin2jNliYVJi+8aDejG9zcu/2/pONw=
 github.com/anacrolix/bargle/v2 v2.0.0-20240804050250-9655b61917bc h1:+ZEZHmyNen2jUY2gD1YSDfmISIDLo+jKrOV3fZF7ZZw=
 github.com/anacrolix/bargle/v2 v2.0.0-20240804050250-9655b61917bc/go.mod h1:rKvwnOHgcXKPJTINj5RmkifgpxgEGC9bkJiv5kM4ctM=
+github.com/anacrolix/bargle/v2 v2.0.0-20240909020204-5265698a6040 h1:gneDM+Y60h9YY5xyG1buJss/OWjBZa+eYFO/Go3e7ro=
+github.com/anacrolix/bargle/v2 v2.0.0-20240909020204-5265698a6040/go.mod h1:rKvwnOHgcXKPJTINj5RmkifgpxgEGC9bkJiv5kM4ctM=
 github.com/anacrolix/chansync v0.3.0 h1:lRu9tbeuw3wl+PhMu/r+JJCRu5ArFXIluOgdF0ao6/U=
 github.com/anacrolix/chansync v0.3.0/go.mod h1:DZsatdsdXxD0WiwcGl0nJVwyjCKMDv+knl1q2iBjA2k=
 github.com/anacrolix/envpprof v0.0.0-20180404065416-323002cec2fa/go.mod h1:KgHhUaQMc8cC0+cEflSgCFNFbKwi5h54gqtVn8yhP7c=

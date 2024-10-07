@@ -8,6 +8,7 @@ import (
 	"io"
 	"net"
 	"runtime/pprof"
+	"slices"
 	"strings"
 	"text/tabwriter"
 	"time"
@@ -99,7 +100,11 @@ func (s *Server) WriteStatus(w io.Writer) {
 		if b.Len() > 0 {
 			tw := tabwriter.NewWriter(w, 0, 0, 1, ' ', 0)
 			fmt.Fprintf(tw, "  node id\taddr\tlast query\tlast response\trecv\tdiscard\tflags\n")
-			b.EachNode(func(n *node) bool {
+			// Bucket nodes ordered by distance from server ID.
+			nodes := slices.SortedFunc(b.NodeIter(), func(l *node, r *node) int {
+				return l.Id.Distance(s.id).Cmp(r.Id.Distance(s.id))
+			})
+			for _, n := range nodes {
 				var flags []string
 				if s.IsQuestionable(n) {
 					flags = append(flags, "q10e")
@@ -122,8 +127,7 @@ func (s *Server) WriteStatus(w io.Writer) {
 					n.failedLastQuestionablePing,
 					strings.Join(flags, ","),
 				)
-				return true
-			})
+			}
 			tw.Flush()
 		}
 	}

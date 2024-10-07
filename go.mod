@@ -1,6 +1,6 @@
 module github.com/anacrolix/dht/v2
 
-go 1.18
+go 1.23
 
 require (
 	filippo.io/edwards25519 v1.0.0-rc.1

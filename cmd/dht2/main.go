@@ -3,12 +3,14 @@ package main
 import (
 	"context"
 	"errors"
+	"net"
+
 	"github.com/anacrolix/bargle/v2"
-	"github.com/anacrolix/dht/v2"
 	g "github.com/anacrolix/generics"
 	app "github.com/anacrolix/gostdapp"
 	"github.com/davecgh/go-spew/spew"
-	"net"
+
+	"github.com/anacrolix/dht/v2"
 )
 
 func main() {

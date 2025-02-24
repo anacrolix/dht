@@ -5,10 +5,10 @@ import (
 	"encoding/json"
 	"net/netip"
 	"os"
+	"slices"
 
 	"github.com/anacrolix/log"
 	"golang.org/x/exp/constraints"
-	"slices"
 
 	"github.com/anacrolix/dht/v2"
 )

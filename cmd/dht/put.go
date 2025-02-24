@@ -5,10 +5,10 @@ import (
 	"crypto/ed25519"
 	"errors"
 	"fmt"
-	g "github.com/anacrolix/generics"
 	"log"
 
 	"github.com/anacrolix/args/targets"
+	g "github.com/anacrolix/generics"
 	"github.com/anacrolix/torrent/bencode"
 
 	"github.com/anacrolix/dht/v2"

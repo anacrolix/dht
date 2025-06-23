@@ -15,11 +15,10 @@ import (
 
 	"github.com/anacrolix/generics"
 	"github.com/anacrolix/log"
-	"github.com/anacrolix/missinggo/v2"
+	"github.com/anacrolix/missinggo"
 	"github.com/anacrolix/sync"
 	"github.com/anacrolix/torrent/bencode"
 	"github.com/anacrolix/torrent/iplist"
-	"github.com/anacrolix/torrent/logonce"
 	"github.com/anacrolix/torrent/metainfo"
 	"golang.org/x/time/rate"
 
@@ -354,7 +353,7 @@ func (s *Server) serve() error {
 		}
 		expvars.Add("packets read", 1)
 		if n == len(b) {
-			logonce.Stderr.Printf("received dht packet exceeds buffer size")
+			expvars.Add("received dht packet exceeds buffer size", 1)
 			continue
 		}
 		if missinggo.AddrPort(addr) == 0 {

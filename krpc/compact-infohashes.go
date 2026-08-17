@@ -7,7 +7,11 @@ type CompactInfohashes [][20]byte
 func (CompactInfohashes) ElemSize() int { return 20 }
 
 func (me CompactInfohashes) MarshalBinary() ([]byte, error) {
-	return marshalBinarySlice(me)
+	ret := make([]byte, 0, len(me)*me.ElemSize())
+	for _, ih := range me {
+		ret = append(ret, ih[:]...)
+	}
+	return ret, nil
 }
 
 func (me CompactInfohashes) MarshalBencode() ([]byte, error) {

@@ -5,9 +5,18 @@ import (
 	"fmt"
 	"reflect"
 
-	"github.com/anacrolix/missinggo/slices"
 	"github.com/anacrolix/torrent/bencode"
 )
+
+// Returns a copy of s with f applied to each element. The named slice type is preserved, so the
+// result still carries its ElemSize method.
+func mapSlice[S ~[]E, E any](s S, f func(E) E) S {
+	ret := make(S, len(s))
+	for i, e := range s {
+		ret[i] = f(e)
+	}
+	return ret
+}
 
 func unmarshalBencodedBinary(u encoding.BinaryUnmarshaler, b []byte) (err error) {
 	var ub string
@@ -48,13 +57,15 @@ func unmarshalBinarySlice(slice elemSizer, b []byte) (err error) {
 	return
 }
 
-func marshalBinarySlice(slice elemSizer) (ret []byte, err error) {
-	var elems []encoding.BinaryMarshaler
-	slices.MakeInto(&elems, slice)
-	for _, e := range elems {
+func marshalBinarySlice[S interface {
+	~[]E
+	elemSizer
+}, E encoding.BinaryMarshaler](slice S) (ret []byte, err error) {
+	for _, e := range slice {
 		var b []byte
 		b, err = e.MarshalBinary()
 		if err != nil {
+			err = fmt.Errorf("marshalling %v: %w", e, err)
 			return
 		}
 		if len(b) != slice.ElemSize() {

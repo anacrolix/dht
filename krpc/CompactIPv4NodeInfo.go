@@ -1,7 +1,5 @@
 package krpc
 
-import "github.com/anacrolix/missinggo/slices"
-
 type (
 	CompactIPv4NodeInfo []NodeInfo
 )
@@ -18,10 +16,10 @@ func (CompactIPv4NodeInfo) ElemSize() int {
 // }
 
 func (me CompactIPv4NodeInfo) MarshalBinary() ([]byte, error) {
-	return marshalBinarySlice(slices.Map(func(ni NodeInfo) NodeInfo {
+	return marshalBinarySlice(mapSlice(me, func(ni NodeInfo) NodeInfo {
 		ni.Addr.IP = ni.Addr.IP.To4()
 		return ni
-	}, me).(CompactIPv4NodeInfo))
+	}))
 }
 
 func (me CompactIPv4NodeInfo) MarshalBencode() ([]byte, error) {

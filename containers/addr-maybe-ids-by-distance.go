@@ -1,8 +1,7 @@
 package containers
 
 import (
-	"github.com/anacrolix/missinggo/v2/iter"
-	"github.com/anacrolix/stm/stmutil"
+	"github.com/benbjohnson/immutable"
 
 	"github.com/anacrolix/dht/v2/int160"
 	"github.com/anacrolix/dht/v2/types"
@@ -17,29 +16,49 @@ type AddrMaybeIdsByDistance interface {
 	Len() int
 }
 
-type stmSettishWrapper struct {
-	set stmutil.Settish[addrMaybeId]
+// Orders addrMaybeIds by their distance to a target. CloserThan is a total order, so elements that
+// compare equal are the same set element.
+type closerThanTarget struct {
+	target int160.T
 }
 
-func (me stmSettishWrapper) Next() addrMaybeId {
-	first, _ := iter.First(me.set.Iter)
-	return first.(addrMaybeId)
+func (me closerThanTarget) Compare(l, r addrMaybeId) int {
+	if l.CloserThan(r, me.target) {
+		return -1
+	}
+	if r.CloserThan(l, me.target) {
+		return 1
+	}
+	return 0
 }
 
-func (me stmSettishWrapper) Delete(x addrMaybeId) AddrMaybeIdsByDistance {
-	return stmSettishWrapper{me.set.Delete(x)}
+// A persistent set of addrMaybeId ordered by distance to a target, backed by an immutable sorted
+// map with empty values.
+type sortedSet struct {
+	m *immutable.SortedMap[addrMaybeId, struct{}]
 }
 
-func (me stmSettishWrapper) Len() int {
-	return me.set.Len()
+// Returns the element closest to the target. Panics if the set is empty.
+func (me sortedSet) Next() addrMaybeId {
+	first, _, ok := me.m.Iterator().Next()
+	if !ok {
+		panic("next called on empty set")
+	}
+	return first
 }
 
-func (me stmSettishWrapper) Add(x addrMaybeId) AddrMaybeIdsByDistance {
-	return stmSettishWrapper{me.set.Add(x)}
+func (me sortedSet) Delete(x addrMaybeId) AddrMaybeIdsByDistance {
+	return sortedSet{me.m.Delete(x)}
+}
+
+func (me sortedSet) Len() int {
+	return me.m.Len()
+}
+
+func (me sortedSet) Add(x addrMaybeId) AddrMaybeIdsByDistance {
+	return sortedSet{me.m.Set(x, struct{}{})}
 }
 
 func NewImmutableAddrMaybeIdsByDistance(target int160.T) AddrMaybeIdsByDistance {
-	return stmSettishWrapper{stmutil.NewSortedSet[addrMaybeId](func(l, r addrMaybeId) bool {
-		return l.CloserThan(r, target)
-	})}
+	return sortedSet{immutable.NewSortedMap[addrMaybeId, struct{}](closerThanTarget{target})}
 }

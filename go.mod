@@ -11,11 +11,9 @@ require (
 	github.com/anacrolix/generics v0.0.0-20230816105729-c755655aee45
 	github.com/anacrolix/gostdapp v0.1.0
 	github.com/anacrolix/log v0.15.2
-	github.com/anacrolix/missinggo v1.3.0
 	github.com/anacrolix/missinggo/v2 v2.7.1
 	github.com/anacrolix/multiless v0.3.1-0.20221221005021-2d12701f83f7
 	github.com/anacrolix/publicip v0.2.0
-	github.com/anacrolix/stm v0.4.1-0.20221221005312-96d17df0e496
 	github.com/anacrolix/sync v0.4.0
 	github.com/anacrolix/tagflag v1.3.0
 	github.com/anacrolix/torrent v1.48.1-0.20230103142631-c20f73d53e9f
@@ -33,8 +31,8 @@ require (
 )
 
 require (
-	github.com/alecthomas/atomic v0.1.0-alpha2 // indirect
 	github.com/anacrolix/backtrace v0.0.0-20221205112523-22a61db8f82e // indirect
+	github.com/anacrolix/missinggo v1.3.0 // indirect
 	github.com/anacrolix/missinggo/perf v1.0.0 // indirect
 	github.com/cenkalti/backoff/v4 v4.1.3 // indirect
 	github.com/dustin/go-humanize v1.0.0 // indirect

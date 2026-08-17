@@ -1,16 +1,14 @@
 package krpc
 
-import "github.com/anacrolix/missinggo/slices"
-
 type CompactIPv6NodeAddrs []NodeAddr
 
 func (CompactIPv6NodeAddrs) ElemSize() int { return 18 }
 
 func (me CompactIPv6NodeAddrs) MarshalBinary() ([]byte, error) {
-	return marshalBinarySlice(slices.Map(func(na NodeAddr) NodeAddr {
+	return marshalBinarySlice(mapSlice(me, func(na NodeAddr) NodeAddr {
 		na.IP = na.IP.To16()
 		return na
-	}, me).(CompactIPv6NodeAddrs))
+	}))
 }
 
 func (me CompactIPv6NodeAddrs) MarshalBencode() ([]byte, error) {

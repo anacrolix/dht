@@ -13,9 +13,9 @@ import (
 	"text/tabwriter"
 	"time"
 
+	"github.com/anacrolix/chansync"
 	"github.com/anacrolix/generics"
 	"github.com/anacrolix/log"
-	"github.com/anacrolix/missinggo"
 	"github.com/anacrolix/sync"
 	"github.com/anacrolix/torrent/bencode"
 	"github.com/anacrolix/torrent/iplist"
@@ -47,7 +47,7 @@ type Server struct {
 	transactions transactions.Dispatcher[*transaction]
 	nextT        uint64 // unique "t" field for outbound queries
 	table        table
-	closed       missinggo.Event
+	closed       chansync.SetOnce
 	ipBlockList  iplist.Ranger
 	tokenServer  tokenServer // Manages tokens we issue to our queriers.
 	config       ServerConfig
@@ -356,7 +356,7 @@ func (s *Server) serve() error {
 			expvars.Add("received dht packet exceeds buffer size", 1)
 			continue
 		}
-		if missinggo.AddrPort(addr) == 0 {
+		if addrPort(addr) == 0 {
 			readZeroPort.Add(1)
 			continue
 		}
@@ -366,7 +366,7 @@ func (s *Server) serve() error {
 			if s.closed.IsSet() {
 				return false, errors.New("server is closed")
 			}
-			return s.ipBlocked(missinggo.AddrIP(addr)), nil
+			return s.ipBlocked(addrIP(addr)), nil
 		}()
 		if err != nil {
 			return err
@@ -1364,7 +1364,7 @@ wait:
 		}
 		op.AddNodes(types.AddrMaybeIdSliceFromNodeInfoSlice(s.notBadNodes()))
 		bucketChanged := b.changed.Signaled()
-		serverClosed := s.closed.C()
+		serverClosed := s.closed.Done()
 		s.mu.RUnlock()
 		select {
 		case <-op.Stalled():
@@ -1445,7 +1445,7 @@ func (s *Server) TableMaintainer() {
 		}
 		s.mu.RUnlock()
 		select {
-		case <-s.closed.LockedChan(&s.mu):
+		case <-s.closed.Done():
 			return
 		case <-time.After(time.Minute):
 		}

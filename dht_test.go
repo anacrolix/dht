@@ -11,7 +11,7 @@ import (
 
 	_ "github.com/anacrolix/envpprof"
 	"github.com/anacrolix/log"
-	"github.com/anacrolix/missinggo/inproc"
+	"github.com/anacrolix/missinggo/v2/inproc"
 	"github.com/anacrolix/sync"
 	"github.com/anacrolix/torrent/bencode"
 	"github.com/stretchr/testify/assert"

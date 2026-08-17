@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/anacrolix/log"
-	"github.com/anacrolix/missinggo/v2"
 	"github.com/anacrolix/torrent/iplist"
 	"github.com/anacrolix/torrent/metainfo"
 	"golang.org/x/time/rate"
@@ -158,6 +157,6 @@ func MakeDeterministicNodeID(public net.Addr) (id krpc.ID) {
 	h := crypto.SHA1.New()
 	h.Write([]byte(public.String()))
 	h.Sum(id[:0:20])
-	SecureNodeId(&id, missinggo.AddrIP(public))
+	SecureNodeId(&id, addrIP(public))
 	return
 }

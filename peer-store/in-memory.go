@@ -21,7 +21,8 @@ type InMemory struct {
 	index  map[InfoHash]indexValue
 }
 
-// A uniqueness key for entries to the entry details
+// Keys are raw IP bytes used only for uniqueness. NodeAndTime values are
+// authoritative for endpoint and timestamp data.
 type indexValue = map[string]NodeAndTime
 
 type debugWriterInterface interface {
@@ -35,13 +36,8 @@ var _ interface {
 func (me *InMemory) GetPeers(ih InfoHash) (ret []krpc.NodeAddr) {
 	me.mu.RLock()
 	defer me.mu.RUnlock()
-	for b := range me.index[ih] {
-		var r krpc.NodeAddr
-		err := r.UnmarshalBinary([]byte(b))
-		if err != nil {
-			panic(err)
-		}
-		ret = append(ret, r)
+	for _, v := range me.index[ih] {
+		ret = append(ret, v.NodeAddr)
 	}
 	return
 }

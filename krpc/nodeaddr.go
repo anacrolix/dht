@@ -3,6 +3,7 @@ package krpc
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
 	"net"
 	"net/netip"
 	"strconv"
@@ -32,6 +33,9 @@ func (me NodeAddr) String() string {
 }
 
 func (me *NodeAddr) UnmarshalBinary(b []byte) error {
+	if len(b) < 2 {
+		return fmt.Errorf("unmarshal NodeAddr from %d bytes: need at least 2", len(b))
+	}
 	me.IP = make(net.IP, len(b)-2)
 	copy(me.IP, b[:len(b)-2])
 	me.Port = int(binary.BigEndian.Uint16(b[len(b)-2:]))

@@ -36,8 +36,15 @@ var _ interface {
 func (me *InMemory) GetPeers(ih InfoHash) (ret []krpc.NodeAddr) {
 	me.mu.RLock()
 	defer me.mu.RUnlock()
-	for _, v := range me.index[ih] {
-		ret = append(ret, v.NodeAddr)
+	nodes := me.index[ih]
+	if len(nodes) == 0 {
+		return
+	}
+	ret = make([]krpc.NodeAddr, len(nodes))
+	i := 0
+	for _, v := range nodes {
+		ret[i] = v.NodeAddr
+		i++
 	}
 	return
 }

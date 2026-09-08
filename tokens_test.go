@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
+	"github.com/go-quicktest/qt"
 )
 
 func TestTokenServer(t *testing.T) {
@@ -21,14 +21,14 @@ func TestTokenServer(t *testing.T) {
 		maxIntervalDelta: 2,
 	}
 	tok := ts.CreateToken(addr1)
-	assert.Len(t, tok, 20)
-	assert.True(t, ts.ValidToken(tok, addr1))
-	assert.False(t, ts.ValidToken(tok[1:], addr1))
-	assert.False(t, ts.ValidToken(tok, addr2))
+	qt.Check(t, qt.HasLen(tok, 20))
+	qt.Check(t, qt.IsTrue(ts.ValidToken(tok, addr1)))
+	qt.Check(t, qt.IsFalse(ts.ValidToken(tok[1:], addr1)))
+	qt.Check(t, qt.IsFalse(ts.ValidToken(tok, addr2)))
 	func() {
 		ts0 := ts
 		ts0.secret = nil
-		assert.False(t, ts0.ValidToken(tok, addr1))
+		qt.Check(t, qt.IsFalse(ts0.ValidToken(tok, addr1)))
 	}()
 	now := time.Now()
 	setTime := func(t time.Time) {
@@ -38,17 +38,17 @@ func TestTokenServer(t *testing.T) {
 	}
 	setTime(now)
 	tok = ts.CreateToken(addr1)
-	assert.True(t, ts.ValidToken(tok, addr1))
+	qt.Check(t, qt.IsTrue(ts.ValidToken(tok, addr1)))
 	setTime(time.Time{})
-	assert.False(t, ts.ValidToken(tok, addr1))
+	qt.Check(t, qt.IsFalse(ts.ValidToken(tok, addr1)))
 	setTime(now.Add(-5 * time.Minute))
-	assert.False(t, ts.ValidToken(tok, addr1))
+	qt.Check(t, qt.IsFalse(ts.ValidToken(tok, addr1)))
 	setTime(now)
-	assert.True(t, ts.ValidToken(tok, addr1))
+	qt.Check(t, qt.IsTrue(ts.ValidToken(tok, addr1)))
 	setTime(now.Add(5 * time.Minute))
-	assert.True(t, ts.ValidToken(tok, addr1))
+	qt.Check(t, qt.IsTrue(ts.ValidToken(tok, addr1)))
 	setTime(now.Add(2 * 5 * time.Minute))
-	assert.True(t, ts.ValidToken(tok, addr1))
+	qt.Check(t, qt.IsTrue(ts.ValidToken(tok, addr1)))
 	setTime(now.Add(3 * 5 * time.Minute))
-	assert.False(t, ts.ValidToken(tok, addr1))
+	qt.Check(t, qt.IsFalse(ts.ValidToken(tok, addr1)))
 }

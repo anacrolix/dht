@@ -4,8 +4,7 @@ import (
 	"net"
 	"testing"
 
-	qt "github.com/frankban/quicktest"
-	"github.com/stretchr/testify/assert"
+	"github.com/go-quicktest/qt"
 
 	"github.com/anacrolix/dht/v2/int160"
 )
@@ -14,11 +13,11 @@ func TestTable(t *testing.T) {
 	tbl := table{k: 8}
 	var maxFar int160.T
 	maxFar.SetMax()
-	assert.Equal(t, 0, tbl.bucketIndex(maxFar))
-	assert.Panics(t, func() { tbl.bucketIndex(tbl.rootID) })
+	qt.Check(t, qt.Equals(tbl.bucketIndex(maxFar), 0))
+	qt.Check(t, qt.PanicMatches(func() { tbl.bucketIndex(tbl.rootID) }, ".*"))
 
-	assert.Error(t, tbl.addNode(&node{}))
-	assert.Equal(t, 0, tbl.buckets[0].Len())
+	qt.Check(t, qt.IsNotNil(tbl.addNode(&node{})))
+	qt.Check(t, qt.Equals(tbl.buckets[0].Len(), 0))
 
 	id0 := int160.FromByteString("\x2f\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00")
 	id1 := int160.FromByteString("\x2e\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00")
@@ -31,24 +30,24 @@ func TestTable(t *testing.T) {
 		Addr: NewAddr(&net.UDPAddr{}),
 	}}
 
-	assert.NoError(t, tbl.addNode(n0))
-	assert.Equal(t, 1, tbl.buckets[2].Len())
+	qt.Check(t, qt.IsNil(tbl.addNode(n0)))
+	qt.Check(t, qt.Equals(tbl.buckets[2].Len(), 1))
 
-	assert.Error(t, tbl.addNode(n0))
-	assert.Equal(t, 1, tbl.buckets[2].Len())
-	assert.Equal(t, 1, tbl.numNodes())
+	qt.Check(t, qt.IsNotNil(tbl.addNode(n0)))
+	qt.Check(t, qt.Equals(tbl.buckets[2].Len(), 1))
+	qt.Check(t, qt.Equals(tbl.numNodes(), 1))
 
-	assert.NoError(t, tbl.addNode(n1))
-	assert.Equal(t, 2, tbl.buckets[2].Len())
-	assert.Equal(t, 2, tbl.numNodes())
+	qt.Check(t, qt.IsNil(tbl.addNode(n1)))
+	qt.Check(t, qt.Equals(tbl.buckets[2].Len(), 2))
+	qt.Check(t, qt.Equals(tbl.numNodes(), 2))
 
 	tbl.dropNode(n0)
-	assert.Equal(t, 1, tbl.buckets[2].Len())
-	assert.Equal(t, 1, tbl.numNodes())
+	qt.Check(t, qt.Equals(tbl.buckets[2].Len(), 1))
+	qt.Check(t, qt.Equals(tbl.numNodes(), 1))
 
 	tbl.dropNode(n1)
-	assert.Equal(t, 0, tbl.buckets[2].Len())
-	assert.Equal(t, 0, tbl.numNodes())
+	qt.Check(t, qt.Equals(tbl.buckets[2].Len(), 0))
+	qt.Check(t, qt.Equals(tbl.numNodes(), 0))
 }
 
 func TestRandomIdInBucket(t *testing.T) {
@@ -59,6 +58,6 @@ func TestRandomIdInBucket(t *testing.T) {
 	for i := range tbl.buckets {
 		id := tbl.randomIdForBucket(i)
 		t.Logf("%v: random id for bucket index %v", id, i)
-		qt.Assert(t, tbl.bucketIndex(id), qt.Equals, i)
+		qt.Assert(t, qt.Equals(tbl.bucketIndex(id), i))
 	}
 }

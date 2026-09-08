@@ -4,12 +4,13 @@ import (
 	"context"
 	"crypto/rand"
 	"net"
+	"regexp"
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"golang.org/x/time/rate"
+
+	"github.com/go-quicktest/qt"
 )
 
 func TestAnnounceNoStartingNodes(t *testing.T) {
@@ -17,12 +18,12 @@ func TestAnnounceNoStartingNodes(t *testing.T) {
 		Conn:       mustListen(":0"),
 		NoSecurity: true,
 	})
-	require.NoError(t, err)
+	qt.Assert(t, qt.IsNil(err))
 	defer s.Close()
 	var ih [20]byte
 	copy(ih[:], "blah")
 	_, err = s.Announce(ih, 0, true)
-	require.EqualError(t, err, "no initial nodes")
+	qt.Assert(t, qt.ErrorMatches(err, regexp.QuoteMeta("no initial nodes")))
 }
 
 func randomInfohash() (ih [20]byte) {
@@ -37,9 +38,9 @@ func TestAnnounceStopsNoPending(t *testing.T) {
 			return []Addr{NewAddr(&net.TCPAddr{})}, nil
 		},
 	})
-	require.NoError(t, err)
+	qt.Assert(t, qt.IsNil(err))
 	a, err := s.Announce(randomInfohash(), 0, true)
-	require.NoError(t, err)
+	qt.Assert(t, qt.IsNil(err))
 	defer a.Close()
 	<-a.Peers
 }
@@ -49,10 +50,10 @@ func TestAnnounceStopsNoPending(t *testing.T) {
 // are successful.
 func TestRateLimiterInadequate(t *testing.T) {
 	rl := rate.NewLimiter(rate.Every(time.Hour), 1)
-	assert.NoError(t, rl.Wait(context.Background()))
+	qt.Check(t, qt.IsNil(rl.Wait(context.Background())))
 	time.AfterFunc(time.Millisecond, func() { rl.AllowN(time.Now(), -1) })
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	time.AfterFunc(2*time.Millisecond, cancel)
-	assert.EqualValues(t, context.Canceled, rl.Wait(ctx))
+	qt.Check(t, qt.Equals(rl.Wait(ctx), context.Canceled))
 }

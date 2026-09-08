@@ -5,21 +5,20 @@ import (
 	"os"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
 	"github.com/anacrolix/dht/v2/krpc"
+
+	"github.com/go-quicktest/qt"
 )
 
 func TestSaveLoadNodesFile(t *testing.T) {
 	f, err := ioutil.TempFile("", "")
-	require.NoError(t, err)
+	qt.Assert(t, qt.IsNil(err))
 	defer os.Remove(f.Name())
 	f.Close()
 	ns := []krpc.NodeInfo{krpc.RandomNodeInfo(4), krpc.RandomNodeInfo(16)}
-	require.NoError(t, WriteNodesToFile(ns, f.Name()))
+	qt.Assert(t, qt.IsNil(WriteNodesToFile(ns, f.Name())))
 	_ns, err := ReadNodesFromFile(f.Name())
-	assert.NoError(t, err)
+	qt.Check(t, qt.IsNil(err))
 	_ns[0].Addr.IP = _ns[0].Addr.IP.To4()
-	assert.EqualValues(t, ns, _ns)
+	qt.Check(t, qt.DeepEquals(_ns, ns))
 }

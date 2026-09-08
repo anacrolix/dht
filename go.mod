@@ -21,10 +21,9 @@ require (
 	github.com/bradfitz/iter v0.0.0-20191230175014-e8f45d346db8
 	github.com/davecgh/go-spew v1.1.1
 	github.com/docopt/docopt-go v0.0.0-20180111231733-ee0de3bc6815
-	github.com/frankban/quicktest v1.14.4
+	github.com/go-quicktest/qt v1.102.0
 	github.com/multiformats/go-base36 v0.1.0
 	github.com/rs/dnscache v0.0.0-20211102005908-e0241e321417
-	github.com/stretchr/testify v1.8.1
 	golang.org/x/exp v0.0.0-20221217163422-3c43f8badb15
 	golang.org/x/sys v0.6.0
 	golang.org/x/time v0.0.0-20220609170525-579cf78fd858
@@ -41,7 +40,7 @@ require (
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-ole/go-ole v1.2.6 // indirect
 	github.com/golang/protobuf v1.5.3 // indirect
-	github.com/google/go-cmp v0.5.9 // indirect
+	github.com/google/go-cmp v0.6.0 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.12.0 // indirect
 	github.com/honeycombio/honeycomb-opentelemetry-go v0.3.0 // indirect
 	github.com/honeycombio/opentelemetry-go-contrib/launcher v0.0.0-20221031150637-a3c60ed98d54 // indirect
@@ -50,9 +49,8 @@ require (
 	github.com/kr/text v0.2.0 // indirect
 	github.com/lufia/plan9stats v0.0.0-20220913051719-115f729f3c8c // indirect
 	github.com/pkg/errors v0.9.1 // indirect
-	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/power-devops/perfstat v0.0.0-20220216144756-c35f1ee13d7c // indirect
-	github.com/rogpeppe/go-internal v1.9.0 // indirect
+	github.com/rogpeppe/go-internal v1.12.0 // indirect
 	github.com/sethvargo/go-envconfig v0.8.2 // indirect
 	github.com/shirou/gopsutil/v3 v3.22.9 // indirect
 	github.com/tklauser/go-sysconf v0.3.10 // indirect
@@ -87,5 +85,4 @@ require (
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20230526203410-71b5a4ffd15e // indirect
 	google.golang.org/grpc v1.55.0 // indirect
 	google.golang.org/protobuf v1.30.0 // indirect
-	gopkg.in/yaml.v3 v3.0.1 // indirect
 )

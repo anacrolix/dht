@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"github.com/anacrolix/torrent/bencode"
-	qt "github.com/frankban/quicktest"
+	"github.com/go-quicktest/qt"
 )
 
 // Check that if we can unmarshal a Msg that we can marshal it back without an error. We
@@ -17,14 +17,13 @@ import (
 func Fuzz(f *testing.F) {
 	f.Add([]byte("d1:rd2:id20:\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x01e1:t1:t1:y1:re"))
 	f.Fuzz(func(t *testing.T, in []byte) {
-		c := qt.New(t)
 		var m Msg
 		err := bencode.Unmarshal(in, &m)
 		if err != nil {
 			t.Skip()
 		}
 		out, err := bencode.Marshal(m)
-		c.Assert(err, qt.IsNil)
+		qt.Assert(t, qt.IsNil(err))
 		if !bytes.Equal(in, out) {
 			t.Skip()
 		}

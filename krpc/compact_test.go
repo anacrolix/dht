@@ -4,8 +4,7 @@ import (
 	"net"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
+	"github.com/go-quicktest/qt"
 )
 
 func TestUnmarshalSlice(t *testing.T) {
@@ -13,10 +12,10 @@ func TestUnmarshalSlice(t *testing.T) {
 	err := data.UnmarshalBencode([]byte("52:" +
 		"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x01\x02\x03\x04\x05\x06" +
 		"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x02\x03\x04\x05\x06\x07"))
-	require.NoError(t, err)
-	require.Len(t, data, 2)
-	assert.Equal(t, "1.2.3.4", data[0].Addr.IP.String())
-	assert.Equal(t, "2.3.4.5", data[1].Addr.IP.String())
+	qt.Assert(t, qt.IsNil(err))
+	qt.Assert(t, qt.HasLen(data, 2))
+	qt.Check(t, qt.Equals(data[0].Addr.IP.String(), "1.2.3.4"))
+	qt.Check(t, qt.Equals(data[1].Addr.IP.String(), "2.3.4.5"))
 }
 
 var nodeAddrIndexTests4 = []struct {
@@ -78,14 +77,15 @@ var marshalIPv4SliceTests = []struct {
 
 func TestMarshalCompactIPv4NodeAddrs(t *testing.T) {
 	for _, tc := range marshalIPv4SliceTests {
-		runFunc := assert.NotPanics
-		if tc.panics {
-			runFunc = assert.Panics
-		}
-		runFunc(t, func() {
+		marshal := func() {
 			out, err := tc.in.MarshalBinary()
-			require.NoError(t, err)
-			assert.Equal(t, tc.out, out, "for input %v, %v", tc.in)
-		})
+			qt.Assert(t, qt.IsNil(err))
+			qt.Check(t, qt.DeepEquals(out, tc.out), qt.Commentf("for input %v", tc.in))
+		}
+		if tc.panics {
+			qt.Check(t, qt.PanicMatches(marshal, ".*"))
+		} else {
+			qt.Check(t, qt.Not(qt.PanicMatches(marshal, ".*")))
+		}
 	}
 }

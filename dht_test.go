@@ -14,11 +14,11 @@ import (
 	"github.com/anacrolix/missinggo/v2/inproc"
 	"github.com/anacrolix/sync"
 	"github.com/anacrolix/torrent/bencode"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/anacrolix/dht/v2/int160"
 	"github.com/anacrolix/dht/v2/krpc"
+
+	"github.com/go-quicktest/qt"
 )
 
 func TestSetNilBigInt(t *testing.T) {
@@ -31,15 +31,15 @@ func TestMarshalCompactNodeInfo(t *testing.T) {
 		ID: [20]byte{'a', 'b', 'c'},
 	}}
 	addr, err := net.ResolveUDPAddr("udp4", "1.2.3.4:5")
-	require.NoError(t, err)
+	qt.Assert(t, qt.IsNil(err))
 	cni[0].Addr.FromUDPAddr(addr)
 	cni[0].Addr.IP = cni[0].Addr.IP.To4()
 	b, err := cni.MarshalBinary()
-	require.NoError(t, err)
+	qt.Assert(t, qt.IsNil(err))
 	var bb [26]byte
 	copy(bb[:], []byte("abc"))
 	copy(bb[20:], []byte("\x01\x02\x03\x04\x00\x05"))
-	assert.EqualValues(t, string(bb[:]), string(b))
+	qt.Check(t, qt.Equals(string(b), string(bb[:])))
 }
 
 const zeroID = "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
@@ -73,7 +73,7 @@ func TestDistances(t *testing.T) {
 func TestMaxDistanceString(t *testing.T) {
 	var max int160.T
 	max.SetMax()
-	require.EqualValues(t, "\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff", max.Bytes())
+	qt.Assert(t, qt.Equals(string(max.Bytes()), "\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff"))
 }
 
 // func TestClosestNodes(t *testing.T) {
@@ -82,19 +82,19 @@ func TestMaxDistanceString(t *testing.T) {
 // 		cn.Push(testIDs[i])
 // 	}
 // 	ids := iter.ToSlice(cn.IDs())
-// 	assert.Len(t, ids, 2)
+// 	qt.Check(t, qt.HasLen(ids, 2))
 // 	m := map[string]bool{}
 // 	for _, id := range ids {
 // 		m[id.(nodeID).ByteString()] = true
 // 	}
 // 	log.Printf("%q", m)
-// 	assert.True(t, m[testIDs[3].ByteString()])
-// 	assert.True(t, m[testIDs[4].ByteString()])
+// 	qt.Check(t, qt.IsTrue(m[testIDs[3].ByteString()]))
+// 	qt.Check(t, qt.IsTrue(m[testIDs[4].ByteString()]))
 // }
 
 func TestDHTDefaultConfig(t *testing.T) {
 	s, err := NewServer(nil)
-	assert.NoError(t, err)
+	qt.Check(t, qt.IsNil(err))
 	s.Close()
 }
 
@@ -112,7 +112,7 @@ func TestPing(t *testing.T) {
 			Port: s.Addr().(*net.UDPAddr).Port,
 		}
 	}
-	require.NoError(t, err)
+	qt.Assert(t, qt.IsNil(err))
 	defer srv.Close()
 	srv0, err := NewServer(&ServerConfig{
 		Conn:          mustListen("127.0.0.1:0"),
@@ -120,29 +120,29 @@ func TestPing(t *testing.T) {
 		Logger:        log.Default,
 		WaitToReply:   true,
 	})
-	require.NoError(t, err)
+	qt.Assert(t, qt.IsNil(err))
 	defer srv0.Close()
 	res := srv.Ping(srvUdpAddr(srv0))
-	require.NoError(t, res.Err)
-	require.EqualValues(t, srv0.ID(), *res.Reply.SenderID())
+	qt.Assert(t, qt.IsNil(res.Err))
+	qt.Assert(t, qt.Equals(*res.Reply.SenderID(), srv0.ID()))
 }
 
 func TestServerCustomNodeId(t *testing.T) {
 	idHex := "5a3ce1c14e7a08645677bbd1cfe7d8f956d53256"
 	idBytes, err := hex.DecodeString(idHex)
-	require.NoError(t, err)
+	qt.Assert(t, qt.IsNil(err))
 	var id [20]byte
 	n := copy(id[:], idBytes)
-	require.Equal(t, 20, n)
+	qt.Assert(t, qt.Equals(n, 20))
 	// How to test custom *secure* ID when tester computers will have
 	// different IDs? Generate custom ids for local IPs and use mini-ID?
 	s, err := NewServer(&ServerConfig{
 		NodeId: id,
 		Conn:   mustListen(":0"),
 	})
-	require.NoError(t, err)
+	qt.Assert(t, qt.IsNil(err))
 	defer s.Close()
-	assert.Equal(t, id, s.ID())
+	qt.Check(t, qt.Equals(s.ID(), id))
 }
 
 func TestAnnounceTimeout(t *testing.T) {
@@ -153,18 +153,18 @@ func TestAnnounceTimeout(t *testing.T) {
 			return 0
 		},
 	})
-	require.NoError(t, err)
+	qt.Assert(t, qt.IsNil(err))
 	var ih [20]byte
 	copy(ih[:], "12341234123412341234")
 	a, err := s.Announce(ih, 0, true)
-	assert.NoError(t, err)
+	qt.Check(t, qt.IsNil(err))
 	<-a.Peers
 	a.Close()
 	s.Close()
 }
 
 func TestEqualPointers(t *testing.T) {
-	assert.EqualValues(t, &krpc.Msg{R: &krpc.Return{}}, &krpc.Msg{R: &krpc.Return{}})
+	qt.Check(t, qt.DeepEquals(&krpc.Msg{R: &krpc.Return{}}, &krpc.Msg{R: &krpc.Return{}}))
 }
 
 func TestHook(t *testing.T) {
@@ -172,7 +172,7 @@ func TestHook(t *testing.T) {
 		Conn:     mustListen("127.0.0.1:5678"),
 		PublicIP: net.IPv4(127, 0, 0, 1),
 	})
-	require.NoError(t, err)
+	qt.Assert(t, qt.IsNil(err))
 	defer pinger.Close()
 	// Establish server with a hook attached to "ping"
 	hookCalled := make(chan struct{}, 1)
@@ -192,7 +192,7 @@ func TestHook(t *testing.T) {
 		},
 		WaitToReply: true,
 	})
-	require.NoError(t, err)
+	qt.Assert(t, qt.IsNil(err))
 	defer receiver.Close()
 	// Ping receiver from pinger to trigger hook. Should also receive a response.
 	t.Log("TestHook: Servers created, hook for ping established. Calling Ping.")
@@ -200,7 +200,7 @@ func TestHook(t *testing.T) {
 		IP:   []byte{127, 0, 0, 1},
 		Port: receiver.Addr().(*net.UDPAddr).Port,
 	})
-	assert.NoError(t, res.Err)
+	qt.Check(t, qt.IsNil(res.Err))
 	// Await signal that hook has been called.
 	select {
 	case <-hookCalled:
@@ -217,8 +217,8 @@ func TestHook(t *testing.T) {
 // arguments.
 func TestResolveBadAddr(t *testing.T) {
 	ua, err := net.ResolveUDPAddr("udp", "0.131.255.145:33085")
-	require.NoError(t, err)
-	assert.False(t, validNodeAddr(ua))
+	qt.Assert(t, qt.IsNil(err))
+	qt.Check(t, qt.IsFalse(validNodeAddr(ua)))
 }
 
 func TestGlobalBootstrapAddrs(t *testing.T) {
@@ -234,7 +234,7 @@ func TestGlobalBootstrapAddrs(t *testing.T) {
 // https://github.com/anacrolix/dht/pull/19
 func TestBadGetPeersResponse(t *testing.T) {
 	pc, err := net.ListenPacket("udp", "localhost:0")
-	require.NoError(t, err)
+	qt.Assert(t, qt.IsNil(err))
 	defer pc.Close()
 	s, err := NewServer(&ServerConfig{
 		StartingNodes: func() ([]Addr, error) {
@@ -242,12 +242,12 @@ func TestBadGetPeersResponse(t *testing.T) {
 		},
 		Conn: mustListen("localhost:0"),
 	})
-	require.NoError(t, err)
+	qt.Assert(t, qt.IsNil(err))
 	defer s.Close()
 	go func() {
 		b := make([]byte, 1024)
 		n, addr, err := pc.ReadFrom(b)
-		require.NoError(t, err)
+		qt.Assert(t, qt.IsNil(err))
 		var rm krpc.Msg
 		bencode.Unmarshal(b[:n], &rm)
 		m := krpc.Msg{
@@ -255,11 +255,11 @@ func TestBadGetPeersResponse(t *testing.T) {
 			T: rm.T,
 		}
 		b, err = bencode.Marshal(m)
-		require.NoError(t, err)
+		qt.Assert(t, qt.IsNil(err))
 		pc.WriteTo(b, addr)
 	}()
 	a, err := s.Announce([20]byte{}, 0, true)
-	require.NoError(t, err)
+	qt.Assert(t, qt.IsNil(err))
 	// Drain the Announce until it closes.
 	for range a.Peers {
 	}
@@ -267,7 +267,7 @@ func TestBadGetPeersResponse(t *testing.T) {
 
 func TestBootstrapRace(t *testing.T) {
 	remotePc, err := inproc.ListenPacket("", "localhost:0")
-	require.NoError(t, err)
+	qt.Assert(t, qt.IsNil(err))
 	defer remotePc.Close()
 	serverPc := bootstrapRacePacketConn{
 		read: make(chan read),
@@ -279,7 +279,7 @@ func TestBootstrapRace(t *testing.T) {
 		QueryResendDelay: func() time.Duration { return 0 },
 		Logger:           log.Default,
 	})
-	require.NoError(t, err)
+	qt.Assert(t, qt.IsNil(err))
 	defer s.Close()
 	go func() {
 		for i := 0; i < defaultMaxQuerySends-1; i++ {
@@ -298,7 +298,7 @@ func TestBootstrapRace(t *testing.T) {
 	}()
 	ts, err := s.Bootstrap()
 	t.Logf("%#v", ts)
-	require.NoError(t, err)
+	qt.Assert(t, qt.IsNil(err))
 }
 
 type emptyNetAddr struct{}

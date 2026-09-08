@@ -6,10 +6,9 @@ import (
 	"net"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
 	"github.com/anacrolix/dht/v2/krpc"
+
+	"github.com/go-quicktest/qt"
 )
 
 func TestDHTSec(t *testing.T) {
@@ -43,15 +42,15 @@ func TestDHTSec(t *testing.T) {
 	} {
 		ip := net.ParseIP(case_.ipStr)
 		_id, err := hex.DecodeString(case_.nodeIDHex)
-		require.NoError(t, err)
+		qt.Assert(t, qt.IsNil(err))
 		var id krpc.ID
-		require.Equal(t, 20, copy(id[:], _id))
+		qt.Assert(t, qt.Equals(copy(id[:], _id), 20))
 		secure := NodeIdSecure(id, ip)
-		assert.Equal(t, case_.valid, secure, "%v", case_)
+		qt.Check(t, qt.Equals(secure, case_.valid), qt.Commentf("%v", case_))
 		if !secure {
 			// It's not secure, so secure it in place and then check it again.
 			SecureNodeId(&id, ip)
-			assert.True(t, NodeIdSecure(id, ip), "%v", case_)
+			qt.Check(t, qt.IsTrue(NodeIdSecure(id, ip)), qt.Commentf("%v", case_))
 		}
 	}
 }
@@ -75,12 +74,12 @@ func TestSecureNodeIdMultipleIps(t *testing.T) {
 	getInsecureIp(id, ip6)
 	t.Logf("random ip4 address: %s", ip4)
 	t.Logf("random ip6 address: %s", ip6)
-	require.False(t, NodeIdSecure(id, ip4))
-	require.False(t, NodeIdSecure(id, ip6))
+	qt.Assert(t, qt.IsFalse(NodeIdSecure(id, ip4)))
+	qt.Assert(t, qt.IsFalse(NodeIdSecure(id, ip6)))
 	SecureNodeId(&id, ip4)
-	assert.True(t, NodeIdSecure(id, ip4))
-	assert.False(t, NodeIdSecure(id, ip6))
+	qt.Check(t, qt.IsTrue(NodeIdSecure(id, ip4)))
+	qt.Check(t, qt.IsFalse(NodeIdSecure(id, ip6)))
 	SecureNodeId(&id, ip6)
-	assert.True(t, NodeIdSecure(id, ip6))
-	assert.False(t, NodeIdSecure(id, ip4))
+	qt.Check(t, qt.IsTrue(NodeIdSecure(id, ip6)))
+	qt.Check(t, qt.IsFalse(NodeIdSecure(id, ip4)))
 }

@@ -6,8 +6,7 @@ import (
 	"net"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
+	"github.com/go-quicktest/qt"
 )
 
 var (
@@ -31,12 +30,12 @@ func TestNodeAddrBinaryRoundTrip(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			encoded, err := test.addr.MarshalBinary()
-			require.NoError(t, err)
+			qt.Assert(t, qt.IsNil(err))
 
 			var got NodeAddr
-			require.NoError(t, got.UnmarshalBinary(encoded))
-			assert.True(t, bytes.Equal(got.IP, test.addr.IP), "IP = %x, want %x", got.IP, test.addr.IP)
-			assert.Equal(t, test.addr.Port, got.Port)
+			qt.Assert(t, qt.IsNil(got.UnmarshalBinary(encoded)))
+			qt.Check(t, qt.IsTrue(bytes.Equal(got.IP, test.addr.IP)), qt.Commentf("IP = %x, want %x", got.IP, test.addr.IP))
+			qt.Check(t, qt.Equals(got.Port, test.addr.Port))
 		})
 	}
 }
@@ -54,15 +53,15 @@ func FuzzNodeAddrUnmarshalBinary(f *testing.F) {
 
 		err := got.UnmarshalBinary(b)
 		if len(b) < 2 {
-			require.Error(t, err)
-			assert.True(t, bytes.Equal(got.IP, original.IP), "receiver IP changed from %x to %x", original.IP, got.IP)
-			assert.Equal(t, original.Port, got.Port)
+			qt.Assert(t, qt.IsNotNil(err))
+			qt.Check(t, qt.IsTrue(bytes.Equal(got.IP, original.IP)), qt.Commentf("receiver IP changed from %x to %x", original.IP, got.IP))
+			qt.Check(t, qt.Equals(got.Port, original.Port))
 			return
 		}
 
-		require.NoError(t, err)
-		assert.True(t, bytes.Equal(got.IP, b[:len(b)-2]), "IP = %x, want %x", got.IP, b[:len(b)-2])
-		assert.Equal(t, int(binary.BigEndian.Uint16(b[len(b)-2:])), got.Port)
+		qt.Assert(t, qt.IsNil(err))
+		qt.Check(t, qt.IsTrue(bytes.Equal(got.IP, b[:len(b)-2])), qt.Commentf("IP = %x, want %x", got.IP, b[:len(b)-2]))
+		qt.Check(t, qt.Equals(got.Port, int(binary.BigEndian.Uint16(b[len(b)-2:]))))
 	})
 }
 

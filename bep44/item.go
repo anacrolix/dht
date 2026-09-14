@@ -164,12 +164,10 @@ func CheckIncoming(stored, incoming *Item) error {
 		return ErrSequenceNumberLessThanCurrent
 	}
 
-	// Cas should be ignored if not present
-	if stored.Cas == 0 {
-		return nil
-	}
-
-	if stored.Cas != incoming.Cas {
+	// cas (compare-and-swap) is the sequence number the writer expects to be
+	// replacing; per BEP 44 it must equal the *stored* item's current seq,
+	// otherwise the put is rejected. An absent cas (0) means "no cas".
+	if incoming.Cas != 0 && incoming.Cas != stored.Seq {
 		return ErrCasHashMismatched
 	}
 

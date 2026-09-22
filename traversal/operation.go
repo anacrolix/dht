@@ -227,8 +227,13 @@ func (op *Operation) addClosest(node krpc.NodeInfo, data any) {
 	})
 }
 
+// Closest returns a snapshot of the closest responding nodes. The snapshot stays valid while
+// later responses update the operation. It is not itself updated.
 func (op *Operation) Closest() *k_nearest_nodes.Type {
-	return &op.closest
+	op.mu.Lock()
+	defer op.mu.Unlock()
+	c := op.closest
+	return &c
 }
 
 func (op *Operation) startQuery() {

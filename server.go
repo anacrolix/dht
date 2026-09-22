@@ -10,6 +10,7 @@ import (
 	"runtime/pprof"
 	"slices"
 	"strings"
+	"sync/atomic"
 	"text/tabwriter"
 	"time"
 
@@ -46,7 +47,11 @@ type Server struct {
 	transactions transactions.Dispatcher[*transaction]
 	table        table
 	closed       chansync.SetOnce
-	ipBlockList  iplist.Ranger
+	// Cancelled at the start of Close, before s.mu is taken. Query combines it with the
+	// caller context so an in-flight send ends when the server shuts down.
+	serverCtx    context.Context
+	cancelServer context.CancelFunc
+	ipBlockList  atomic.Pointer[ipBlocklist]
 	tokenServer  tokenServer // Manages tokens we issue to our queriers.
 	config       ServerConfig
 	stats        ServerStats
@@ -221,8 +226,7 @@ func NewServer(c *ServerConfig) (s *Server, err error) {
 	}
 
 	s = &Server{
-		config:      *c,
-		ipBlockList: c.IPBlocklist,
+		config: *c,
 		tokenServer: tokenServer{
 			maxIntervalDelta: 2,
 			interval:         5 * time.Minute,
@@ -237,6 +241,10 @@ func NewServer(c *ServerConfig) (s *Server, err error) {
 	s.socket = c.Conn
 	s.id = int160.FromByteArray(c.NodeId)
 	s.table.rootID = s.id
+	s.serverCtx, s.cancelServer = context.WithCancel(context.Background())
+	if c.IPBlocklist != nil {
+		s.ipBlockList.Store(&ipBlocklist{list: c.IPBlocklist})
+	}
 	s.resendDelay = s.config.QueryResendDelay
 	if s.resendDelay == nil {
 		s.resendDelay = defaultQueryResendDelay
@@ -260,14 +268,28 @@ func (s *Server) String() string {
 }
 
 // Packets to and from any address matching a range in the list are dropped.
+// Published atomically. ipBlocked runs both under s.mu and outside it, and writeToNode calls it
+// while already holding s.mu.RLock, so this list is not guarded by s.mu.
+type ipBlocklist struct{ list iplist.Ranger }
+
+func (s *Server) blocklist() iplist.Ranger {
+	h := s.ipBlockList.Load()
+	if h == nil {
+		return nil
+	}
+	return h.list
+}
+
 func (s *Server) SetIPBlockList(list iplist.Ranger) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.ipBlockList = list
+	if list == nil {
+		s.ipBlockList.Store(nil)
+		return
+	}
+	s.ipBlockList.Store(&ipBlocklist{list: list})
 }
 
 func (s *Server) IPBlocklist() iplist.Ranger {
-	return s.ipBlockList
+	return s.blocklist()
 }
 
 func (s *Server) processPacket(b []byte, addr Addr) {
@@ -365,10 +387,11 @@ func (s *Server) serve() error {
 }
 
 func (s *Server) ipBlocked(ip net.IP) (blocked bool) {
-	if s.ipBlockList == nil {
+	list := s.blocklist()
+	if list == nil {
 		return
 	}
-	_, blocked = s.ipBlockList.Lookup(ip)
+	_, blocked = list.Lookup(ip)
 	return
 }
 
@@ -729,7 +752,7 @@ func (s *Server) writeToNode(ctx context.Context, b []byte, node Addr, wait, rat
 			err = errors.New("server is closed")
 			return
 		}
-		if list := s.ipBlockList; list != nil {
+		if list := s.blocklist(); list != nil {
 			if r, ok := list.Lookup(node.IP()); ok {
 				err = fmt.Errorf("write to %v blocked by %v", node, r)
 				return
@@ -908,6 +931,10 @@ func (s *Server) Query(ctx context.Context, addr Addr, q string, input QueryInpu
 	// Receives the sender's terminal error, and closes when the sender completes.
 	sendErr := make(chan error, 1)
 	sendCtx, cancelSend := context.WithCancel(pprof.WithLabels(ctx, pprof.Labels("q", q)))
+	// Close cancels serverCtx. Either that or the caller context ends the send. The callback
+	// only cancels sendCtx, so it does not take s.mu.
+	stopServer := context.AfterFunc(s.serverCtx, cancelSend)
+	defer stopServer()
 	go func() {
 		sendErr <- s.transactionQuerySender(
 			sendCtx,
@@ -1098,6 +1125,8 @@ func (s *Server) notBadNodes() (nis []krpc.NodeInfo) {
 
 // Stops the server network activity. This is all that's required to clean-up a Server.
 func (s *Server) Close() {
+	// Cancel before taking s.mu. In-flight queries must observe it without this method holding the lock.
+	s.cancelServer()
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.closed.Set()

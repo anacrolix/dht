@@ -3,6 +3,7 @@ package dht
 import (
 	"errors"
 	"fmt"
+	"slices"
 
 	"github.com/anacrolix/dht/v2/int160"
 )
@@ -85,16 +86,23 @@ func (tbl *table) closestNodes(k int, target int160.T, filter func(*node) bool) 
 	if target != tbl.rootID {
 		bi = tbl.bucketIndex(target)
 	}
+	// Buckets are ordered by XOR magnitude: every node in an earlier bucket is closer than every
+	// node in a later one. Inside a bucket the map order is not distance order, so a partial
+	// bucket is sorted and only the nearest remaining slots are kept.
 	for ; bi >= 0 && len(ret) < k; bi-- {
+		var bucketNodes []*node
 		for n := range tbl.buckets[bi].nodes {
 			if filter(n) {
-				ret = append(ret, n)
+				bucketNodes = append(bucketNodes, n)
 			}
 		}
-	}
-	// TODO: Keep only the closest.
-	if len(ret) > k {
-		ret = ret[:k]
+		slices.SortFunc(bucketNodes, func(a, b *node) int {
+			return a.Id.Distance(target).Cmp(b.Id.Distance(target))
+		})
+		if need := k - len(ret); len(bucketNodes) > need {
+			bucketNodes = bucketNodes[:need]
+		}
+		ret = append(ret, bucketNodes...)
 	}
 	return
 }

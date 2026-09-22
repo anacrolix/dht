@@ -36,12 +36,16 @@ func ping(args pingArgs, s *dht.Server) error {
 				fmt.Printf("%s: %s: %s\n", a, time.Since(started), res.Err)
 				return
 			}
-			id := *res.Reply.SenderID()
+			id := res.Reply.SenderID()
+			if id == nil {
+				fmt.Printf("%s: response has no id: %s\n", a, time.Since(started))
+				return
+			}
 			secure := '✘'
-			if dht.NodeIdSecure(id, ua.IP) {
+			if dht.NodeIdSecure(*id, ua.IP) {
 				secure = '✔'
 			}
-			fmt.Printf("%s: %x %c: %s\n", a, id, secure, time.Since(started))
+			fmt.Printf("%s: %x %c: %s\n", a, *id, secure, time.Since(started))
 		})
 	}
 	done := make(chan struct{})

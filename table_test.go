@@ -61,3 +61,67 @@ func TestRandomIdInBucket(t *testing.T) {
 		qt.Assert(t, qt.Equals(tbl.bucketIndex(id), i))
 	}
 }
+
+// BEP 5 replies must contain the k nodes closest to the target. closestNodes walks buckets and
+// then cuts the list at k, so a partially included bucket keeps whichever nodes the map yields
+// first rather than the nearest ones.
+func TestClosestNodesKeepsNearestInBucket(t *testing.T) {
+	var root int160.T
+	tbl := table{rootID: root, k: 8}
+	var target int160.T
+	target.SetBit(10, true)
+
+	add := func(bucket, extra, port int) {
+		t.Helper()
+		var id int160.T
+		id.SetBit(bucket, true)
+		if extra >= 0 {
+			id.SetBit(extra, true)
+		}
+		if got := tbl.bucketIndex(id); got != bucket {
+			t.Fatalf("bit %d extra %d is bucket %d, want %d", bucket, extra, got, bucket)
+		}
+		n := &node{nodeKey: nodeKey{
+			Id:   id,
+			Addr: NewAddr(&net.UDPAddr{IP: net.IPv4(127, 0, 0, 1), Port: port}),
+		}}
+		if err := tbl.addNode(n); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// Three nodes in the target's bucket. Every one of them is closer than every node in the next
+	// bucket, so all three must be kept.
+	for i, bit := range []int{20, 30, 40} {
+		add(10, bit, 1000+i)
+	}
+	// Eight nodes in the next bucket. Only the five closest fit in the remaining slots.
+	for _, bit := range []int{20, 30, 40, 50, 60, 70, 80, 90} {
+		add(9, bit, 2000+bit)
+	}
+	want := map[int]bool{1000: true, 1001: true, 1002: true, 2090: true, 2080: true, 2070: true, 2060: true, 2050: true}
+
+	for try := range 30 {
+		got := tbl.closestNodes(8, target, func(*node) bool { return true })
+		if len(got) != 8 {
+			t.Fatalf("try %d: got %d nodes", try, len(got))
+		}
+		var prev int160.T
+		seen := map[int]bool{}
+		for i, n := range got {
+			d := n.Id.Distance(target)
+			if i > 0 && prev.Cmp(d) > 0 {
+				t.Fatalf("try %d: result is not ordered by XOR distance", try)
+			}
+			prev = d
+			seen[n.Addr.Port()] = true
+		}
+		if len(seen) != len(want) {
+			t.Fatalf("try %d: ports %v, want %v", try, seen, want)
+		}
+		for port := range want {
+			if !seen[port] {
+				t.Fatalf("try %d: dropped closer node on port %d; got %v", try, port, seen)
+			}
+		}
+	}
+}

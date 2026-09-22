@@ -162,12 +162,10 @@ func CheckIncoming(stored, incoming *Item) error {
 		return ErrSequenceNumberLessThanCurrent
 	}
 
-	// Cas should be ignored if not present
-	if stored.Cas == 0 {
-		return nil
-	}
-
-	if stored.Cas != incoming.Cas {
+	// cas is optional. A zero value is omitted on the wire, so zero means absent. When present,
+	// BEP 44 requires it to equal the sequence number currently stored, not the cas recorded on
+	// the previous write. Callers skip this check when nothing is stored yet.
+	if incoming.Cas != 0 && incoming.Cas != stored.Seq {
 		return ErrCasHashMismatched
 	}
 

@@ -98,6 +98,10 @@ func (s *Server) AnnounceTraversal(infoHash [20]byte, opts ...AnnounceOpt) (_ *A
 	for _, opt := range opts {
 		opt(a)
 	}
+	nodes, err := s.TraversalStartingNodes()
+	if err != nil {
+		return
+	}
 	a.traversal = traversal.Start(traversal.OperationInput{
 		Target:     infoHash,
 		DoQuery:    a.getPeers,
@@ -107,11 +111,6 @@ func (s *Server) AnnounceTraversal(infoHash [20]byte, opts ...AnnounceOpt) (_ *A
 			return ok
 		},
 	})
-	nodes, err := s.TraversalStartingNodes()
-	if err != nil {
-		a.traversal.Stop()
-		return
-	}
 	a.traversal.AddNodes(nodes)
 	go func() {
 		<-a.traversal.Stalled()

@@ -43,6 +43,10 @@ func startGetTraversal(
 ) (
 	vChan chan GetResult, op *traversal.Operation, err error,
 ) {
+	nodes, err := s.TraversalStartingNodes()
+	if err != nil {
+		return nil, nil, err
+	}
 	vChan = make(chan GetResult)
 	op = traversal.Start(traversal.OperationInput{
 		Alpha:  15,
@@ -73,11 +77,6 @@ func startGetTraversal(
 			return ok
 		},
 	})
-	nodes, err := s.TraversalStartingNodes()
-	if err != nil {
-		op.Stop()
-		return nil, nil, err
-	}
 	op.AddNodes(nodes)
 	return
 }

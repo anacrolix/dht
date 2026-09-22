@@ -31,6 +31,10 @@ func (s *Server) BootstrapContext(ctx context.Context) (_ TraversalStats, err er
 		defer s.mu.Unlock()
 		s.bootstrappingNow = false
 	}()
+	nodes, err := s.TraversalStartingNodes()
+	if err != nil {
+		return
+	}
 	t := traversal.Start(traversal.OperationInput{
 		Target: s.id.AsByteArray(),
 		K:      16,
@@ -39,10 +43,6 @@ func (s *Server) BootstrapContext(ctx context.Context) (_ TraversalStats, err er
 		},
 		NodeFilter: s.TraversalNodeFilter,
 	})
-	nodes, err := s.TraversalStartingNodes()
-	if err != nil {
-		return
-	}
 	t.AddNodes(nodes)
 	s.mu.Lock()
 	s.lastBootstrap = time.Now()

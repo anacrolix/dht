@@ -4,7 +4,6 @@ package main
 import (
 	"errors"
 	"fmt"
-	"log"
 	"net"
 	"sync"
 	"time"
@@ -20,49 +19,39 @@ type pingArgs struct {
 }
 
 func ping(args pingArgs, s *dht.Server) error {
-	var wg sync.WaitGroup
-	defaults := dht.DefaultGlobalBootstrapHostPorts
-	if !args.Defaults {
-		defaults = nil
+	nodes := args.Nodes
+	if args.Defaults {
+		nodes = append(nodes, dht.DefaultGlobalBootstrapHostPorts...)
 	}
-	for _, a := range append(args.Nodes, defaults...) {
-		func(a string) {
-			ua, err := net.ResolveUDPAddr(args.Network, a)
-			if err != nil {
-				log.Fatal(err)
+	var wg sync.WaitGroup
+	for _, a := range nodes {
+		ua, err := net.ResolveUDPAddr(args.Network, a)
+		if err != nil {
+			return err
+		}
+		started := time.Now()
+		wg.Go(func() {
+			res := s.Ping(ua)
+			if res.Err != nil {
+				fmt.Printf("%s: %s: %s\n", a, time.Since(started), res.Err)
+				return
 			}
-			started := time.Now()
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				res := s.Ping(ua)
-				err := res.Err
-				if err != nil {
-					fmt.Printf("%s: %s: %s\n", a, time.Since(started), err)
-					return
-				}
-				id := *res.Reply.SenderID()
-				fmt.Printf("%s: %x %c: %s\n", a, id, func() rune {
-					if dht.NodeIdSecure(id, ua.IP) {
-						return '✔'
-					} else {
-						return '✘'
-					}
-				}(), time.Since(started))
-			}()
-		}(a)
+			id := *res.Reply.SenderID()
+			secure := '✘'
+			if dht.NodeIdSecure(id, ua.IP) {
+				secure = '✔'
+			}
+			fmt.Printf("%s: %x %c: %s\n", a, id, secure, time.Since(started))
+		})
 	}
 	done := make(chan struct{})
 	go func() {
 		wg.Wait()
 		close(done)
 	}()
-	timeout := make(chan struct{})
+	var timeout <-chan time.Time
 	if args.Timeout != 0 {
-		go func() {
-			time.Sleep(args.Timeout)
-			close(timeout)
-		}()
+		timeout = time.After(args.Timeout)
 	}
 	select {
 	case <-done:

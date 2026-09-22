@@ -34,16 +34,11 @@ func (n *node) IsSecure() bool {
 	return NodeIdSecure(n.Id.AsByteArray(), n.Addr.IP())
 }
 
-func (n *node) idString() string {
-	return n.Id.ByteString()
-}
-
-func (n *node) NodeInfo() (ret krpc.NodeInfo) {
-	ret.Addr = n.Addr.KRPC()
-	if n := copy(ret.ID[:], n.idString()); n != 20 {
-		panic(n)
+func (n *node) NodeInfo() krpc.NodeInfo {
+	return krpc.NodeInfo{
+		ID:   n.Id.AsByteArray(),
+		Addr: n.Addr.KRPC(),
 	}
-	return
 }
 
 // Per the spec in BEP 5.

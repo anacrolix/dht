@@ -2,7 +2,7 @@ package transactions
 
 import (
 	"encoding/binary"
-	"sync"
+	"sync/atomic"
 )
 
 type IdIssuer interface {
@@ -11,17 +11,11 @@ type IdIssuer interface {
 
 var DefaultIdIssuer varintIdIssuer
 
+// Issues sequential IDs encoded as unsigned varints, so they stay short. Safe for concurrent use.
 type varintIdIssuer struct {
-	mu   sync.Mutex
-	buf  [binary.MaxVarintLen64]byte
-	next uint64
+	next atomic.Uint64
 }
 
 func (me *varintIdIssuer) Issue() Id {
-	me.mu.Lock()
-	n := binary.PutUvarint(me.buf[:], me.next)
-	me.next++
-	id := string(me.buf[:n])
-	me.mu.Unlock()
-	return id
+	return string(binary.AppendUvarint(nil, me.next.Add(1)-1))
 }

@@ -282,7 +282,7 @@ func TestBootstrapRace(t *testing.T) {
 	qt.Assert(t, qt.IsNil(err))
 	defer s.Close()
 	go func() {
-		for i := 0; i < defaultMaxQuerySends-1; i++ {
+		for range defaultMaxQuerySends - 1 {
 			remotePc.ReadFrom(nil)
 		}
 		var b [1024]byte

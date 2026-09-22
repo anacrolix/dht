@@ -1,10 +1,10 @@
 package krpc
 
 import (
+	"crypto/rand"
 	"encoding/hex"
 	"fmt"
 	"math"
-	"math/rand"
 	"net"
 	"strings"
 	"testing"
@@ -125,7 +125,7 @@ func TestMarshalUnmarshalMsg(t *testing.T) {
 	testMarshalUnmarshalMsg(t, Msg{
 		R: &Return{
 			Bep44Return: Bep44Return{
-				V:   bencode.MustMarshal([]interface{}{"tee", "hee"}),
+				V:   bencode.MustMarshal([]any{"tee", "hee"}),
 				Seq: new(int64),
 				K:   k,
 				Sig: sig,

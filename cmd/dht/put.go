@@ -52,20 +52,11 @@ func put(cmd *PutCmd) (err error) {
 	}
 	mutable := cmd.Mutable || len(cmd.Key.Bytes) != 0 || cmd.Cas != 0 || len(cmd.Salt) != 0
 	for _, data := range cmd.Data {
-		putBytes := []byte(data)
-		var v interface{}
+		var v any
 		if cmd.Strings {
-			var s interface{} = string(putBytes)
-			v = s
-			putBytes, err = bencode.Marshal(v)
-			if err != nil {
-				return fmt.Errorf("marshalling string arg to bytes: %w", err)
-			}
-		} else {
-			err = bencode.Unmarshal(putBytes, &v)
-			if err != nil {
-				return
-			}
+			v = data
+		} else if err = bencode.Unmarshal([]byte(data), &v); err != nil {
+			return fmt.Errorf("parsing value bencode: %w", err)
 		}
 		put := bep44.Put{
 			V:    v,

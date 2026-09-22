@@ -28,8 +28,8 @@ func (m *Memory) Put(i *Item) error {
 }
 
 func (m *Memory) Get(t Target) (*Item, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 
 	i, ok := m.m[t]
 	if !ok {

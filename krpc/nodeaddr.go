@@ -1,7 +1,6 @@
 package krpc
 
 import (
-	"bytes"
 	"encoding/binary"
 	"fmt"
 	"net"
@@ -52,10 +51,9 @@ func (me *NodeAddr) UnmarshalBencode(b []byte) (err error) {
 }
 
 func (me NodeAddr) MarshalBinary() ([]byte, error) {
-	var b bytes.Buffer
-	b.Write(me.IP)
-	binary.Write(&b, binary.BigEndian, uint16(me.Port))
-	return b.Bytes(), nil
+	b := make([]byte, 0, len(me.IP)+2)
+	b = append(b, me.IP...)
+	return binary.BigEndian.AppendUint16(b, uint16(me.Port)), nil
 }
 
 func (me NodeAddr) MarshalBencode() ([]byte, error) {

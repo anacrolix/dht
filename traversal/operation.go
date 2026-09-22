@@ -20,10 +20,9 @@ type QueryResult struct {
 	// This is set non-nil if a query reply is a response-type as defined by the DHT BEP 5 (contains
 	// "r")
 	ResponseFrom *krpc.NodeInfo
-	// Data associated with a closest node. Is this ever not a string? I think using generics for
-	// this leaks throughout the entire Operation. Hardly worth it. It's still possible to handle
-	// invalid token types at runtime.
-	ClosestData interface{}
+	// Data associated with a closest node, typically the token from the reply. Filtered by
+	// OperationInput.DataFilter.
+	ClosestData any
 	Nodes       []krpc.NodeInfo
 	Nodes6      []krpc.NodeInfo
 }
@@ -44,29 +43,25 @@ type OperationInput struct {
 type defaultsAppliedOperationInput OperationInput
 
 func Start(input OperationInput) *Operation {
-	herp := defaultsAppliedOperationInput(input)
-	if herp.Alpha == 0 {
-		herp.Alpha = 3
+	in := defaultsAppliedOperationInput(input)
+	if in.Alpha == 0 {
+		in.Alpha = 3
 	}
-	if herp.K == 0 {
-		herp.K = 8
+	if in.K == 0 {
+		in.K = 8
 	}
-	if herp.NodeFilter == nil {
-		herp.NodeFilter = func(types.AddrMaybeId) bool {
-			return true
-		}
+	if in.NodeFilter == nil {
+		in.NodeFilter = func(types.AddrMaybeId) bool { return true }
 	}
-	if herp.DataFilter == nil {
-		herp.DataFilter = func(_ any) bool {
-			return true
-		}
+	if in.DataFilter == nil {
+		in.DataFilter = func(any) bool { return true }
 	}
-	targetInt160 := herp.Target.Int160()
+	targetInt160 := in.Target.Int160()
 	op := &Operation{
 		targetInt160: targetInt160,
-		input:        herp,
+		input:        in,
 		queried:      make(map[addrString]struct{}),
-		closest:      k_nearest_nodes.New(targetInt160, herp.K),
+		closest:      k_nearest_nodes.New(targetInt160, in.K),
 		unqueried:    containers.NewImmutableAddrMaybeIdsByDistance(targetInt160),
 	}
 	go op.run()
@@ -101,10 +96,7 @@ func (op *Operation) Stop() {
 			defer op.stopped.Set()
 			op.mu.Lock()
 			defer op.mu.Unlock()
-			for {
-				if op.outstanding == 0 {
-					break
-				}
+			for op.outstanding != 0 {
 				cond := op.cond.Signaled()
 				op.mu.Unlock()
 				<-cond
@@ -210,7 +202,7 @@ func (op *Operation) run() {
 	}
 }
 
-func (op *Operation) addClosest(node krpc.NodeInfo, data interface{}) {
+func (op *Operation) addClosest(node krpc.NodeInfo, data any) {
 	var ami types.AddrMaybeId
 	ami.FromNodeInfo(node)
 	if !op.input.NodeFilter(ami) {
@@ -240,7 +232,6 @@ func (op *Operation) startQuery() {
 			op.outstanding--
 			op.cond.Broadcast()
 		}()
-		// log.Printf("traversal querying %v", a)
 		atomic.AddUint32(&op.stats.NumAddrsTried, 1)
 		ctx, cancel := context.WithCancel(context.Background())
 		go func() {

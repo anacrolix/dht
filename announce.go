@@ -1,7 +1,5 @@
 package dht
 
-// get_peers and announce_peers.
-
 import (
 	"context"
 	"fmt"
@@ -73,10 +71,11 @@ func AnnouncePeer(opts AnnouncePeerOpts) AnnounceOpt {
 	}
 }
 
-// Deprecated: Use Server.AnnounceTraversal.
 // Traverses the DHT graph toward nodes that store peers for the infohash, streaming them to the
 // caller, and announcing the local node to each responding node if port is non-zero or impliedPort
 // is true.
+//
+// Deprecated: Use Server.AnnounceTraversal with AnnouncePeer.
 func (s *Server) Announce(infoHash [20]byte, port int, impliedPort bool, opts ...AnnounceOpt) (_ *Announce, err error) {
 	if port != 0 || impliedPort {
 		opts = append([]AnnounceOpt{AnnouncePeer(AnnouncePeerOpts{
@@ -130,14 +129,12 @@ func (s *Server) AnnounceTraversal(infoHash [20]byte, opts ...AnnounceOpt) (_ *A
 func (a *Announce) announceClosest() {
 	var wg sync.WaitGroup
 	a.traversal.Closest().Range(func(elem dhtutil.Elem) {
-		wg.Add(1)
-		go func() {
+		wg.Go(func() {
 			a.logger().Levelf(log.Debug,
 				"announce_peer to %v: %v",
 				elem, a.announcePeer(elem),
 			)
-			wg.Done()
-		}()
+		})
 	})
 	wg.Wait()
 }

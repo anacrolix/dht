@@ -20,7 +20,6 @@ import (
 	"github.com/anacrolix/torrent/bencode"
 	"github.com/anacrolix/torrent/iplist"
 	"github.com/anacrolix/torrent/metainfo"
-	"golang.org/x/time/rate"
 
 	"github.com/anacrolix/dht/v2/bep44"
 	"github.com/anacrolix/dht/v2/int160"
@@ -45,14 +44,12 @@ type Server struct {
 
 	mu           sync.RWMutex
 	transactions transactions.Dispatcher[*transaction]
-	nextT        uint64 // unique "t" field for outbound queries
 	table        table
 	closed       chansync.SetOnce
 	ipBlockList  iplist.Ranger
 	tokenServer  tokenServer // Manages tokens we issue to our queriers.
 	config       ServerConfig
 	stats        ServerStats
-	sendLimit    *rate.Limiter
 
 	lastBootstrap    time.Time
 	bootstrappingNow bool
@@ -252,10 +249,7 @@ func (s *Server) serveUntilClosed() {
 	err := s.serve()
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.closed.IsSet() {
-		return
-	}
-	if err != nil {
+	if !s.closed.IsSet() {
 		panic(err)
 	}
 }
@@ -277,7 +271,6 @@ func (s *Server) IPBlocklist() iplist.Ranger {
 }
 
 func (s *Server) processPacket(b []byte, addr Addr) {
-	// log.Printf("got packet %q", b)
 	if len(b) < 2 || b[0] != 'd' {
 		// KRPC messages are bencoded dicts.
 		readNotKRPCDict.Add(1)
@@ -285,31 +278,13 @@ func (s *Server) processPacket(b []byte, addr Addr) {
 	}
 	var d krpc.Msg
 	err := bencode.Unmarshal(b, &d)
-	if _, ok := err.(bencode.ErrUnusedTrailingBytes); ok {
-		// log.Printf("%s: received message packet with %d trailing bytes: %q", s, _err.NumUnusedBytes, b[len(b)-_err.NumUnusedBytes:])
+	if _, ok := errors.AsType[bencode.ErrUnusedTrailingBytes](err); ok {
 		expvars.Add("processed packets with trailing bytes", 1)
 	} else if err != nil {
 		readUnmarshalError.Add(1)
-		// log.Printf("%s: received bad krpc message from %s: %s: %+q", s, addr, err, b)
-		func() {
-			if se, ok := err.(*bencode.SyntaxError); ok {
-				// The message was truncated.
-				if int(se.Offset) == len(b) {
-					return
-				}
-				// Some messages seem to drop to nul chars abruptly.
-				if int(se.Offset) < len(b) && b[se.Offset] == 0 {
-					return
-				}
-				// The message isn't bencode from the first.
-				if se.Offset == 0 {
-					return
-				}
-			}
-			// if missinggo.CryHeard() {
-			log.Printf("%s: received bad krpc message from %s: %s: %+q", s, addr, err, b)
-			// }
-		}()
+		if !uninterestingUnmarshalError(err, b) {
+			s.logger().Printf("received bad krpc message from %s: %s: %+q", addr, err, b)
+		}
 		return
 	}
 	s.mu.Lock()
@@ -332,13 +307,23 @@ func (s *Server) processPacket(b []byte, addr Addr) {
 		return
 	}
 	t := s.transactions.Pop(tk)
-	// s.logger().Printf("received response for transaction %q from %v", d.T, addr)
 	go t.handleResponse(d)
-	s.updateNode(addr, d.SenderID(), !d.ReadOnly, func(n *node) {
+	_ = s.updateNode(addr, d.SenderID(), !d.ReadOnly, func(n *node) {
 		n.lastGotResponse = time.Now()
 		n.failedLastQuestionablePing = false
 		n.numReceivesFrom++
 	})
+}
+
+// Reports whether a bencode decoding error is common junk not worth logging: truncated messages,
+// messages that drop to NUL bytes abruptly, or data that isn't bencode at all.
+func uninterestingUnmarshalError(err error, b []byte) bool {
+	se, ok := errors.AsType[*bencode.SyntaxError](err)
+	if !ok {
+		return false
+	}
+	off := int(se.Offset)
+	return off == 0 || off == len(b) || off < len(b) && b[off] == 0
 }
 
 func (s *Server) serve() error {
@@ -396,35 +381,21 @@ func (s *Server) AddNode(ni krpc.NodeInfo) error {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.updateNode(NewAddr(ni.Addr.UDP()), (*krpc.ID)(&ni.ID), true, func(*node) {})
-}
-
-func wantsContain(ws []krpc.Want, w krpc.Want) bool {
-	for _, _w := range ws {
-		if _w == w {
-			return true
-		}
-	}
-	return false
+	return s.updateNode(NewAddr(ni.Addr.UDP()), &ni.ID, true, func(*node) {})
 }
 
 func shouldReturnNodes(queryWants []krpc.Want, querySource net.IP) bool {
 	if len(queryWants) != 0 {
-		return wantsContain(queryWants, krpc.WantNodes)
+		return slices.Contains(queryWants, krpc.WantNodes)
 	}
-	// Is it possible to be over IPv6 with IPv4 endpoints?
 	return querySource.To4() != nil
 }
 
 func shouldReturnNodes6(queryWants []krpc.Want, querySource net.IP) bool {
 	if len(queryWants) != 0 {
-		return wantsContain(queryWants, krpc.WantNodes6)
+		return slices.Contains(queryWants, krpc.WantNodes6)
 	}
 	return querySource.To4() == nil
-}
-
-func (s *Server) makeReturnNodes(target int160.T, filter func(krpc.NodeAddr) bool) []krpc.NodeInfo {
-	return s.closestGoodNodeInfos(8, target, filter)
 }
 
 var krpcErrMissingArguments = krpc.Error{
@@ -434,47 +405,44 @@ var krpcErrMissingArguments = krpc.Error{
 
 // Filters peers per BEP 32 to return in the values field to a get_peers query.
 func filterPeers(querySourceIp net.IP, queryWants []krpc.Want, allPeers []krpc.NodeAddr) (filtered []krpc.NodeAddr) {
-	// The logic here is common with nodes, see BEP 32.
 	retain4 := shouldReturnNodes(queryWants, querySourceIp)
 	retain6 := shouldReturnNodes6(queryWants, querySourceIp)
 	for _, peer := range allPeers {
-		if ip, ok := func(ip net.IP) (net.IP, bool) {
-			as4 := peer.IP.To4()
-			as16 := peer.IP.To16()
-			switch {
-			case retain4 && len(ip) == net.IPv4len:
-				return ip, true
-			case retain6 && len(ip) == net.IPv6len:
-				return ip, true
-			case retain4 && as4 != nil:
-				// Is it possible that we're converting to an IPv4 address when the transport in use
-				// is IPv6?
-				return as4, true
-			case retain6 && as16 != nil:
-				// Couldn't any IPv4 address be converted to IPv6, but isn't listening over IPv6?
-				return as16, true
-			default:
-				return nil, false
-			}
-		}(peer.IP); ok {
-			filtered = append(filtered, krpc.NodeAddr{IP: ip, Port: peer.Port})
+		ip := peer.IP
+		switch {
+		case retain4 && len(ip) == net.IPv4len, retain6 && len(ip) == net.IPv6len:
+		case retain4 && ip.To4() != nil:
+			ip = ip.To4()
+		case retain6 && ip.To16() != nil:
+			ip = ip.To16()
+		default:
+			continue
 		}
+		filtered = append(filtered, krpc.NodeAddr{IP: ip, Port: peer.Port})
 	}
 	return
 }
 
-func (s *Server) setReturnNodes(r *krpc.Return, queryMsg krpc.Msg, querySource Addr) *krpc.Error {
-	if queryMsg.A == nil {
-		return &krpcErrMissingArguments
+// Sets the BEP 32 node fields of r to the good nodes closest to target.
+func (s *Server) setReturnNodes(r *krpc.Return, target krpc.ID, wants []krpc.Want, querySource Addr) {
+	targetInt160 := target.Int160()
+	if shouldReturnNodes(wants, querySource.IP()) {
+		r.Nodes = s.closestGoodNodeInfos(8, targetInt160, func(na krpc.NodeAddr) bool { return na.IP.To4() != nil })
 	}
-	target := int160.FromByteArray(queryMsg.A.InfoHash)
-	if shouldReturnNodes(queryMsg.A.Want, querySource.IP()) {
-		r.Nodes = s.makeReturnNodes(target, func(na krpc.NodeAddr) bool { return na.IP.To4() != nil })
+	if shouldReturnNodes6(wants, querySource.IP()) {
+		r.Nodes6 = s.closestGoodNodeInfos(8, targetInt160, func(krpc.NodeAddr) bool { return true })
 	}
-	if shouldReturnNodes6(queryMsg.A.Want, querySource.IP()) {
-		r.Nodes6 = s.makeReturnNodes(target, func(krpc.NodeAddr) bool { return true })
+}
+
+// Converts an error from the BEP 44 store into one suitable for returning to the querying node.
+func storeError(err error) krpc.Error {
+	if kerr, ok := errors.AsType[krpc.Error](err); ok {
+		return kerr
 	}
-	return nil
+	return krpc.Error{
+		Code: krpc.ErrorCodeGenericError,
+		Msg:  err.Error(),
+	}
 }
 
 func (s *Server) handleQuery(source Addr, m krpc.Msg) {
@@ -489,173 +457,145 @@ func (s *Server) handleQuery(source Addr, m krpc.Msg) {
 			}
 		}
 	}()
-	s.updateNode(source, m.SenderID(), !m.ReadOnly, func(n *node) {
+	_ = s.updateNode(source, m.SenderID(), !m.ReadOnly, func(n *node) {
 		n.lastGotQuery = time.Now()
 		n.numReceivesFrom++
 	})
-	if s.config.OnQuery != nil {
-		propagate := s.config.OnQuery(&m, source.Raw())
-		if !propagate {
-			return
-		}
+	if s.config.OnQuery != nil && !s.config.OnQuery(&m, source.Raw()) {
+		return
 	}
-	// Don't respond.
 	if s.config.Passive {
 		return
 	}
-	// TODO: Should we disallow replying to ourself?
-	args := m.A
+	var handle func(source Addr, t string, args *krpc.MsgArgs)
 	switch m.Q {
 	case "ping":
 		s.reply(source, m.T, krpc.Return{})
+		return
 	case "get_peers":
-		// Check for the naked m.A.Want deref below.
-		if m.A == nil {
-			s.sendError(source, m.T, krpcErrMissingArguments)
-			break
-		}
-		var r krpc.Return
-		if ps := s.config.PeerStore; ps != nil {
-			r.Values = filterPeers(source.IP(), m.A.Want, ps.GetPeers(peer_store.InfoHash(args.InfoHash)))
-			r.Token = func() *string {
-				t := s.createToken(source)
-				return &t
-			}()
-		}
-		if len(r.Values) == 0 {
-			if err := s.setReturnNodes(&r, m, source); err != nil {
-				s.sendError(source, m.T, *err)
-				break
-			}
-		}
-		s.reply(source, m.T, r)
+		handle = s.handleGetPeers
 	case "find_node":
-		var r krpc.Return
-		if err := s.setReturnNodes(&r, m, source); err != nil {
-			s.sendError(source, m.T, *err)
-			break
-		}
-		s.reply(source, m.T, r)
+		handle = s.handleFindNode
 	case "announce_peer":
-		if !s.validToken(args.Token, source) {
-			expvars.Add("received announce_peer with invalid token", 1)
-			return
-		}
-		expvars.Add("received announce_peer with valid token", 1)
-
-		var port int
-		portOk := false
-		if args.Port != nil {
-			port = *args.Port
-			portOk = true
-		}
-		if args.ImpliedPort {
-			expvars.Add("received announce_peer with implied_port", 1)
-			port = source.Port()
-			portOk = true
-		}
-		if !portOk {
-			expvars.Add("received announce_peer with no derivable port", 1)
-		}
-
-		if h := s.config.OnAnnouncePeer; h != nil {
-			go h(metainfo.Hash(args.InfoHash), source.IP(), port, portOk)
-		}
-		if ps := s.config.PeerStore; ps != nil {
-			go ps.AddPeer(
-				peer_store.InfoHash(args.InfoHash),
-				krpc.NodeAddr{IP: source.IP(), Port: port},
-			)
-		}
-
-		s.reply(source, m.T, krpc.Return{})
+		handle = s.handleAnnouncePeer
 	case "put":
-		if !s.validToken(args.Token, source) {
-			expvars.Add("received put with invalid token", 1)
-			return
-		}
-		expvars.Add("received put with valid token", 1)
-
-		if args.Seq == nil {
-			s.sendError(source, m.T, krpc.Error{
-				Code: krpc.ErrorCodeProtocolError,
-				Msg:  "expected seq argument",
-			})
-			return
-		}
-
-		i := &bep44.Item{
-			V:    args.V,
-			K:    args.K,
-			Salt: args.Salt,
-			Sig:  args.Sig,
-			Cas:  args.Cas,
-			Seq:  *args.Seq,
-		}
-
-		if err := s.store.Put(i); err != nil {
-			kerr, ok := err.(krpc.Error)
-			if !ok {
-				s.sendError(source, m.T, krpc.ErrorMethodUnknown)
-				break
-			}
-
-			s.sendError(source, m.T, kerr)
-			break
-		}
-
-		s.reply(source, m.T, krpc.Return{
-			ID: s.ID(),
-		})
+		handle = s.handlePut
 	case "get":
-		var r krpc.Return
-		if err := s.setReturnNodes(&r, m, source); err != nil {
-			s.sendError(source, m.T, *err)
-			break
-		}
-
-		t := s.createToken(source)
-		r.Token = &t
-
-		item, err := s.store.Get(bep44.Target(args.Target))
-		if err == bep44.ErrItemNotFound {
-			s.reply(source, m.T, r)
-			break
-		}
-
-		if kerr, ok := err.(krpc.Error); ok {
-			s.sendError(source, m.T, kerr)
-			break
-		}
-
-		if err != nil {
-			s.sendError(source, m.T, krpc.Error{
-				Code: krpc.ErrorCodeGenericError,
-				Msg:  err.Error(),
-			})
-			break
-		}
-
-		r.Seq = &item.Seq
-
-		if args.Seq != nil && item.Seq <= *args.Seq {
-			s.reply(source, m.T, r)
-			break
-		}
-
-		r.V = bencode.MustMarshal(item.V)
-		r.K = item.K
-		r.Sig = item.Sig
-
-		s.reply(source, m.T, r)
-	// case "sample_infohashes":
-	// // Nodes supporting this extension should always include the samples field in the response,
-	// // even when it is zero-length. This lets indexing nodes to distinguish nodes supporting this
-	// // extension from those that respond to unknown query types which contain a target field [2].
+		handle = s.handleGet
 	default:
 		// TODO: http://libtorrent.org/dht_extensions.html#forward-compatibility
 		s.sendError(source, m.T, krpc.ErrorMethodUnknown)
+		return
 	}
+	if m.A == nil {
+		s.sendError(source, m.T, krpcErrMissingArguments)
+		return
+	}
+	handle(source, m.T, m.A)
+}
+
+func (s *Server) handleGetPeers(source Addr, t string, args *krpc.MsgArgs) {
+	var r krpc.Return
+	if ps := s.config.PeerStore; ps != nil {
+		r.Values = filterPeers(source.IP(), args.Want, ps.GetPeers(peer_store.InfoHash(args.InfoHash)))
+		token := s.createToken(source)
+		r.Token = &token
+	}
+	if len(r.Values) == 0 {
+		s.setReturnNodes(&r, args.InfoHash, args.Want, source)
+	}
+	s.reply(source, t, r)
+}
+
+func (s *Server) handleFindNode(source Addr, t string, args *krpc.MsgArgs) {
+	var r krpc.Return
+	s.setReturnNodes(&r, args.Target, args.Want, source)
+	s.reply(source, t, r)
+}
+
+func (s *Server) handleAnnouncePeer(source Addr, t string, args *krpc.MsgArgs) {
+	if !s.validToken(args.Token, source) {
+		expvars.Add("received announce_peer with invalid token", 1)
+		return
+	}
+	expvars.Add("received announce_peer with valid token", 1)
+	var port int
+	portOk := false
+	if args.Port != nil {
+		port = *args.Port
+		portOk = true
+	}
+	if args.ImpliedPort {
+		expvars.Add("received announce_peer with implied_port", 1)
+		port = source.Port()
+		portOk = true
+	}
+	if !portOk {
+		expvars.Add("received announce_peer with no derivable port", 1)
+	}
+	if h := s.config.OnAnnouncePeer; h != nil {
+		go h(metainfo.Hash(args.InfoHash), source.IP(), port, portOk)
+	}
+	if ps := s.config.PeerStore; ps != nil {
+		go ps.AddPeer(
+			peer_store.InfoHash(args.InfoHash),
+			krpc.NodeAddr{IP: source.IP(), Port: port},
+		)
+	}
+	s.reply(source, t, krpc.Return{})
+}
+
+func (s *Server) handlePut(source Addr, t string, args *krpc.MsgArgs) {
+	if !s.validToken(args.Token, source) {
+		expvars.Add("received put with invalid token", 1)
+		return
+	}
+	expvars.Add("received put with valid token", 1)
+	i := &bep44.Item{
+		V:    args.V,
+		K:    args.K,
+		Salt: args.Salt,
+		Sig:  args.Sig,
+		Cas:  args.Cas,
+	}
+	if i.IsMutable() {
+		if args.Seq == nil {
+			s.sendError(source, t, krpc.Error{
+				Code: krpc.ErrorCodeProtocolError,
+				Msg:  "expected seq argument for mutable item",
+			})
+			return
+		}
+		i.Seq = *args.Seq
+	}
+	if err := s.store.Put(i); err != nil {
+		s.sendError(source, t, storeError(err))
+		return
+	}
+	s.reply(source, t, krpc.Return{})
+}
+
+func (s *Server) handleGet(source Addr, t string, args *krpc.MsgArgs) {
+	var r krpc.Return
+	s.setReturnNodes(&r, args.Target, args.Want, source)
+	token := s.createToken(source)
+	r.Token = &token
+	item, err := s.store.Get(bep44.Target(args.Target))
+	if errors.Is(err, bep44.ErrItemNotFound) {
+		s.reply(source, t, r)
+		return
+	}
+	if err != nil {
+		s.sendError(source, t, storeError(err))
+		return
+	}
+	r.Seq = &item.Seq
+	if args.Seq == nil || item.Seq > *args.Seq {
+		r.V = bencode.MustMarshal(item.V)
+		r.K = item.K
+		r.Sig = item.Sig
+	}
+	s.reply(source, t, r)
 }
 
 func (s *Server) sendError(addr Addr, t string, e krpc.Error) {
@@ -772,7 +712,7 @@ func (s *Server) nodeErr(n *node) error {
 	if n.Id.IsZero() {
 		return errors.New("has zero id")
 	}
-	if !(s.config.NoSecurity || n.IsSecure()) {
+	if !s.config.NoSecurity && !n.IsSecure() {
 		return errors.New("not secure")
 	}
 	if n.failedLastQuestionablePing {
@@ -783,8 +723,6 @@ func (s *Server) nodeErr(n *node) error {
 
 func (s *Server) writeToNode(ctx context.Context, b []byte, node Addr, wait, rate bool) (wrote bool, err error) {
 	func() {
-		// This is a pain. It would be better if the blocklist returned an error if it was closed
-		// instead.
 		s.mu.RLock()
 		defer s.mu.RUnlock()
 		if s.closed.IsSet() {
@@ -801,7 +739,6 @@ func (s *Server) writeToNode(ctx context.Context, b []byte, node Addr, wait, rat
 	if err != nil {
 		return
 	}
-	// s.config.Logger.WithValues(log.Debug).Printf("writing to %s: %q", node.String(), b)
 	if rate {
 		if wait {
 			err = s.config.SendLimiter.Wait(ctx)
@@ -825,10 +762,10 @@ func (s *Server) writeToNode(ctx context.Context, b []byte, node Addr, wait, rat
 	if err != nil {
 		writeErrors.Add(1)
 		if rate {
-			// Give the token back. nfi if this will actually work.
+			// Return the token consumed by the failed write.
 			s.config.SendLimiter.AllowN(time.Now(), -1)
 		}
-		err = fmt.Errorf("error writing %d bytes to %s: %s", len(b), node, err)
+		err = fmt.Errorf("writing %d bytes to %s: %w", len(b), node, err)
 		return
 	}
 	wrote = true
@@ -844,9 +781,7 @@ func (s *Server) nextTransactionID() string {
 }
 
 func (s *Server) deleteTransaction(k transactionKey) {
-	if s.transactions.Have(k) {
-		s.transactions.Pop(k)
-	}
+	s.transactions.Delete(k)
 }
 
 func (s *Server) addTransaction(k transactionKey, t *transaction) {
@@ -907,8 +842,8 @@ func (qr QueryResult) ToError() error {
 }
 
 // Converts a Server QueryResult to a traversal.QueryResult.
-func (me QueryResult) TraversalQueryResult(addr krpc.NodeAddr) (ret traversal.QueryResult) {
-	r := me.Reply.R
+func (qr QueryResult) TraversalQueryResult(addr krpc.NodeAddr) (ret traversal.QueryResult) {
+	r := qr.Reply.R
 	if r == nil {
 		return
 	}
@@ -925,9 +860,7 @@ func (me QueryResult) TraversalQueryResult(addr krpc.NodeAddr) (ret traversal.Qu
 }
 
 // Rate-limiting to be applied to writes for a given query. Queries occur inside transactions that
-// will attempt to send several times. If the STM rate-limiting helpers are used, the first send is
-// often already accounted for in the rate-limiting machinery before the query method that does the
-// IO is invoked.
+// may send several times.
 type QueryRateLimiting struct {
 	// Don't rate-limit the first send for a query.
 	NotFirst bool
@@ -972,20 +905,17 @@ func (s *Server) Query(ctx context.Context, addr Addr, q string, input QueryInpu
 	tk.T = tid
 	s.addTransaction(tk, t)
 	s.mu.Unlock()
-	// Receives a non-nil error from the sender, and closes when the sender completes.
+	// Receives the sender's terminal error, and closes when the sender completes.
 	sendErr := make(chan error, 1)
 	sendCtx, cancelSend := context.WithCancel(pprof.WithLabels(ctx, pprof.Labels("q", q)))
 	go func() {
-		err := s.transactionQuerySender(
+		sendErr <- s.transactionQuerySender(
 			sendCtx,
 			s.makeQueryBytes(q, input.MsgArgs, tid),
 			&ret.Writes,
 			addr,
 			input.RateLimiting,
 			input.NumTries)
-		if err != nil {
-			sendErr <- err
-		}
 		close(sendErr)
 	}()
 	expvars.Add(fmt.Sprintf("outbound %s queries", q), 1)
@@ -1014,30 +944,16 @@ func (s *Server) transactionQuerySender(
 	rateLimiting QueryRateLimiting,
 	numTries int,
 ) error {
-	// log.Printf("sending %q", b)
 	err := transactionSender(
 		sendCtx,
 		func() error {
-			wrote, err := s.writeToNode(sendCtx, b, addr,
-				// We only wait for the first write by default if rate-limiting is enabled for this
-				// query.
-				func() bool {
-					if *writes == 0 {
-						return !rateLimiting.NoWaitFirst
-					} else {
-						return rateLimiting.WaitOnRetries
-					}
-				}(),
-				func() bool {
-					if rateLimiting.NotAny {
-						return false
-					}
-					if *writes == 0 {
-						return !rateLimiting.NotFirst
-					}
-					return true
-				}(),
-			)
+			first := *writes == 0
+			wait := rateLimiting.WaitOnRetries
+			if first {
+				wait = !rateLimiting.NoWaitFirst
+			}
+			rate := !rateLimiting.NotAny && (!first || !rateLimiting.NotFirst)
+			wrote, err := s.writeToNode(sendCtx, b, addr, wait, rate)
 			if wrote {
 				*writes++
 			}
@@ -1086,13 +1002,13 @@ func (s *Server) Put(ctx context.Context, node Addr, i bep44.Put, token string, 
 	qi := QueryInput{
 		MsgArgs: krpc.MsgArgs{
 			Cas:   i.Cas,
-			ID:    s.ID(),
 			Salt:  i.Salt,
 			Seq:   &i.Seq,
 			Sig:   i.Sig,
 			Token: token,
 			V:     i.V,
 		},
+		RateLimiting: rl,
 	}
 	if i.K != nil {
 		qi.MsgArgs.K = *i.K
@@ -1225,7 +1141,6 @@ func (s *Server) GetPeers(
 func (s *Server) Get(ctx context.Context, addr Addr, target bep44.Target, seq *int64, rl QueryRateLimiting) QueryResult {
 	return s.Query(ctx, addr, "get", QueryInput{
 		MsgArgs: krpc.MsgArgs{
-			ID:     s.ID(),
 			Target: target,
 			Seq:    seq,
 			Want:   []krpc.Want{krpc.WantNodes, krpc.WantNodes6},
@@ -1274,8 +1189,6 @@ func (s *Server) TraversalStartingNodes() (nodes []addrMaybeId, err error) {
 		addrs, err := s.config.StartingNodes()
 		if err != nil {
 			return nil, fmt.Errorf("getting starting nodes: %w", err)
-		} else {
-			// log.Printf("resolved %v addresses", len(addrs))
 		}
 		for _, a := range addrs {
 			nodes = append(nodes, addrMaybeId{Addr: a.KRPC().ToNodeAddrPort()})
@@ -1306,17 +1219,6 @@ func (s *Server) logger() log.Logger {
 
 func (s *Server) PeerStore() peer_store.Interface {
 	return s.config.PeerStore
-}
-
-func (s *Server) getQuestionableNode() (ret *node) {
-	s.table.forNodes(func(n *node) bool {
-		if s.IsQuestionable(n) {
-			ret = n
-			return false
-		}
-		return true
-	})
-	return
 }
 
 func (s *Server) shouldStopRefreshingBucket(bucketIndex int) bool {
@@ -1393,14 +1295,12 @@ func (s *Server) pingQuestionableNodesInBucket(bucketIndex int) {
 	var wg sync.WaitGroup
 	b.EachNode(func(n *node) bool {
 		if s.IsQuestionable(n) {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
+			wg.Go(func() {
 				err := s.questionableNodePing(context.TODO(), n.Addr, n.Id.AsByteArray()).Err
 				if err != nil {
 					s.logger().WithDefaultLevel(log.Debug).Printf("error pinging questionable node in bucket %v: %v", bucketIndex, err)
 				}
-			}()
+			})
 		}
 		return true
 	})
@@ -1426,9 +1326,6 @@ func (s *Server) TableMaintainer() {
 		s.mu.RLock()
 		for i := range s.table.buckets {
 			s.pingQuestionableNodesInBucket(i)
-			// if time.Since(b.lastChanged) < 15*time.Minute {
-			//	continue
-			// }
 			if s.shouldStopRefreshingBucket(i) {
 				continue
 			}
@@ -1464,7 +1361,7 @@ func (s *Server) questionableNodePing(ctx context.Context, addr Addr, id krpc.ID
 		s.NodeRespondedToPing(addr, res.Reply.R.ID.Int160())
 	} else {
 		s.mu.Lock()
-		s.updateNode(addr, &id, false, func(n *node) {
+		_ = s.updateNode(addr, &id, false, func(n *node) {
 			n.failedLastQuestionablePing = true
 		})
 		s.mu.Unlock()
@@ -1486,14 +1383,12 @@ func (s *Server) TraversalNodeFilter(node addrMaybeId) bool {
 	return s.config.NoSecurity || NodeIdSecure(node.Id.Value.AsByteArray(), node.Addr.IP())
 }
 
-func validNodeAddr(addr net.Addr) bool {
-	// At least for UDP addresses, we know what doesn't work.
-	ua := addr.(*net.UDPAddr)
+func validNodeAddr(ua *net.UDPAddr) bool {
 	if ua.Port == 0 {
 		return false
 	}
+	// 0.0.0.0/8 addresses "this network" and can't be a destination (RFC 1122).
 	if ip4 := ua.IP.To4(); ip4 != nil && ip4[0] == 0 {
-		// Why?
 		return false
 	}
 	return true

@@ -211,7 +211,7 @@ func main() {
 				return
 			}
 			cfg.Conn = conn
-			all, err := publicip.Get(context.TODO(), serverArgs.Network)
+			all, err := publicip.Get(ctx, serverArgs.Network)
 			if err == nil {
 				cfg.PublicIP = all[0]
 				log.Printf("public ip: %q", cfg.PublicIP)

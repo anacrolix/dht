@@ -27,15 +27,6 @@ func (tbl *table) randomIdForBucket(bucketIndex int) int160.T {
 	return randomId
 }
 
-func (tbl *table) addrNodes(addr Addr) []*node {
-	a := tbl.addrs[addr.String()]
-	ret := make([]*node, 0, len(a))
-	for id := range a {
-		ret = append(ret, tbl.getNode(addr, id))
-	}
-	return ret
-}
-
 func (tbl *table) dropNode(n *node) {
 	as := n.Addr.String()
 	if _, ok := tbl.addrs[as][n.Id]; !ok {
@@ -90,13 +81,11 @@ func (tbl *table) getNode(addr Addr, id int160.T) *node {
 }
 
 func (tbl *table) closestNodes(k int, target int160.T, filter func(*node) bool) (ret []*node) {
-	for bi := func() int {
-		if target == tbl.rootID {
-			return len(tbl.buckets) - 1
-		} else {
-			return tbl.bucketIndex(target)
-		}
-	}(); bi >= 0 && len(ret) < k; bi-- {
+	bi := len(tbl.buckets) - 1
+	if target != tbl.rootID {
+		bi = tbl.bucketIndex(target)
+	}
+	for ; bi >= 0 && len(ret) < k; bi-- {
 		for n := range tbl.buckets[bi].nodes {
 			if filter(n) {
 				ret = append(ret, n)

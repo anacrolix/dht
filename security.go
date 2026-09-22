@@ -7,13 +7,13 @@ import (
 	"github.com/anacrolix/dht/v2/krpc"
 )
 
+var castagnoliTable = crc32.MakeTable(crc32.Castagnoli)
+
 func maskForIP(ip net.IP) []byte {
-	switch {
-	case ip.To4() != nil:
+	if ip.To4() != nil {
 		return []byte{0x03, 0x0f, 0x3f, 0xff}
-	default:
-		return []byte{0x01, 0x03, 0x07, 0x0f, 0x1f, 0x3f, 0x7f, 0xff}
 	}
+	return []byte{0x01, 0x03, 0x07, 0x0f, 0x1f, 0x3f, 0x7f, 0xff}
 }
 
 // Generate the CRC used to make or validate secure node ID.
@@ -21,15 +21,13 @@ func crcIP(ip net.IP, rand uint8) uint32 {
 	if ip4 := ip.To4(); ip4 != nil {
 		ip = ip4
 	}
-	// Copy IP so we can make changes. Go sux at this.
-	ip = append(make(net.IP, 0, len(ip)), ip...)
 	mask := maskForIP(ip)
+	masked := make([]byte, len(mask))
 	for i := range mask {
-		ip[i] &= mask[i]
+		masked[i] = ip[i] & mask[i]
 	}
-	r := rand & 7
-	ip[0] |= r << 5
-	return crc32.Checksum(ip[:len(mask)], crc32.MakeTable(crc32.Castagnoli))
+	masked[0] |= (rand & 7) << 5
+	return crc32.Checksum(masked, castagnoliTable)
 }
 
 // Makes a node ID secure, in-place. The ID is 20 raw bytes.
@@ -47,23 +45,17 @@ func NodeIdSecure(id [20]byte, ip net.IP) bool {
 	if isLocalNetwork(ip) {
 		return true
 	}
-	if ip4 := ip.To4(); ip4 != nil {
-		ip = ip4
-	}
 	crc := crcIP(ip, id[19])
-	if id[0] != byte(crc>>24&0xff) {
-		return false
-	}
-	if id[1] != byte(crc>>16&0xff) {
-		return false
-	}
-	if id[2]&0xf8 != byte(crc>>8&0xf8) {
-		return false
-	}
-	return true
+	return id[0] == byte(crc>>24&0xff) &&
+		id[1] == byte(crc>>16&0xff) &&
+		id[2]&0xf8 == byte(crc>>8&0xf8)
 }
 
-var classA, classB, classC *net.IPNet
+var localNetworks = []*net.IPNet{
+	mustParseCIDRIPNet("10.0.0.0/8"),
+	mustParseCIDRIPNet("172.16.0.0/12"),
+	mustParseCIDRIPNet("192.168.0.0/16"),
+}
 
 func mustParseCIDRIPNet(s string) *net.IPNet {
 	_, ret, err := net.ParseCIDR(s)
@@ -73,30 +65,14 @@ func mustParseCIDRIPNet(s string) *net.IPNet {
 	return ret
 }
 
-func init() {
-	classA = mustParseCIDRIPNet("10.0.0.0/8")
-	classB = mustParseCIDRIPNet("172.16.0.0/12")
-	classC = mustParseCIDRIPNet("192.168.0.0/16")
-}
-
 // Per http://www.libtorrent.org/dht_sec.html#enforcement, the IP is
 // considered a local network address and should be exempted from node ID
 // verification.
 func isLocalNetwork(ip net.IP) bool {
-	if classA.Contains(ip) {
-		return true
+	for _, n := range localNetworks {
+		if n.Contains(ip) {
+			return true
+		}
 	}
-	if classB.Contains(ip) {
-		return true
-	}
-	if classC.Contains(ip) {
-		return true
-	}
-	if ip.IsLinkLocalUnicast() {
-		return true
-	}
-	if ip.IsLoopback() {
-		return true
-	}
-	return false
+	return ip.IsLinkLocalUnicast() || ip.IsLoopback()
 }

@@ -6,7 +6,7 @@ package dht
 
 // How many bits?
 func bitCount(b []byte) int {
-	var count int = 0
+	var count int
 	for _, c := range b {
 		count += int(bitCounts[c])
 	}

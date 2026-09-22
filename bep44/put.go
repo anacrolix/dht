@@ -8,7 +8,7 @@ import (
 )
 
 type Put struct {
-	V    interface{}
+	V    any
 	K    *[32]byte
 	Salt []byte
 	Sig  [64]byte
@@ -34,14 +34,13 @@ func (p *Put) Sign(k ed25519.PrivateKey) {
 	copy(p.Sig[:], Sign(k, p.Salt, p.Seq, bencode.MustMarshal(p.V)))
 }
 
-func (i *Put) Target() Target {
-	if i.IsMutable() {
-		return MakeMutableTarget(*i.K, i.Salt)
-	} else {
-		return sha1.Sum(bencode.MustMarshal(i.V))
+func (p *Put) Target() Target {
+	if p.IsMutable() {
+		return MakeMutableTarget(*p.K, p.Salt)
 	}
+	return sha1.Sum(bencode.MustMarshal(p.V))
 }
 
-func (s *Put) IsMutable() bool {
-	return s.K != nil
+func (p *Put) IsMutable() bool {
+	return p.K != nil
 }

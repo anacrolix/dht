@@ -71,13 +71,8 @@ func mainErr() error {
 	}
 	log.Printf("dht server on %s, ID is %x", s.Addr(), s.ID())
 
-	ctx, cancel := context.WithCancel(context.Background())
-	go func() {
-		ch := make(chan os.Signal, 1)
-		signal.Notify(ch, os.Interrupt)
-		log.Printf("got signal: %v", <-ch)
-		cancel()
-	}()
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer stop()
 	if !flags.NoBootstrap {
 		go func() {
 			if tried, err := s.Bootstrap(); err != nil {

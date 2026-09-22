@@ -5,6 +5,7 @@ import (
 	"encoding"
 	"encoding/hex"
 	"fmt"
+	"io"
 
 	"github.com/anacrolix/torrent/bencode"
 
@@ -27,9 +28,9 @@ var (
 	_ fmt.Formatter     = ID{}
 )
 
-func (h ID) Format(f fmt.State, c rune) {
+func (id ID) Format(f fmt.State, c rune) {
 	// See metainfo.Hash.
-	f.Write([]byte(h.String()))
+	io.WriteString(f, id.String())
 }
 
 func IdFromString(s string) (id ID) {

@@ -31,8 +31,6 @@ func (s *Server) BootstrapContext(ctx context.Context) (_ TraversalStats, err er
 		defer s.mu.Unlock()
 		s.bootstrappingNow = false
 	}()
-	// Track number of responses, for STM use. (It's available via atomic in TraversalStats but that
-	// won't let wake up STM transactions that are observing the value.)
 	t := traversal.Start(traversal.OperationInput{
 		Target: s.id.AsByteArray(),
 		K:      16,

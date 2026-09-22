@@ -1,43 +1,25 @@
 package dht
 
 import (
-	"io/ioutil"
 	"os"
 
 	"github.com/anacrolix/dht/v2/krpc"
 )
 
-func WriteNodesToFile(ns []krpc.NodeInfo, fileName string) (err error) {
+func WriteNodesToFile(ns []krpc.NodeInfo, fileName string) error {
 	b, err := krpc.CompactIPv6NodeInfo(ns).MarshalBinary()
 	if err != nil {
-		return
+		return err
 	}
-	f, err := os.OpenFile(fileName, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o640)
-	if err != nil {
-		return
-	}
-	defer func() {
-		closeErr := f.Close()
-		if err == nil {
-			err = closeErr
-		}
-	}()
-	_, err = f.Write(b)
-	return
+	return os.WriteFile(fileName, b, 0o640)
 }
 
-func ReadNodesFromFile(fileName string) (ns []krpc.NodeInfo, err error) {
-	f, err := os.Open(fileName)
+func ReadNodesFromFile(fileName string) ([]krpc.NodeInfo, error) {
+	b, err := os.ReadFile(fileName)
 	if err != nil {
-		return
-	}
-	defer f.Close()
-	b, err := ioutil.ReadAll(f)
-	if err != nil {
-		return
+		return nil, err
 	}
 	var cnis krpc.CompactIPv6NodeInfo
 	err = cnis.UnmarshalBinary(b)
-	ns = cnis
-	return
+	return cnis, err
 }

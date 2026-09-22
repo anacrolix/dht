@@ -56,15 +56,16 @@ func mainErr() int {
 	var wg sync.WaitGroup
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer cancel()
+	var opts []dht.AnnounceOpt
+	if flags.Port != 0 {
+		opts = append(opts, dht.AnnouncePeer(dht.AnnouncePeerOpts{Port: flags.Port}))
+	}
+	if flags.Scrape {
+		opts = append(opts, dht.Scrape())
+	}
 	addrs := make(map[[20]byte]map[string]struct{}, len(flags.Infohash))
 	for _, ih := range flags.Infohash {
-		// PSA: Go sucks.
-		a, err := s.Announce(ih, flags.Port, false, func() (ret []dht.AnnounceOpt) {
-			if flags.Scrape {
-				ret = append(ret, dht.Scrape())
-			}
-			return
-		}()...)
+		a, err := s.AnnounceTraversal(ih, opts...)
 		if err != nil {
 			log.Printf("error announcing %s: %s", ih, err)
 			continue

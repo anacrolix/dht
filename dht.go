@@ -2,10 +2,9 @@ package dht
 
 import (
 	"context"
-	"crypto"
-	_ "crypto/sha1"
+	"crypto/sha1"
 	"errors"
-	"math/rand"
+	"fmt"
 	"net"
 	"time"
 
@@ -29,8 +28,7 @@ type transactionKey = transactions.Key
 
 type StartingNodesGetter func() ([]Addr, error)
 
-// ServerConfig allows setting up a  configuration of the `Server` instance to be created with
-// NewServer.
+// ServerConfig configures a Server created with NewServer.
 type ServerConfig struct {
 	// Set NodeId Manually. Caller must ensure that if NodeId does not conform
 	// to DHT Security Extensions, that NoSecurity is also set.
@@ -62,7 +60,7 @@ type ServerConfig struct {
 	// How long to wait before resending queries that haven't received a response. Defaults to 2s.
 	// After the last send, a query is aborted after this time.
 	QueryResendDelay func() time.Duration
-	// TODO: Expose Peers, to return NodeInfo for received get_peers queries.
+	// Stores peers announced to us, and provides the values for get_peers responses.
 	PeerStore peer_store.Interface
 	// BEP-44: Storing arbitrary data in the DHT. If not store provided, a default in-memory
 	// implementation will be used.
@@ -96,10 +94,6 @@ type ServerStats struct {
 	OutboundQueriesAttempted int64
 }
 
-func jitterDuration(average time.Duration, plusMinus time.Duration) time.Duration {
-	return average - plusMinus/2 + time.Duration(rand.Int63n(int64(plusMinus)))
-}
-
 type Peer = krpc.NodeAddr
 
 var DefaultGlobalBootstrapHostPorts = []string{
@@ -120,17 +114,15 @@ func GlobalBootstrapAddrs(network string) ([]Addr, error) {
 }
 
 // Resolves host:port strings to dht.Addrs, using the dht DNS resolver cache. Suitable for use with
-// ServerConfig.BootstrapAddrs.
+// ServerConfig.StartingNodes.
 func ResolveHostPorts(hostPorts []string) (addrs []Addr, err error) {
-	initDnsResolver()
 	for _, s := range hostPorts {
 		host, port, err := net.SplitHostPort(s)
 		if err != nil {
-			panic(err)
+			return nil, fmt.Errorf("parsing %q: %w", s, err)
 		}
-		hostAddrs, err := dnsResolver.LookupHost(context.Background(), host)
+		hostAddrs, err := dnsResolver().LookupHost(context.Background(), host)
 		if err != nil {
-			// log.Default.WithDefaultLevel(log.Debug).Printf("error looking up %q: %v", s, err)
 			continue
 		}
 		for _, a := range hostAddrs {
@@ -148,15 +140,14 @@ func ResolveHostPorts(hostPorts []string) (addrs []Addr, err error) {
 	return
 }
 
-// Deprecated: Use function from krpc.
+// Deprecated: Use krpc.RandomNodeID.
 func RandomNodeID() (id krpc.ID) {
 	return krpc.RandomNodeID()
 }
 
+// Returns a secure node ID derived from the SHA-1 of the public address.
 func MakeDeterministicNodeID(public net.Addr) (id krpc.ID) {
-	h := crypto.SHA1.New()
-	h.Write([]byte(public.String()))
-	h.Sum(id[:0:20])
+	id = sha1.Sum([]byte(public.String()))
 	SecureNodeId(&id, addrIP(public))
 	return
 }

@@ -3,8 +3,6 @@ package krpc
 import (
 	"net"
 	"net/netip"
-
-	"github.com/anacrolix/multiless"
 )
 
 // This is a comparable replacement for NodeAddr.
@@ -27,9 +25,7 @@ func (me NodeAddrPort) IP() net.IP {
 	return me.Addr().AsSlice()
 }
 
-func (l NodeAddrPort) Compare(r NodeAddrPort) int {
-	return multiless.EagerOrdered(
-		multiless.New().Cmp(l.Addr().Compare(r.Addr())),
-		l.Port(), r.Port(),
-	).OrderingInt()
+// Orders by address, then port.
+func (me NodeAddrPort) Compare(r NodeAddrPort) int {
+	return me.AddrPort.Compare(r.AddrPort)
 }

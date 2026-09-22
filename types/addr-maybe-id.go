@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	"github.com/anacrolix/generics"
-	"github.com/anacrolix/multiless"
 
 	"github.com/anacrolix/dht/v2/int160"
 	"github.com/anacrolix/dht/v2/krpc"
@@ -48,19 +47,20 @@ func (me *AddrMaybeId) FromNodeInfo(ni krpc.NodeInfo) {
 func (me AddrMaybeId) String() string {
 	if !me.Id.Ok {
 		return fmt.Sprintf("unknown id at %s", me.Addr)
-	} else {
-		return fmt.Sprintf("%v at %v", me.Id.Value, me.Addr)
 	}
+	return fmt.Sprintf("%v at %v", me.Id.Value, me.Addr)
 }
 
+// Reports whether l sorts before r when ordering by distance to target. Entries with known IDs
+// come first, then by distance, then by address. This is a total order.
 func (l AddrMaybeId) CloserThan(r AddrMaybeId, target int160.T) bool {
-	ml := multiless.New().Bool(!l.Id.Ok, !r.Id.Ok)
-	if l.Id.Ok && r.Id.Ok {
-		ml = ml.Cmp(l.Id.Value.Distance(target).Cmp(r.Id.Value.Distance(target)))
+	if l.Id.Ok != r.Id.Ok {
+		return l.Id.Ok
 	}
-	if !ml.Ok() {
-		ml = ml.Cmp(l.Addr.Addr().Compare(r.Addr.Addr()))
-		ml = multiless.EagerOrdered(ml, l.Addr.Port(), r.Addr.Port())
+	if l.Id.Ok {
+		if c := l.Id.Value.Distance(target).Cmp(r.Id.Value.Distance(target)); c != 0 {
+			return c < 0
+		}
 	}
-	return ml.Less()
+	return l.Addr.Compare(r.Addr) < 0
 }

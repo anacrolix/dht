@@ -41,10 +41,6 @@ linters:
       # Tests compare raw IP bytes on purpose.
       - path: _test\.go
         text: SA1021
-      # Test fixtures deliberately ignore I/O errors on throwaway sockets and decoders.
-      - path: _test\.go
-        linters:
-          - errcheck
 
 formatters:
   enable:

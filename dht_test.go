@@ -249,14 +249,15 @@ func TestBadGetPeersResponse(t *testing.T) {
 		n, addr, err := pc.ReadFrom(b)
 		qt.Assert(t, qt.IsNil(err))
 		var rm krpc.Msg
-		bencode.Unmarshal(b[:n], &rm)
+		qt.Assert(t, qt.IsNil(bencode.Unmarshal(b[:n], &rm)))
 		m := krpc.Msg{
 			R: &krpc.Return{},
 			T: rm.T,
 		}
 		b, err = bencode.Marshal(m)
 		qt.Assert(t, qt.IsNil(err))
-		pc.WriteTo(b, addr)
+		_, err = pc.WriteTo(b, addr)
+		qt.Assert(t, qt.IsNil(err))
 	}()
 	a, err := s.Announce([20]byte{}, 0, true)
 	qt.Assert(t, qt.IsNil(err))
@@ -283,18 +284,26 @@ func TestBootstrapRace(t *testing.T) {
 	defer s.Close()
 	go func() {
 		for range defaultMaxQuerySends - 1 {
-			remotePc.ReadFrom(nil)
+			_, _, _ = remotePc.ReadFrom(nil)
 		}
 		var b [1024]byte
-		_, addr, _ := remotePc.ReadFrom(b[:])
+		n, addr, err := remotePc.ReadFrom(b[:])
+		if err != nil {
+			// The remote is closed when the test ends.
+			return
+		}
 		var m krpc.Msg
-		bencode.Unmarshal(b[:], &m)
+		if err := bencode.Unmarshal(b[:n], &m); err != nil {
+			panic(err)
+		}
 		m.Y = "r"
 		rb, err := bencode.Marshal(m)
 		if err != nil {
 			panic(err)
 		}
-		remotePc.WriteTo(rb, addr)
+		if _, err := remotePc.WriteTo(rb, addr); err != nil {
+			panic(err)
+		}
 	}()
 	ts, err := s.Bootstrap()
 	t.Logf("%#v", ts)
@@ -342,7 +351,9 @@ func (me *bootstrapRacePacketConn) WriteTo(b []byte, addr net.Addr) (int, error)
 	log.Printf("wrote %d times", me.writes)
 	if me.writes == defaultMaxQuerySends {
 		var m krpc.Msg
-		bencode.Unmarshal(b[:], &m)
+		if err := bencode.Unmarshal(b, &m); err != nil {
+			panic(err)
+		}
 		m.Y = "r"
 		rb, err := bencode.Marshal(m)
 		if err != nil {

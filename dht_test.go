@@ -424,6 +424,7 @@ func TestAnnounceCloseWithoutReadingPeers(t *testing.T) {
 	}()
 	a, err := s.AnnounceTraversal([20]byte{1})
 	qt.Assert(t, qt.IsNil(err))
+	t.Cleanup(a.Close)
 	select {
 	case <-replied:
 	case <-time.After(2 * time.Second):

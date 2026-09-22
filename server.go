@@ -1235,7 +1235,7 @@ func (s *Server) shouldStopRefreshingBucket(bucketIndex int) bool {
 	})
 }
 
-func (s *Server) refreshBucket(bucketIndex int) *traversal.Stats {
+func (s *Server) refreshBucket(bucketIndex int) (stats *traversal.Stats) {
 	s.mu.RLock()
 	id := s.table.randomIdForBucket(bucketIndex)
 	op := traversal.Start(traversal.OperationInput{
@@ -1258,8 +1258,11 @@ func (s *Server) refreshBucket(bucketIndex int) *traversal.Stats {
 	})
 	defer func() {
 		s.mu.RUnlock()
+		// Assign stats only after Stopped. A result in the return statement would be
+		// evaluated first, and Operation.Stats must not be read until the traversal stops.
 		op.Stop()
 		<-op.Stopped()
+		stats = op.Stats()
 	}()
 	b := &s.table.buckets[bucketIndex]
 wait:
@@ -1280,7 +1283,7 @@ wait:
 		}
 		s.mu.RLock()
 	}
-	return op.Stats()
+	return
 }
 
 func (s *Server) shouldBootstrap() bool {
@@ -1396,7 +1399,3 @@ func validNodeAddr(ua *net.UDPAddr) bool {
 	}
 	return true
 }
-
-// func (s *Server) refreshBucket(bucketIndex int) {
-//	targetId := s.table.randomIdForBucket(bucketIndex)
-// }

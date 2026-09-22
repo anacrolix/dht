@@ -90,3 +90,13 @@ func TestBootstrapContextCancelWaitsForTraversal(t *testing.T) {
 	qt.Check(t, qt.Equals(stats.NumAddrsTried, uint32(1)))
 	assertTraversalGoroutines(t, before)
 }
+
+// refreshBucket must stop its traversal before returning stats, and must not leave the traversal
+// goroutine running.
+func TestRefreshBucketStopsBeforeStats(t *testing.T) {
+	s := newServerWithoutStartingNodes(t)
+	before := numTraversalGoroutines()
+	stats := s.refreshBucket(0)
+	qt.Assert(t, qt.IsNotNil(stats))
+	assertTraversalGoroutines(t, before)
+}

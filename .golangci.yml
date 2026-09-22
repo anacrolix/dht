@@ -1,0 +1,52 @@
+version: "2"
+
+linters:
+  default: standard
+  enable:
+    - errorlint
+    - misspell
+    - modernize
+    - nolintlint
+    - unconvert
+  settings:
+    errcheck:
+      exclude-functions:
+        - (hash.Hash).Write
+        - (io.Writer).Write
+        - crypto/rand.Read
+        - fmt.Fprint
+        - fmt.Fprintf
+        - fmt.Fprintln
+        - io.WriteString
+    staticcheck:
+      checks:
+        - all
+        # Package names such as k_nearest_nodes and peer_store are part of the public API.
+        - -ST1003
+        # Receiver names follow the existing "me" convention in many types.
+        - -ST1016
+        # Exported identifiers without doc comments.
+        - -ST1000
+        - -ST1020
+        - -ST1021
+        - -ST1022
+        # TransactionTimeout is exported API.
+        - -ST1012
+        # Explicit embedded-field selectors such as NodeAndTime.Time read more clearly.
+        - -QF1008
+  exclusions:
+    presets:
+      - std-error-handling
+    rules:
+      # Tests compare raw IP bytes on purpose.
+      - path: _test\.go
+        text: SA1021
+      # Test fixtures deliberately ignore I/O errors on throwaway sockets and decoders.
+      - path: _test\.go
+        linters:
+          - errcheck
+
+formatters:
+  enable:
+    - gofmt
+    - goimports

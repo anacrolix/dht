@@ -1053,15 +1053,18 @@ func (s *Server) announcePeer(
 
 // Sends a find_node query to addr. targetID is the node we're looking for. The Server makes use of
 // some of the response fields.
-func (s *Server) FindNode(addr Addr, targetID int160.T, rl QueryRateLimiting) (ret QueryResult) {
-	ret = s.Query(context.TODO(), addr, "find_node", QueryInput{
+func (s *Server) FindNode(addr Addr, targetID int160.T, rl QueryRateLimiting) QueryResult {
+	return s.findNode(context.TODO(), addr, targetID, rl)
+}
+
+func (s *Server) findNode(ctx context.Context, addr Addr, targetID int160.T, rl QueryRateLimiting) QueryResult {
+	return s.Query(ctx, addr, "find_node", QueryInput{
 		MsgArgs: krpc.MsgArgs{
 			Target: targetID.AsByteArray(),
 			Want:   s.config.DefaultWant,
 		},
 		RateLimiting: rl,
 	})
-	return
 }
 
 // Returns how many nodes are in the node table.
@@ -1244,9 +1247,9 @@ func (s *Server) refreshBucket(bucketIndex int) *traversal.Stats {
 		// as soon as the bucket is good.
 		K: s.table.K(),
 		DoQuery: func(ctx context.Context, addr krpc.NodeAddr) traversal.QueryResult {
-			res := s.FindNode(NewAddr(addr.UDP()), id, QueryRateLimiting{})
+			res := s.findNode(ctx, NewAddr(addr.UDP()), id, QueryRateLimiting{})
 			err := res.Err
-			if err != nil && !errors.Is(err, TransactionTimeout) {
+			if err != nil && !errors.Is(err, TransactionTimeout) && !errors.Is(err, context.Canceled) {
 				s.logger().Levelf(log.Debug, "error doing find node while refreshing bucket: %v", err)
 			}
 			return res.TraversalQueryResult(addr)

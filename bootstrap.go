@@ -39,7 +39,7 @@ func (s *Server) BootstrapContext(ctx context.Context) (_ TraversalStats, err er
 		Target: s.id.AsByteArray(),
 		K:      16,
 		DoQuery: func(ctx context.Context, addr krpc.NodeAddr) traversal.QueryResult {
-			return s.FindNode(NewAddr(addr.UDP()), s.id, QueryRateLimiting{}).TraversalQueryResult(addr)
+			return s.findNode(ctx, NewAddr(addr.UDP()), s.id, QueryRateLimiting{}).TraversalQueryResult(addr)
 		},
 		NodeFilter: s.TraversalNodeFilter,
 	})
@@ -52,12 +52,8 @@ func (s *Server) BootstrapContext(ctx context.Context) (_ TraversalStats, err er
 		err = ctx.Err()
 	case <-t.Stalled():
 	}
+	// Stopping cancels outstanding queries, so this doesn't wait for them to time out.
 	t.Stop()
-	if err != nil {
-		// Could test for Stopped and return stats here but the interface doesn't tell the caller if
-		// we were successful in taking the stats. We could also take a snapshot instead.
-		return
-	}
 	<-t.Stopped()
-	return *t.Stats(), nil
+	return *t.Stats(), err
 }

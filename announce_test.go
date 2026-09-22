@@ -57,3 +57,25 @@ func TestRateLimiterInadequate(t *testing.T) {
 	time.AfterFunc(2*time.Millisecond, cancel)
 	qt.Check(t, qt.Equals(rl.Wait(ctx), context.Canceled))
 }
+
+// Stats can be read while a query is still outstanding.
+func TestTraversalStatsDuringQuery(t *testing.T) {
+	silent := mustListen("localhost:0")
+	defer silent.Close()
+	s, err := NewServer(&ServerConfig{
+		Conn:             mustListen("localhost:0"),
+		NoSecurity:       true,
+		QueryResendDelay: func() time.Duration { return time.Hour },
+		StartingNodes:    addrResolver(silent.LocalAddr().String()),
+	})
+	qt.Assert(t, qt.IsNil(err))
+	defer s.Close()
+	a, err := s.AnnounceTraversal([20]byte{9})
+	qt.Assert(t, qt.IsNil(err))
+	defer a.Close()
+	deadline := time.Now().Add(50 * time.Millisecond)
+	for time.Now().Before(deadline) {
+		_ = a.TraversalStats()
+		_ = a.NumContacted()
+	}
+}

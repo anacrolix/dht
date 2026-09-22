@@ -55,5 +55,5 @@ func (s *Server) BootstrapContext(ctx context.Context) (_ TraversalStats, err er
 	// Stopping cancels outstanding queries, so this doesn't wait for them to time out.
 	t.Stop()
 	<-t.Stopped()
-	return *t.Stats(), err
+	return t.LoadStats(), err
 }

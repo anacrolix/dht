@@ -85,9 +85,19 @@ type Operation struct {
 	stopped      chansync.SetOnce
 }
 
-// I don't think you should access this until the Stopped event.
+// Stats returns the operation counters. While the operation is running, the fields are updated
+// with atomic adds. Read them with sync/atomic, or take a copy with LoadStats. A plain field read
+// is safe only after Stopped.
 func (op *Operation) Stats() *Stats {
 	return &op.stats
+}
+
+// LoadStats copies the counters with atomic loads. Safe to call while the operation is running.
+func (op *Operation) LoadStats() Stats {
+	return Stats{
+		NumAddrsTried: atomic.LoadUint32(&op.stats.NumAddrsTried),
+		NumResponses:  atomic.LoadUint32(&op.stats.NumResponses),
+	}
 }
 
 func (op *Operation) Stop() {

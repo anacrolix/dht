@@ -91,8 +91,8 @@ func TestBootstrapContextCancelWaitsForTraversal(t *testing.T) {
 	assertTraversalGoroutines(t, before)
 }
 
-// refreshBucket must stop its traversal before returning stats, and must not leave the traversal
-// goroutine running.
+// The traversal goroutine must be gone when refreshBucket returns. This does not observe the
+// stats-before-Stopped ordering; that return is assigned only after Stopped in refreshBucket.
 func TestRefreshBucketStopsBeforeStats(t *testing.T) {
 	s := newServerWithoutStartingNodes(t)
 	before := numTraversalGoroutines()

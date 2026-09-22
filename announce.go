@@ -43,7 +43,7 @@ func (a *Announce) NumContacted() uint32 {
 }
 
 func (a *Announce) TraversalStats() TraversalStats {
-	return *a.traversal.Stats()
+	return a.traversal.LoadStats()
 }
 
 // Server.Announce option

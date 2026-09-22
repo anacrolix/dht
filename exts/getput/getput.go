@@ -117,7 +117,8 @@ receive:
 	}
 	op.Stop()
 	<-op.Stopped()
-	stats = op.Stats()
+	loaded := op.LoadStats()
+	stats = &loaded
 	return
 }
 
@@ -154,7 +155,8 @@ receive:
 	}
 	op.Stop()
 	<-op.Stopped()
-	stats = op.Stats()
+	loaded := op.LoadStats()
+	stats = &loaded
 	if err != nil {
 		return
 	}

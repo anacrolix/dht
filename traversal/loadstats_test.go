@@ -1,6 +1,7 @@
 package traversal
 
 import (
+	"runtime"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -12,7 +13,11 @@ func TestLoadStatsDuringUpdates(t *testing.T) {
 	var op Operation
 	var wg sync.WaitGroup
 	stop := make(chan struct{})
+	started := make(chan struct{})
 	wg.Go(func() {
+		atomic.AddUint32(&op.stats.NumAddrsTried, 1)
+		atomic.AddUint32(&op.stats.NumResponses, 1)
+		close(started)
 		for {
 			select {
 			case <-stop:
@@ -23,9 +28,11 @@ func TestLoadStatsDuringUpdates(t *testing.T) {
 			}
 		}
 	})
+	<-started
 	var last Stats
 	for range 10000 {
 		last = op.LoadStats()
+		runtime.Gosched()
 	}
 	close(stop)
 	wg.Wait()

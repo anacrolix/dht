@@ -170,9 +170,12 @@ func (a *Announce) getPeers(ctx context.Context, addr krpc.NodeAddr) traversal.Q
 			},
 			Return: *r,
 		}
+		// Stop waits for this query to return before Stopped fires, so waiting on
+		// Stopped here deadlocks when nobody is receiving from Peers. The query
+		// context is cancelled when the traversal stops.
 		select {
 		case a.Peers <- peersValues:
-		case <-a.traversal.Stopped():
+		case <-ctx.Done():
 		}
 	}
 	return res.TraversalQueryResult(addr)

@@ -233,3 +233,77 @@ func TestPingContextCancellationCancelsAndJoinsWorkers(t *testing.T) {
 		t.Errorf("outstanding transactions after ping returned = %d, want 0", got)
 	}
 }
+
+func TestPingTimeoutIncludesDNSResolution(t *testing.T) {
+	s := newPingLifecycleTestServer(t)
+	oldResolver := net.DefaultResolver
+	t.Cleanup(func() { net.DefaultResolver = oldResolver })
+	resolverStarted := make(chan struct{})
+	releaseResolver := make(chan struct{})
+	var once sync.Once
+	net.DefaultResolver = &net.Resolver{
+		PreferGo: true,
+		Dial: func(ctx context.Context, _, _ string) (net.Conn, error) {
+			once.Do(func() { close(resolverStarted) })
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-releaseResolver:
+				return nil, errors.New("resolver released by cleanup")
+			}
+		},
+	}
+	done := make(chan error, 1)
+	finished := make(chan struct{})
+	t.Cleanup(func() {
+		close(releaseResolver)
+		select {
+		case <-finished:
+		case <-time.After(time.Second):
+			t.Error("ping did not release its DNS lookup")
+		}
+	})
+	go func() {
+		defer close(finished)
+		done <- ping(context.Background(), pingArgs{
+			Network: "udp",
+			Timeout: 25 * time.Millisecond,
+			Nodes:   []string{"blocked-resolution.invalid:6881"},
+		}, s)
+	}()
+	select {
+	case <-resolverStarted:
+	case <-time.After(time.Second):
+		t.Fatal("ping did not start DNS resolution")
+	}
+	select {
+	case err := <-done:
+		if !errors.Is(err, context.DeadlineExceeded) {
+			t.Fatalf("ping DNS timeout error = %v, want context deadline", err)
+		}
+	case <-time.After(250 * time.Millisecond):
+		t.Fatal("ping timeout did not include DNS resolution")
+	}
+}
+
+func TestContextResolverPreservesLiteralAddressSemantics(t *testing.T) {
+	for _, tc := range []struct{ network, address string }{
+		{"udp", "127.0.0.1:6881"},
+		{"udp6", "[::1]:6881"},
+		{"udp6", "[fe80::1%en0]:6881"},
+		{"udp", ":6881"},
+		{"udp4", "[::1]:6881"},
+		{"invalid", "127.0.0.1:6881"},
+	} {
+		t.Run(tc.network+"/"+tc.address, func(t *testing.T) {
+			want, wantErr := net.ResolveUDPAddr(tc.network, tc.address)
+			got, gotErr := resolveUDPAddr(context.Background(), tc.network, tc.address)
+			if (wantErr != nil) != (gotErr != nil) {
+				t.Fatalf("resolution errors: got %v, standard resolver %v", gotErr, wantErr)
+			}
+			if wantErr == nil && (got.Port != want.Port || got.Zone != want.Zone || !got.IP.Equal(want.IP)) {
+				t.Fatalf("resolved %v, want %v", got, want)
+			}
+		})
+	}
+}

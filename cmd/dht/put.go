@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"math"
 
 	"github.com/anacrolix/args/targets"
 	g "github.com/anacrolix/generics"
@@ -28,11 +29,21 @@ type PutCmd struct {
 	AutoSeq bool
 }
 
+func validateMutableKey(mutable bool, key []byte) error {
+	if mutable && len(key) != ed25519.SeedSize {
+		return fmt.Errorf("mutable key must be %d bytes, got %d", ed25519.SeedSize, len(key))
+	}
+	return nil
+}
+
 func makeSeqToPut(autoSeq, mutable bool, put bep44.Put, privKey ed25519.PrivateKey) getput.SeqToPut {
 	return func(seq int64) bep44.Put {
-		// Increment best seen seq by one.
-		if autoSeq {
+		if autoSeq && seq != math.MaxInt64 {
 			put.Seq = seq + 1
+		} else if autoSeq {
+			// BEP 44 sequence numbers must not exceed MaxInt64. Reusing the maximum lets
+			// identical content refresh its timeout; a changed value is rejected remotely.
+			put.Seq = seq
 		}
 		if mutable {
 			put.Sign(privKey)
@@ -51,6 +62,9 @@ func put(ctx context.Context, cmd *PutCmd) (err error) {
 		return errors.New("no payloads given")
 	}
 	mutable := cmd.Mutable || len(cmd.Key.Bytes) != 0 || cmd.Cas != 0 || len(cmd.Salt) != 0
+	if err := validateMutableKey(mutable, cmd.Key.Bytes); err != nil {
+		return err
+	}
 	for _, data := range cmd.Data {
 		var v any
 		if cmd.Strings {

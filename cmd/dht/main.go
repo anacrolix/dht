@@ -36,6 +36,20 @@ func main() {
 	}
 }
 
+func returnedNodeAddresses(res dht.QueryResult) ([]string, error) {
+	if err := res.ToError(); err != nil {
+		return nil, err
+	}
+	if res.Reply.R == nil {
+		return nil, errors.New("response missing return dictionary")
+	}
+	var nodes []string
+	res.Reply.R.ForAllNodes(func(info krpc.NodeInfo) {
+		nodes = append(nodes, info.Addr.String())
+	})
+	return nodes, nil
+}
+
 func runMain() int {
 	logger := log.Default.WithNames("main")
 	ctx := log.ContextWithLogger(context.Background(), logger)
@@ -59,6 +73,9 @@ func runMain() int {
 						Salt string
 					}
 					sub.Parse(args.FromStruct(&subArgs)...)
+					if err := validateMutableKey(true, subArgs.Key.Bytes); err != nil {
+						return err
+					}
 					put.Salt = []byte(subArgs.Salt)
 					put.K = (*[32]byte)(subArgs.Key.Bytes)
 					if subArgs.Private {
@@ -94,10 +111,10 @@ func runMain() int {
 		args.Subcommand("put", func(sub args.SubCmdCtx) (err error) {
 			var putOpt PutCmd
 			sub.Parse(args.FromStruct(&putOpt)...)
-			switch len(putOpt.Key.Bytes) {
-			case 0, 32:
-			default:
-				return fmt.Errorf("key has bad length %v", len(putOpt.Key.Bytes))
+			mutable := putOpt.Mutable || len(putOpt.Key.Bytes) != 0 ||
+				putOpt.Cas != 0 || len(putOpt.Salt) != 0
+			if err := validateMutableKey(mutable, putOpt.Key.Bytes); err != nil {
+				return err
 			}
 			sub.Defer(func() error { return put(ctx, &putOpt) })
 			return nil
@@ -187,18 +204,13 @@ func runMain() int {
 				input := dht.QueryInput{}
 				input.MsgArgs.Target = subArgs.Target
 				res := s.Query(ctx, dht.NewAddr(addr), subArgs.Q, input)
-				err = res.ToError()
+				nodes, err := returnedNodeAddresses(res)
 				if err != nil {
 					return err
 				}
 				return ping(ctx, pingArgs{
 					Network: serverArgs.Network,
-					Nodes: func() (ret []string) {
-						res.Reply.R.ForAllNodes(func(info krpc.NodeInfo) {
-							ret = append(ret, info.Addr.String())
-						})
-						return
-					}(),
+					Nodes:   nodes,
 					Timeout: subArgs.Timeout,
 				}, s)
 			})

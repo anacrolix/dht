@@ -32,8 +32,10 @@ func (me NodeAddr) String() string {
 }
 
 func (me *NodeAddr) UnmarshalBinary(b []byte) error {
-	if len(b) < 2 {
-		return fmt.Errorf("unmarshal NodeAddr from %d bytes: need at least 2", len(b))
+	switch len(b) {
+	case net.IPv4len + 2, net.IPv6len + 2:
+	default:
+		return fmt.Errorf("unmarshal NodeAddr from %d bytes: need 6-byte IPv4 or 18-byte IPv6 compact address", len(b))
 	}
 	me.IP = make(net.IP, len(b)-2)
 	copy(me.IP, b[:len(b)-2])

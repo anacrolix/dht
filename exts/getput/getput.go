@@ -27,6 +27,9 @@ type GetResult struct {
 // Returns the item carried by r if it is the immutable item for target, or a correctly signed
 // mutable item for target and salt.
 func verifiedResult(r *krpc.Return, target bep44.Target, salt []byte) (GetResult, bool) {
+	if r.V == nil {
+		return GetResult{}, false
+	}
 	if sha1.Sum(r.V) == target {
 		return GetResult{V: r.V, Sig: r.Sig}, true
 	}
@@ -124,6 +127,9 @@ receive:
 
 type SeqToPut func(seq int64) bep44.Put
 
+// Put attempts to store the item at the closest token-eligible nodes and waits for all attempts.
+// It succeeds when at least one node accepts the item. With no accepting nodes it returns an
+// error, preserving remote protocol errors for errors.Is/As.
 func Put(
 	ctx context.Context, target krpc.ID, s *dht.Server, salt []byte, seqToPut SeqToPut,
 ) (
@@ -160,20 +166,35 @@ receive:
 	if err != nil {
 		return
 	}
+	closest := op.Closest()
+	if closest.Len() == 0 {
+		return stats, errors.New("no token-eligible nodes found")
+	}
+	results := make(chan error, closest.Len())
 	var wg sync.WaitGroup
 	put := seqToPut(autoSeq)
-	op.Closest().Range(func(elem k_nearest_nodes.Elem) {
+	closest.Range(func(elem k_nearest_nodes.Elem) {
 		wg.Go(func() {
 			// This is enforced by the DataFilter in startGetTraversal.
 			token := elem.Data.(string)
 			res := s.Put(ctx, dht.NewAddr(elem.Addr.UDP()), put, token, dht.QueryRateLimiting{})
-			if err := res.ToError(); err != nil {
+			err := res.ToError()
+			if err != nil {
 				logger.Levelf(log.Warning, "error putting to %v [token=%q]: %v", elem.Addr, token, err)
 			} else {
 				logger.Levelf(log.Debug, "put to %v [token=%q]", elem.Addr, token)
 			}
+			results <- err
 		})
 	})
 	wg.Wait()
-	return
+	var putErrors []error
+	for range closest.Len() {
+		if putErr := <-results; putErr == nil {
+			return stats, nil
+		} else {
+			putErrors = append(putErrors, putErr)
+		}
+	}
+	return stats, errors.Join(putErrors...)
 }

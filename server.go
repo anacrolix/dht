@@ -586,8 +586,12 @@ func (s *Server) handleAnnouncePeer(source Addr, t string, args *krpc.MsgArgs) {
 		port = source.Port()
 		portOk = true
 	}
-	if !portOk {
-		expvars.Add("received announce_peer with no derivable port", 1)
+	if !portOk || port < 1 || port > 65535 {
+		s.sendError(source, t, krpc.Error{
+			Code: krpc.ErrorCodeProtocolError,
+			Msg:  "invalid announce_peer port",
+		})
+		return
 	}
 	if h := s.config.OnAnnouncePeer; h != nil {
 		go h(metainfo.Hash(args.InfoHash), source.IP(), port, portOk)
@@ -705,7 +709,7 @@ func (s *Server) reply(addr Addr, t string, r krpc.Return) {
 		}
 		b := bencode.MustMarshal(m)
 		log.Fmsg("replying to %q", addr).Log(s.logger())
-		wrote, err := s.writeToNode(context.Background(), b, addr, s.config.WaitToReply, true)
+		wrote, err := s.writeToNode(s.serverCtx, b, addr, s.config.WaitToReply, true)
 		if err != nil {
 			s.config.Logger.Printf("error replying to %s: %s", addr, err)
 		}
@@ -810,6 +814,9 @@ func (s *Server) writeToNode(ctx context.Context, b []byte, node Addr, wait, rat
 			err = fmt.Errorf("write to %v blocked by %v", node, r)
 			return
 		}
+	}
+	if s.closed.IsSet() {
+		return false, errors.New("server is closed")
 	}
 	if rate {
 		if wait {

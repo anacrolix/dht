@@ -12,31 +12,30 @@ import (
 func TestLoadStatsDuringUpdates(t *testing.T) {
 	var op Operation
 	var wg sync.WaitGroup
-	stop := make(chan struct{})
+	const updates = 10000
 	started := make(chan struct{})
 	wg.Go(func() {
 		atomic.AddUint32(&op.stats.NumAddrsTried, 1)
 		atomic.AddUint32(&op.stats.NumResponses, 1)
 		close(started)
-		for {
-			select {
-			case <-stop:
-				return
-			default:
-				atomic.AddUint32(&op.stats.NumAddrsTried, 1)
-				atomic.AddUint32(&op.stats.NumResponses, 1)
-			}
+		for range updates {
+			atomic.AddUint32(&op.stats.NumAddrsTried, 1)
+			atomic.AddUint32(&op.stats.NumResponses, 1)
+			runtime.Gosched()
 		}
 	})
 	<-started
 	var last Stats
-	for range 10000 {
-		last = op.LoadStats()
+	for range updates {
+		current := op.LoadStats()
+		if current.NumAddrsTried < last.NumAddrsTried || current.NumResponses < last.NumResponses {
+			t.Errorf("counters went backwards: previous %+v, current %+v", last, current)
+		}
+		last = current
 		runtime.Gosched()
 	}
-	close(stop)
 	wg.Wait()
-	if last.NumAddrsTried == 0 || last.NumResponses == 0 {
-		t.Fatalf("expected counters to move, got %+v", last)
+	if got := op.LoadStats(); got.NumAddrsTried != updates+1 || got.NumResponses != updates+1 {
+		t.Fatalf("final counters = %+v, want %d each", got, updates+1)
 	}
 }

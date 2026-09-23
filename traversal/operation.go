@@ -171,6 +171,15 @@ func (op *Operation) popClosestUnqueried() types.AddrMaybeId {
 }
 
 func (op *Operation) haveQuery() bool {
+	// IDs can change or become known after an address is queued. Those candidates
+	// remain distinct in the distance-ordered set, but must not cause another query.
+	for op.unqueried.Len() != 0 {
+		next := op.closestUnqueried()
+		if _, queried := op.queried[addrString(next.Addr.String())]; !queried {
+			break
+		}
+		op.unqueried = op.unqueried.Delete(next)
+	}
 	if op.unqueried.Len() == 0 {
 		return false
 	}

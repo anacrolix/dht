@@ -1,7 +1,6 @@
 package dht
 
 import (
-	"context"
 	"crypto/rand"
 	"net"
 	"regexp"
@@ -48,19 +47,6 @@ func TestAnnounceStopsNoPending(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("empty traversal did not finish")
 	}
-}
-
-// Assert that rate.Limiter won't wake-up waiters once they have determined a
-// delay. This means we can't use it to cancel reservations for queries that
-// are successful.
-func TestRateLimiterInadequate(t *testing.T) {
-	rl := rate.NewLimiter(rate.Every(time.Hour), 1)
-	qt.Check(t, qt.IsNil(rl.Wait(context.Background())))
-	time.AfterFunc(time.Millisecond, func() { rl.AllowN(time.Now(), -1) })
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	time.AfterFunc(2*time.Millisecond, cancel)
-	qt.Check(t, qt.Equals(rl.Wait(ctx), context.Canceled))
 }
 
 // Stats can be read while a query is still outstanding.

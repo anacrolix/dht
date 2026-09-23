@@ -3,6 +3,7 @@ package dht
 import (
 	"context"
 	"net"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -57,6 +58,13 @@ func newCallbackTestServer(t *testing.T, cfg *ServerConfig) *Server {
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() {
+		// A regression may strand a goroutine holding mu. Signal shutdown without
+		// taking that mutex so a failing test neither hangs cleanup nor panics serve.
+		s.cancelServer()
+		s.closed.Set()
+		_ = conn.Close()
+	})
 	return s
 }
 
@@ -75,15 +83,8 @@ func processCallbackTestPacket(t *testing.T, s *Server, query krpc.Msg) {
 	}
 }
 func TestOnQueryCanReenterStatsAndClose(t *testing.T) {
-	conn, err := net.ListenPacket("udp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer conn.Close()
-
 	store := new(callbackTestStore)
 	cfg := NewDefaultServerConfig()
-	cfg.Conn = conn
 	cfg.Store = store
 	var s *Server
 	var callbackCalls int
@@ -96,10 +97,7 @@ func TestOnQueryCanReenterStatsAndClose(t *testing.T) {
 		close(callbackDone)
 		return true
 	}
-	s, err = NewServer(cfg)
-	if err != nil {
-		t.Fatal(err)
-	}
+	s = newCallbackTestServer(t, cfg)
 
 	packet := bencode.MustMarshal(krpc.Msg{
 		T: "1",
@@ -183,7 +181,11 @@ func TestPacketLoggerCanReenterStats(t *testing.T) {
 	cfg.Passive = true
 	cfg.Logger = log.NewLogger()
 	var s *Server
-	cfg.Logger.SetHandlers(callbackTestLogHandler{onLog: func() { _ = s.Stats() }})
+	var calls atomic.Uint32
+	cfg.Logger.SetHandlers(callbackTestLogHandler{onLog: func() {
+		_ = s.Stats()
+		calls.Add(1)
+	}})
 	s = newCallbackTestServer(t, cfg)
 	processCallbackTestPacket(t, s, krpc.Msg{
 		T: "1",
@@ -191,6 +193,9 @@ func TestPacketLoggerCanReenterStats(t *testing.T) {
 		Q: "ping",
 		A: &krpc.MsgArgs{ID: krpc.ID{19: 1}},
 	})
+	if calls.Load() == 0 {
+		t.Fatal("packet did not exercise the reentrant logger")
+	}
 	s.Close()
 }
 
@@ -236,8 +241,10 @@ func (s *callbackTestPeerStore) GetPeers(ih peer_store.InfoHash) []krpc.NodeAddr
 func TestPeerStoreCanReenterStats(t *testing.T) {
 	var s *Server
 	cfg := NewDefaultServerConfig()
+	called := false
 	cfg.PeerStore = &callbackTestPeerStore{get: func(peer_store.InfoHash) []krpc.NodeAddr {
 		_ = s.Stats()
+		called = true
 		return nil
 	}}
 	s = newCallbackTestServer(t, cfg)
@@ -247,6 +254,9 @@ func TestPeerStoreCanReenterStats(t *testing.T) {
 		Q: "get_peers",
 		A: &krpc.MsgArgs{ID: krpc.ID{19: 1}},
 	})
+	if !called {
+		t.Fatal("get_peers did not exercise the reentrant peer store")
+	}
 	s.Close()
 }
 
@@ -345,9 +355,11 @@ func TestBlocklistLookupOnReadCanReenterStats(t *testing.T) {
 	cfg.IPBlocklist = ranger
 	var s *Server
 	serverReady := make(chan struct{})
+	var lookups atomic.Uint32
 	ranger.lookup = func(net.IP) {
 		<-serverReady
 		_ = s.Stats()
+		lookups.Add(1)
 	}
 	queryReceived := make(chan struct{})
 	cfg.OnQuery = func(*krpc.Msg, net.Addr) bool {
@@ -374,6 +386,9 @@ func TestBlocklistLookupOnReadCanReenterStats(t *testing.T) {
 	case <-queryReceived:
 	case <-time.After(2 * time.Second):
 		t.Fatal("receive path deadlocked when blocklist Lookup reentered Server.Stats")
+	}
+	if lookups.Load() == 0 {
+		t.Fatal("receive path skipped the reentrant blocklist lookup")
 	}
 	s.Close()
 }
@@ -454,10 +469,12 @@ func TestRefreshBucketNodeFilterCanReenterStats(t *testing.T) {
 
 type callbackTestMarshaler struct {
 	server *Server
+	calls  *atomic.Uint32
 }
 
 func (m callbackTestMarshaler) MarshalBencode() ([]byte, error) {
 	_ = m.server.Stats()
+	m.calls.Add(1)
 	return []byte("i1e"), nil
 }
 
@@ -466,18 +483,23 @@ func TestStoreValueMarshalerCanReenterStats(t *testing.T) {
 	cfg := NewDefaultServerConfig()
 	cfg.Store = store
 	s := newCallbackTestServer(t, cfg)
-	item, err := bep44.NewItem(callbackTestMarshaler{server: s}, nil, 1, 1, nil)
+	var calls atomic.Uint32
+	item, err := bep44.NewItem(callbackTestMarshaler{server: s, calls: &calls}, nil, 1, 1, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err := s.store.Put(item); err != nil {
 		t.Fatal(err)
 	}
+	before := calls.Load()
 	processCallbackTestPacket(t, s, krpc.Msg{
 		T: "1",
 		Y: "q",
 		Q: "get",
 		A: &krpc.MsgArgs{ID: krpc.ID{19: 1}},
 	})
+	if calls.Load() == before {
+		t.Fatal("get response did not exercise the reentrant value marshaler")
+	}
 	s.Close()
 }

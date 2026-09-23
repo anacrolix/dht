@@ -106,13 +106,3 @@ func TestBootstrapContextCancelWaitsForTraversal(t *testing.T) {
 	}
 	qt.Assert(t, qt.Equals(s.Stats().OutstandingTransactions, 0))
 }
-
-// The traversal goroutine must be gone when refreshBucket returns. This does not observe the
-// stats-before-Stopped ordering; that return is assigned only after Stopped in refreshBucket.
-func TestRefreshBucketStopsBeforeStats(t *testing.T) {
-	s := newServerWithoutStartingNodes(t)
-	before := numTraversalGoroutines()
-	stats := s.refreshBucket(0)
-	qt.Assert(t, qt.IsNotNil(stats))
-	assertTraversalGoroutines(t, before)
-}

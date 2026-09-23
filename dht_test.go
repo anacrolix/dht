@@ -171,7 +171,7 @@ func TestEqualPointers(t *testing.T) {
 
 func TestHook(t *testing.T) {
 	pinger, err := NewServer(&ServerConfig{
-		Conn:     mustListen("127.0.0.1:5678"),
+		Conn:     mustListen("127.0.0.1:0"),
 		PublicIP: net.IPv4(127, 0, 0, 1),
 	})
 	qt.Assert(t, qt.IsNil(err))
@@ -179,9 +179,9 @@ func TestHook(t *testing.T) {
 	// Establish server with a hook attached to "ping"
 	hookCalled := make(chan struct{}, 1)
 	receiver, err := NewServer(&ServerConfig{
-		Conn:          mustListen("127.0.0.1:5679"),
+		Conn:          mustListen("127.0.0.1:0"),
 		PublicIP:      net.IPv4(127, 0, 0, 1),
-		StartingNodes: addrResolver("127.0.0.1:5678"),
+		StartingNodes: addrResolver(pinger.Addr().String()),
 		OnQuery: func(m *krpc.Msg, addr net.Addr) bool {
 			t.Logf("receiver got msg: %v", m)
 			if m.Q == "ping" {

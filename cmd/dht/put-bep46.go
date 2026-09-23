@@ -27,7 +27,7 @@ type PutMutableInfohash struct {
 	AutoSeq bool
 }
 
-func putMutableInfohash(cmd *PutMutableInfohash, ih infohash.T) (err error) {
+func putMutableInfohash(ctx context.Context, cmd *PutMutableInfohash, ih infohash.T) (err error) {
 	s, err := dht.NewServer(nil)
 	if err != nil {
 		return
@@ -50,7 +50,7 @@ func putMutableInfohash(cmd *PutMutableInfohash, ih infohash.T) (err error) {
 	log.Printf("putting %q to %x", put.V, target)
 	var stats *traversal.Stats
 	stats, err = getput.Put(
-		context.Background(),
+		ctx,
 		target,
 		s,
 		put.Salt,

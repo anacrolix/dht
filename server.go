@@ -1,6 +1,7 @@
 package dht
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"errors"
@@ -83,56 +84,60 @@ func prettySince(t time.Time) string {
 }
 
 func (s *Server) WriteStatus(w io.Writer) {
-	fmt.Fprintf(w, "Listening on %s\n", s.Addr())
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	fmt.Fprintf(w, "Nodes in table: %d good, %d total\n", s.numGoodNodes(), s.numNodes())
-	fmt.Fprintf(w, "Ongoing transactions: %d\n", s.transactions.NumActive())
-	fmt.Fprintf(w, "Server node ID: %x\n", s.id.Bytes())
-	buckets := &s.table.buckets
-	for i := range s.table.buckets {
-		b := &buckets[i]
-		if b.Len() == 0 && b.lastChanged.IsZero() {
-			continue
-		}
-		fmt.Fprintf(w,
-			"b# %v: %v nodes, last updated: %v\n",
-			i, b.Len(), prettySince(b.lastChanged))
-		if b.Len() > 0 {
-			tw := tabwriter.NewWriter(w, 0, 0, 1, ' ', 0)
-			fmt.Fprintf(tw, "  node id\taddr\tlast query\tlast response\trecv\tdiscard\tflags\n")
-			// Bucket nodes ordered by distance from server ID.
-			nodes := slices.SortedFunc(b.NodeIter(), func(l *node, r *node) int {
-				return l.Id.Distance(s.id).Cmp(r.Id.Distance(s.id))
-			})
-			for _, n := range nodes {
-				var flags []string
-				if s.IsQuestionable(n) {
-					flags = append(flags, "q10e")
-				}
-				if s.nodeIsBad(n) {
-					flags = append(flags, "bad")
-				}
-				if s.IsGood(n) {
-					flags = append(flags, "good")
-				}
-				if n.IsSecure() {
-					flags = append(flags, "sec")
-				}
-				fmt.Fprintf(tw, "  %x\t%s\t%s\t%s\t%d\t%v\t%v\n",
-					n.Id.Bytes(),
-					n.Addr,
-					prettySince(n.lastGotQuery),
-					prettySince(n.lastGotResponse),
-					n.numReceivesFrom,
-					n.failedLastQuestionablePing,
-					strings.Join(flags, ","),
-				)
+	var buf bytes.Buffer
+	fmt.Fprintf(&buf, "Listening on %s\n", s.Addr())
+	func() {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		fmt.Fprintf(&buf, "Nodes in table: %d good, %d total\n", s.numGoodNodes(), s.numNodes())
+		fmt.Fprintf(&buf, "Ongoing transactions: %d\n", s.transactions.NumActive())
+		fmt.Fprintf(&buf, "Server node ID: %x\n", s.id.Bytes())
+		buckets := &s.table.buckets
+		for i := range s.table.buckets {
+			b := &buckets[i]
+			if b.Len() == 0 && b.lastChanged.IsZero() {
+				continue
 			}
-			tw.Flush()
+			fmt.Fprintf(&buf,
+				"b# %v: %v nodes, last updated: %v\n",
+				i, b.Len(), prettySince(b.lastChanged))
+			if b.Len() > 0 {
+				tw := tabwriter.NewWriter(&buf, 0, 0, 1, ' ', 0)
+				fmt.Fprintf(tw, "  node id\taddr\tlast query\tlast response\trecv\tdiscard\tflags\n")
+				// Bucket nodes ordered by distance from server ID.
+				nodes := slices.SortedFunc(b.NodeIter(), func(l *node, r *node) int {
+					return l.Id.Distance(s.id).Cmp(r.Id.Distance(s.id))
+				})
+				for _, n := range nodes {
+					var flags []string
+					if s.IsQuestionable(n) {
+						flags = append(flags, "q10e")
+					}
+					if s.nodeIsBad(n) {
+						flags = append(flags, "bad")
+					}
+					if s.IsGood(n) {
+						flags = append(flags, "good")
+					}
+					if n.IsSecure() {
+						flags = append(flags, "sec")
+					}
+					fmt.Fprintf(tw, "  %x\t%s\t%s\t%s\t%d\t%v\t%v\n",
+						n.Id.Bytes(),
+						n.Addr,
+						prettySince(n.lastGotQuery),
+						prettySince(n.lastGotResponse),
+						n.numReceivesFrom,
+						n.failedLastQuestionablePing,
+						strings.Join(flags, ","),
+					)
+				}
+				tw.Flush()
+			}
 		}
-	}
-	fmt.Fprintln(w)
+		fmt.Fprintln(&buf)
+	}()
+	_, _ = buf.WriteTo(w)
 }
 
 func (s *Server) numNodes() (num int) {
@@ -268,8 +273,7 @@ func (s *Server) String() string {
 }
 
 // Packets to and from any address matching a range in the list are dropped.
-// Published atomically. ipBlocked runs both under s.mu and outside it, and writeToNode calls it
-// while already holding s.mu.RLock, so this list is not guarded by s.mu.
+// Published atomically; Ranger methods run without s.mu held because a Ranger may execute user code.
 type ipBlocklist struct{ list iplist.Ranger }
 
 func (s *Server) blocklist() iplist.Ranger {
@@ -316,7 +320,13 @@ func (s *Server) processPacket(b []byte, addr Addr) {
 	}
 	if d.Y == "q" {
 		expvars.Add("received queries", 1)
-		s.logger().Printf("received query %q from %v", d.Q, addr)
+		logger := s.logger()
+		s.withServerLockReleased(func() {
+			logger.Printf("received query %q from %v", d.Q, addr)
+		})
+		if s.closed.IsSet() {
+			return
+		}
 		s.handleQuery(addr, d)
 		return
 	}
@@ -325,7 +335,10 @@ func (s *Server) processPacket(b []byte, addr Addr) {
 		T:          d.T,
 	}
 	if !s.transactions.Have(tk) {
-		s.logger().Printf("received response for untracked transaction %q from %v", d.T, addr)
+		logger := s.logger()
+		s.withServerLockReleased(func() {
+			logger.Printf("received response for untracked transaction %q from %v", d.T, addr)
+		})
 		return
 	}
 	t := s.transactions.Pop(tk)
@@ -335,6 +348,14 @@ func (s *Server) processPacket(b []byte, addr Addr) {
 		n.failedLastQuestionablePing = false
 		n.numReceivesFrom++
 	})
+}
+
+// withServerLockReleased calls fn without s.mu held and restores the caller's lock before returning.
+// Call only from a path that entered with s.mu locked.
+func (s *Server) withServerLockReleased(fn func()) {
+	s.mu.Unlock()
+	defer s.mu.Lock()
+	fn()
 }
 
 // Reports whether a bencode decoding error is common junk not worth logging: truncated messages,
@@ -367,18 +388,13 @@ func (s *Server) serve() error {
 			readZeroPort.Add(1)
 			continue
 		}
-		blocked, err := func() (bool, error) {
-			s.mu.RLock()
-			defer s.mu.RUnlock()
-			if s.closed.IsSet() {
-				return false, errors.New("server is closed")
-			}
-			return s.ipBlocked(addrIP(addr)), nil
-		}()
-		if err != nil {
-			return err
+		s.mu.RLock()
+		closed := s.closed.IsSet()
+		s.mu.RUnlock()
+		if closed {
+			return errors.New("server is closed")
 		}
-		if blocked {
+		if s.ipBlocked(addrIP(addr)) {
 			readBlocked.Add(1)
 			continue
 		}
@@ -469,23 +485,33 @@ func storeError(err error) krpc.Error {
 }
 
 func (s *Server) handleQuery(source Addr, m krpc.Msg) {
-	go func() {
-		expvars.Add(fmt.Sprintf("received query %q", m.Q), 1)
-		if a := m.A; a != nil {
-			if a.NoSeed != 0 {
-				expvars.Add("received argument noseed", 1)
-			}
-			if a.Scrape != 0 {
-				expvars.Add("received argument scrape", 1)
-			}
+	query := m.Q
+	var noSeed, scrape bool
+	if a := m.A; a != nil {
+		noSeed = a.NoSeed != 0
+		scrape = a.Scrape != 0
+	}
+	go func(query string, noSeed, scrape bool) {
+		expvars.Add(fmt.Sprintf("received query %q", query), 1)
+		if noSeed {
+			expvars.Add("received argument noseed", 1)
 		}
-	}()
+		if scrape {
+			expvars.Add("received argument scrape", 1)
+		}
+	}(query, noSeed, scrape)
 	_ = s.updateNode(source, m.SenderID(), !m.ReadOnly, func(n *node) {
 		n.lastGotQuery = time.Now()
 		n.numReceivesFrom++
 	})
-	if s.config.OnQuery != nil && !s.config.OnQuery(&m, source.Raw()) {
-		return
+	if onQuery := s.config.OnQuery; onQuery != nil {
+		propagate := false
+		s.withServerLockReleased(func() {
+			propagate = onQuery(&m, source.Raw())
+		})
+		if s.closed.IsSet() || !propagate {
+			return
+		}
 	}
 	if s.config.Passive {
 		return
@@ -520,7 +546,14 @@ func (s *Server) handleQuery(source Addr, m krpc.Msg) {
 func (s *Server) handleGetPeers(source Addr, t string, args *krpc.MsgArgs) {
 	var r krpc.Return
 	if ps := s.config.PeerStore; ps != nil {
-		r.Values = filterPeers(source.IP(), args.Want, ps.GetPeers(peer_store.InfoHash(args.InfoHash)))
+		var peers []krpc.NodeAddr
+		s.withServerLockReleased(func() {
+			peers = ps.GetPeers(peer_store.InfoHash(args.InfoHash))
+		})
+		if s.closed.IsSet() {
+			return
+		}
+		r.Values = filterPeers(source.IP(), args.Want, peers)
 		token := s.createToken(source)
 		r.Token = &token
 	}
@@ -591,7 +624,14 @@ func (s *Server) handlePut(source Addr, t string, args *krpc.MsgArgs) {
 		}
 		i.Seq = *args.Seq
 	}
-	if err := s.store.Put(i); err != nil {
+	var err error
+	s.withServerLockReleased(func() {
+		err = s.store.Put(i)
+	})
+	if s.closed.IsSet() {
+		return
+	}
+	if err != nil {
 		s.sendError(source, t, storeError(err))
 		return
 	}
@@ -603,7 +643,14 @@ func (s *Server) handleGet(source Addr, t string, args *krpc.MsgArgs) {
 	s.setReturnNodes(&r, args.Target, args.Want, source)
 	token := s.createToken(source)
 	r.Token = &token
-	item, err := s.store.Get(bep44.Target(args.Target))
+	var item *bep44.Item
+	var err error
+	s.withServerLockReleased(func() {
+		item, err = s.store.Get(bep44.Target(args.Target))
+	})
+	if s.closed.IsSet() {
+		return
+	}
 	if errors.Is(err, bep44.ErrItemNotFound) {
 		s.reply(source, t, r)
 		return
@@ -614,7 +661,14 @@ func (s *Server) handleGet(source Addr, t string, args *krpc.MsgArgs) {
 	}
 	r.Seq = &item.Seq
 	if args.Seq == nil || item.Seq > *args.Seq {
-		r.V = bencode.MustMarshal(item.V)
+		var encodedValue []byte
+		s.withServerLockReleased(func() {
+			encodedValue = bencode.MustMarshal(item.V)
+		})
+		if s.closed.IsSet() {
+			return
+		}
+		r.V = encodedValue
 		r.K = item.K
 		r.Sig = item.Sig
 	}
@@ -745,22 +799,17 @@ func (s *Server) nodeErr(n *node) error {
 }
 
 func (s *Server) writeToNode(ctx context.Context, b []byte, node Addr, wait, rate bool) (wrote bool, err error) {
-	func() {
-		s.mu.RLock()
-		defer s.mu.RUnlock()
-		if s.closed.IsSet() {
-			err = errors.New("server is closed")
+	s.mu.RLock()
+	closed := s.closed.IsSet()
+	s.mu.RUnlock()
+	if closed {
+		return false, errors.New("server is closed")
+	}
+	if list := s.blocklist(); list != nil {
+		if r, ok := list.Lookup(node.IP()); ok {
+			err = fmt.Errorf("write to %v blocked by %v", node, r)
 			return
 		}
-		if list := s.blocklist(); list != nil {
-			if r, ok := list.Lookup(node.IP()); ok {
-				err = fmt.Errorf("write to %v blocked by %v", node, r)
-				return
-			}
-		}
-	}()
-	if err != nil {
-		return
 	}
 	if rate {
 		if wait {
@@ -1299,10 +1348,11 @@ wait:
 		if s.shouldStopRefreshingBucket(bucketIndex) {
 			break wait
 		}
-		op.AddNodes(types.AddrMaybeIdSliceFromNodeInfoSlice(s.notBadNodes()))
+		nodes := types.AddrMaybeIdSliceFromNodeInfoSlice(s.notBadNodes())
 		bucketChanged := b.changed.Signaled()
 		serverClosed := s.closed.Done()
 		s.mu.RUnlock()
+		op.AddNodes(nodes)
 		select {
 		case <-op.Stalled():
 			s.mu.RLock()
@@ -1364,8 +1414,8 @@ func (s *Server) TableMaintainer() {
 			if s.shouldStopRefreshingBucket(i) {
 				continue
 			}
-			logger.Levelf(log.Debug, "refreshing bucket %v", i)
 			s.mu.RUnlock()
+			logger.Levelf(log.Debug, "refreshing bucket %v", i)
 			stats := s.refreshBucket(i)
 			logger.Levelf(log.Debug, "finished refreshing bucket %v: %v", i, stats)
 			s.mu.RLock()

@@ -156,26 +156,40 @@ func TestSetReturnNodesUsesTarget(t *testing.T) {
 	cfg := NewDefaultServerConfig()
 	cfg.Conn = mustListen("localhost:0")
 	cfg.NodeId = krpc.ID{19: 1}
+	cfg.NoSecurity = true
 	s, err := NewServer(cfg)
 	qt.Assert(t, qt.IsNil(err))
-	defer s.Close()
-	far := s.id
-	far.SetBit(0, true)
-	near := s.id
-	near.SetBit(158, true)
+	t.Cleanup(s.Close)
+	target := s.id
+	target.SetBit(0, true)
+	ids := []int160.T{target}
+	// More than K candidates: a lookup near zero must exclude target, whereas a lookup
+	// for target must include it. Do not depend on bucket traversal or response order.
+	for bit := 150; bit < 158; bit++ {
+		id := s.id
+		id.SetBit(bit, true)
+		ids = append(ids, id)
+	}
 	s.mu.Lock()
-	for i, id := range []int160.T{far, near} {
+	for i, id := range ids {
 		n := &node{
-			nodeKey:         nodeKey{Id: id, Addr: NewAddr(&net.UDPAddr{IP: net.IPv4(1, 2, 3, byte(i)), Port: 1})},
+			nodeKey: nodeKey{Id: id, Addr: NewAddr(&net.UDPAddr{
+				IP: net.IPv4(1, 2, 3, byte(i)), Port: 1,
+			})},
 			lastGotResponse: time.Now(),
 		}
 		qt.Assert(t, qt.IsNil(s.table.addNode(n)))
 	}
 	var r krpc.Return
-	s.setReturnNodes(&r, far.AsByteArray(), []krpc.Want{krpc.WantNodes}, NewAddr(&net.UDPAddr{IP: net.IPv4(127, 0, 0, 1), Port: 1}))
+	s.setReturnNodes(&r, target.AsByteArray(), []krpc.Want{krpc.WantNodes},
+		NewAddr(&net.UDPAddr{IP: net.IPv4(127, 0, 0, 1), Port: 1}))
 	s.mu.Unlock()
-	qt.Assert(t, qt.HasLen(r.Nodes, 1))
-	qt.Check(t, qt.Equals(r.Nodes[0].ID, far.AsByteArray()))
+	for _, n := range r.Nodes {
+		if n.ID == target.AsByteArray() {
+			return
+		}
+	}
+	t.Fatal("response omitted the exact queried target in favor of nodes near zero")
 }
 
 func newServer(t *testing.T, l log.Logger) *Server {

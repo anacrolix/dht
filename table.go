@@ -82,27 +82,25 @@ func (tbl *table) getNode(addr Addr, id int160.T) *node {
 }
 
 func (tbl *table) closestNodes(k int, target int160.T, filter func(*node) bool) (ret []*node) {
-	bi := len(tbl.buckets) - 1
-	if target != tbl.rootID {
-		bi = tbl.bucketIndex(target)
+	if k <= 0 {
+		return nil
 	}
-	// Buckets are ordered by XOR magnitude: every node in an earlier bucket is closer than every
-	// node in a later one. Inside a bucket the map order is not distance order, so a partial
-	// bucket is sorted and only the nearest remaining slots are kept.
-	for ; bi >= 0 && len(ret) < k; bi-- {
-		var bucketNodes []*node
-		for n := range tbl.buckets[bi].nodes {
-			if filter(n) {
-				bucketNodes = append(bucketNodes, n)
-			}
+	// Buckets are relative to rootID, not target. Even a higher-index bucket can contain
+	// a closer eligible node, so rank candidates from the entire table.
+	tbl.forNodes(func(n *node) bool {
+		if filter(n) {
+			ret = append(ret, n)
 		}
-		slices.SortFunc(bucketNodes, func(a, b *node) int {
-			return a.Id.Distance(target).Cmp(b.Id.Distance(target))
-		})
-		if need := k - len(ret); len(bucketNodes) > need {
-			bucketNodes = bucketNodes[:need]
+		return true
+	})
+	slices.SortFunc(ret, func(a, b *node) int {
+		if d := a.Id.Distance(target).Cmp(b.Id.Distance(target)); d != 0 {
+			return d
 		}
-		ret = append(ret, bucketNodes...)
+		return a.Addr.KRPC().ToNodeAddrPort().Compare(b.Addr.KRPC().ToNodeAddrPort())
+	})
+	if len(ret) > k {
+		ret = ret[:k]
 	}
 	return
 }

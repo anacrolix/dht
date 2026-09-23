@@ -19,10 +19,12 @@ func NewMemory() *Memory {
 }
 
 func (m *Memory) Put(i *Item) error {
+	target := i.Target()
+
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	m.m[i.Target()] = i
+	m.m[target] = i
 
 	return nil
 }

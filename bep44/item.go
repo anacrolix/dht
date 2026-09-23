@@ -147,8 +147,19 @@ func Check(i *Item) error {
 }
 
 func CheckIncoming(stored, incoming *Item) error {
-	// If the sequence number is equal, and the value is also the same,
-	// the node SHOULD reset its timeout counter.
+	// BEP 44 requires a CAS mismatch to fail even when the sequence number is also stale or the
+	// value is unchanged, so check CAS before sequence-number rules. CAS only applies to mutable
+	// puts.
+	//
+	// Cas is an int64 in the public API and KRPC arguments; KRPC also omits zero values. A present
+	// cas=0 is therefore indistinguishable from an absent cas and cannot be checked here. Supporting
+	// present zero requires presence-aware CAS fields across the API and wire representation.
+	if incoming.IsMutable() && incoming.Cas != 0 && incoming.Cas != stored.Seq {
+		return ErrCasHashMismatched
+	}
+
+	// If the sequence number is equal, and the value is also the same, the node SHOULD reset its
+	// timeout counter.
 	if stored.Seq == incoming.Seq {
 		if bytes.Equal(
 			bencode.MustMarshal(stored.V),
@@ -160,13 +171,6 @@ func CheckIncoming(stored, incoming *Item) error {
 
 	if stored.Seq >= incoming.Seq {
 		return ErrSequenceNumberLessThanCurrent
-	}
-
-	// cas is optional. A zero value is omitted on the wire, so zero means absent. When present,
-	// BEP 44 requires it to equal the sequence number currently stored, not the cas recorded on
-	// the previous write. Callers skip this check when nothing is stored yet.
-	if incoming.Cas != 0 && incoming.Cas != stored.Seq {
-		return ErrCasHashMismatched
 	}
 
 	return nil

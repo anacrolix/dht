@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	stdLog "log"
 	"net"
 	"net/http"
@@ -85,10 +86,17 @@ func mainErr() error {
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
+	var bootstrapDone <-chan struct{}
 	if !flags.NoBootstrap {
+		done := make(chan struct{})
+		bootstrapDone = done
 		go func() {
-			if tried, err := s.Bootstrap(); err != nil {
-				log.Printf("error bootstrapping: %s", err)
+			defer close(done)
+			tried, err := s.BootstrapContext(ctx)
+			if err != nil {
+				if !errors.Is(err, context.Canceled) {
+					log.Printf("error bootstrapping: %s", err)
+				}
 			} else {
 				log.Printf("finished bootstrapping: %#v", tried)
 			}
@@ -96,6 +104,9 @@ func mainErr() error {
 	}
 	<-ctx.Done()
 	s.Close()
+	if bootstrapDone != nil {
+		<-bootstrapDone
+	}
 
 	if flags.TableFile != "" {
 		if err := saveTable(); err != nil {

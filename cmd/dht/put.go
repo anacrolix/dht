@@ -41,7 +41,7 @@ func makeSeqToPut(autoSeq, mutable bool, put bep44.Put, privKey ed25519.PrivateK
 	}
 }
 
-func put(cmd *PutCmd) (err error) {
+func put(ctx context.Context, cmd *PutCmd) (err error) {
 	s, err := dht.NewServer(nil)
 	if err != nil {
 		return
@@ -73,7 +73,7 @@ func put(cmd *PutCmd) (err error) {
 		log.Printf("putting %q to %x", v, target)
 		var stats *traversal.Stats
 		stats, err = getput.Put(
-			context.Background(),
+			ctx,
 			target,
 			s,
 			put.Salt,

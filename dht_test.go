@@ -246,25 +246,46 @@ func TestBadGetPeersResponse(t *testing.T) {
 	})
 	qt.Assert(t, qt.IsNil(err))
 	defer s.Close()
+	replied := make(chan error, 1)
 	go func() {
-		b := make([]byte, 1024)
-		n, addr, err := pc.ReadFrom(b)
-		qt.Assert(t, qt.IsNil(err))
-		var rm krpc.Msg
-		qt.Assert(t, qt.IsNil(bencode.Unmarshal(b[:n], &rm)))
-		m := krpc.Msg{
-			R: &krpc.Return{},
-			T: rm.T,
-		}
-		b, err = bencode.Marshal(m)
-		qt.Assert(t, qt.IsNil(err))
-		_, err = pc.WriteTo(b, addr)
-		qt.Assert(t, qt.IsNil(err))
+		replied <- func() error {
+			b := make([]byte, 1024)
+			n, addr, err := pc.ReadFrom(b)
+			if err != nil {
+				return err
+			}
+			var rm krpc.Msg
+			if err := bencode.Unmarshal(b[:n], &rm); err != nil {
+				return err
+			}
+			// Intentionally omit Y: PR #19 covers a reply whose SenderID is nil.
+			b, err = bencode.Marshal(krpc.Msg{R: &krpc.Return{}, T: rm.T})
+			if err != nil {
+				return err
+			}
+			_, err = pc.WriteTo(b, addr)
+			return err
+		}()
 	}()
 	a, err := s.Announce([20]byte{}, 0, true)
 	qt.Assert(t, qt.IsNil(err))
-	// Drain the Announce until it closes.
-	for range a.Peers {
+	t.Cleanup(a.Close)
+	select {
+	case err := <-replied:
+		qt.Assert(t, qt.IsNil(err))
+	case <-time.After(2 * time.Second):
+		t.Fatal("responder did not complete")
+	}
+	select {
+	case _, ok := <-a.Peers:
+		qt.Assert(t, qt.IsTrue(ok))
+	case <-time.After(2 * time.Second):
+		t.Fatal("malformed reply did not produce a peer result")
+	}
+	select {
+	case <-a.Finished():
+	case <-time.After(2 * time.Second):
+		t.Fatal("announce did not finish after malformed reply")
 	}
 }
 

@@ -125,3 +125,43 @@ func TestClosestNodesKeepsNearestInBucket(t *testing.T) {
 		}
 	}
 }
+
+func TestClosestNodesAcrossRootBuckets(t *testing.T) {
+	tbl := table{k: 8}
+	var target int160.T
+	target.SetBit(10, true)
+	makeNode := func(bits ...int) *node {
+		var id int160.T
+		for _, bit := range bits {
+			id.SetBit(bit, true)
+		}
+		n := &node{nodeKey: nodeKey{Id: id, Addr: NewAddr(&net.UDPAddr{
+			IP: net.IPv4(127, 0, 0, 1), Port: bits[0] + 1,
+		})}}
+		qt.Assert(t, qt.IsNil(tbl.addNode(n)))
+		return n
+	}
+	near := makeNode(10, 20)
+	middle := makeNode(11)
+	far := makeNode(9)
+	for _, tc := range []struct {
+		name     string
+		k        int
+		excluded *node
+		want     []*node
+	}{
+		{"target bucket", 1, nil, []*node{near}},
+		{"higher root bucket", 1, near, []*node{middle}},
+		{"all buckets", 8, nil, []*node{near, middle, far}},
+		{"zero limit", 0, nil, nil},
+		{"negative limit", -1, nil, nil},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := tbl.closestNodes(tc.k, target, func(n *node) bool { return n != tc.excluded })
+			qt.Assert(t, qt.Equals(len(got), len(tc.want)))
+			for i := range got {
+				qt.Assert(t, qt.Equals(got[i], tc.want[i]))
+			}
+		})
+	}
+}

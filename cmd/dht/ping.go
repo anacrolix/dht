@@ -2,6 +2,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net"
@@ -18,20 +19,35 @@ type pingArgs struct {
 	Nodes    []string      `arg:"positional" arity:"*" help:"nodes to ping e.g. router.bittorrent.com:6881"`
 }
 
-func ping(args pingArgs, s *dht.Server) error {
+func ping(ctx context.Context, args pingArgs, s *dht.Server) error {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 	nodes := args.Nodes
 	if args.Defaults {
 		nodes = append(nodes, dht.DefaultGlobalBootstrapHostPorts...)
 	}
 	var wg sync.WaitGroup
 	for _, a := range nodes {
+		if err := ctx.Err(); err != nil {
+			cancel()
+			wg.Wait()
+			return err
+		}
 		ua, err := net.ResolveUDPAddr(args.Network, a)
 		if err != nil {
+			cancel()
+			wg.Wait()
+			return err
+		}
+		if err := ctx.Err(); err != nil {
+			cancel()
+			wg.Wait()
 			return err
 		}
 		started := time.Now()
 		wg.Go(func() {
-			res := s.Ping(ua)
+			addr := dht.NewAddr(ua)
+			res := s.Query(ctx, addr, "ping", dht.QueryInput{})
 			if res.Err != nil {
 				fmt.Printf("%s: %s: %s\n", a, time.Since(started), res.Err)
 				return
@@ -41,6 +57,7 @@ func ping(args pingArgs, s *dht.Server) error {
 				fmt.Printf("%s: response has no id: %s\n", a, time.Since(started))
 				return
 			}
+			s.NodeRespondedToPing(addr, id.Int160())
 			secure := '✘'
 			if dht.NodeIdSecure(*id, ua.IP) {
 				secure = '✔'
@@ -55,12 +72,23 @@ func ping(args pingArgs, s *dht.Server) error {
 	}()
 	var timeout <-chan time.Time
 	if args.Timeout != 0 {
-		timeout = time.After(args.Timeout)
+		timer := time.NewTimer(args.Timeout)
+		defer timer.Stop()
+		timeout = timer.C
 	}
 	select {
 	case <-done:
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		return nil
+	case <-ctx.Done():
+		cancel()
+		<-done
+		return ctx.Err()
 	case <-timeout:
+		cancel()
+		<-done
 		return errors.New("timed out")
 	}
 }

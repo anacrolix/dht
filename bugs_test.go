@@ -1,6 +1,8 @@
 package dht
 
 import (
+	"context"
+	"errors"
 	"net"
 	"net/netip"
 	"sync"
@@ -48,11 +50,14 @@ func TestPingReturnsAfterClose(t *testing.T) {
 	s.Close()
 	select {
 	case res := <-done:
-		if res.Err == nil {
-			t.Fatal("ping succeeded after Close")
+		if !errors.Is(res.Err, context.Canceled) {
+			t.Fatalf("Ping after Close: got %v, want cancellation", res.Err)
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("Ping did not return after Close")
+	}
+	if got := s.Stats().OutstandingTransactions; got != 0 {
+		t.Fatalf("Close left %d active transactions", got)
 	}
 }
 
@@ -61,8 +66,7 @@ type swapList struct{ n int }
 func (swapList) Lookup(net.IP) (iplist.Range, bool) { return iplist.Range{}, false }
 func (s swapList) NumRanges() int                   { return s.n }
 
-// SetIPBlockList stores the list under s.mu, but IPBlocklist and TraversalNodeFilter read it
-// without that lock. Concurrent replacement must not race.
+// Concurrent block-list replacement must be safe for both public readers.
 func TestIPBlocklistConcurrentRead(t *testing.T) {
 	s, err := NewServer(&ServerConfig{
 		Conn:       mustListen("127.0.0.1:0"),
@@ -87,4 +91,40 @@ func TestIPBlocklistConcurrentRead(t *testing.T) {
 		}
 	})
 	wg.Wait()
+}
+
+func TestQueryCallerCancellation(t *testing.T) {
+	peer := mustListen("127.0.0.1:0")
+	t.Cleanup(func() { _ = peer.Close() })
+	s, err := NewServer(&ServerConfig{
+		Conn: mustListen("127.0.0.1:0"), NoSecurity: true,
+		QueryResendDelay: func() time.Duration { return time.Hour },
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(s.Close)
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	done := make(chan QueryResult, 1)
+	go func() { done <- s.Query(ctx, NewAddr(peer.LocalAddr()), "ping", QueryInput{}) }()
+	if err := peer.SetReadDeadline(time.Now().Add(2 * time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	var packet [1500]byte
+	if _, _, err := peer.ReadFrom(packet[:]); err != nil {
+		t.Fatal(err)
+	}
+	cancel()
+	select {
+	case res := <-done:
+		if !errors.Is(res.Err, context.Canceled) {
+			t.Fatalf("Query returned %v, want caller cancellation", res.Err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("Query ignored caller cancellation")
+	}
+	if got := s.Stats().OutstandingTransactions; got != 0 {
+		t.Fatalf("cancelled Query left %d active transactions", got)
+	}
 }

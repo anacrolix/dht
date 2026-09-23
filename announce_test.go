@@ -39,10 +39,15 @@ func TestAnnounceStopsNoPending(t *testing.T) {
 		},
 	})
 	qt.Assert(t, qt.IsNil(err))
+	t.Cleanup(s.Close)
 	a, err := s.Announce(randomInfohash(), 0, true)
 	qt.Assert(t, qt.IsNil(err))
-	defer a.Close()
-	<-a.Peers
+	t.Cleanup(a.Close)
+	select {
+	case <-a.Finished():
+	case <-time.After(2 * time.Second):
+		t.Fatal("empty traversal did not finish")
+	}
 }
 
 // Assert that rate.Limiter won't wake-up waiters once they have determined a
@@ -72,10 +77,17 @@ func TestTraversalStatsDuringQuery(t *testing.T) {
 	defer s.Close()
 	a, err := s.AnnounceTraversal([20]byte{9})
 	qt.Assert(t, qt.IsNil(err))
-	defer a.Close()
-	deadline := time.Now().Add(50 * time.Millisecond)
-	for time.Now().Before(deadline) {
-		_ = a.TraversalStats()
-		_ = a.NumContacted()
+	t.Cleanup(a.Close)
+	qt.Assert(t, qt.IsNil(silent.SetReadDeadline(time.Now().Add(2*time.Second))))
+	var packet [1500]byte
+	_, _, err = silent.ReadFrom(packet[:])
+	qt.Assert(t, qt.IsNil(err))
+	qt.Assert(t, qt.Equals(a.TraversalStats().NumAddrsTried, uint32(1)))
+	qt.Assert(t, qt.Equals(a.NumContacted(), uint32(1)))
+	a.Close()
+	select {
+	case <-a.Finished():
+	case <-time.After(2 * time.Second):
+		t.Fatal("stats traversal did not finish")
 	}
 }

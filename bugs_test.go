@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/anacrolix/torrent/iplist"
+	"golang.org/x/time/rate"
 
 	"github.com/anacrolix/dht/v2/krpc"
 )
@@ -32,6 +33,7 @@ func TestPingReturnsAfterClose(t *testing.T) {
 	s, err := NewServer(&ServerConfig{
 		Conn:             mustListen("127.0.0.1:0"),
 		NoSecurity:       true,
+		SendLimiter:      rate.NewLimiter(rate.Inf, 0),
 		QueryResendDelay: func() time.Duration { return time.Hour },
 	})
 	if err != nil {
@@ -98,6 +100,7 @@ func TestQueryCallerCancellation(t *testing.T) {
 	t.Cleanup(func() { _ = peer.Close() })
 	s, err := NewServer(&ServerConfig{
 		Conn: mustListen("127.0.0.1:0"), NoSecurity: true,
+		SendLimiter:      rate.NewLimiter(rate.Inf, 0),
 		QueryResendDelay: func() time.Duration { return time.Hour },
 	})
 	if err != nil {

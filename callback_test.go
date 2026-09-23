@@ -9,6 +9,7 @@ import (
 	"github.com/anacrolix/log"
 	"github.com/anacrolix/torrent/bencode"
 	"github.com/anacrolix/torrent/iplist"
+	"golang.org/x/time/rate"
 
 	"github.com/anacrolix/dht/v2/bep44"
 	"github.com/anacrolix/dht/v2/krpc"
@@ -51,6 +52,7 @@ func newCallbackTestServer(t *testing.T, cfg *ServerConfig) *Server {
 	}
 	t.Cleanup(func() { _ = conn.Close() })
 	cfg.Conn = conn
+	cfg.SendLimiter = rate.NewLimiter(rate.Inf, 0)
 	s, err := NewServer(cfg)
 	if err != nil {
 		t.Fatal(err)

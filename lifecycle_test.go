@@ -10,6 +10,7 @@ import (
 
 	"github.com/anacrolix/log"
 	"github.com/go-quicktest/qt"
+	"golang.org/x/time/rate"
 )
 
 // Counts goroutines with a frame in the traversal package: operation loops and their queries.
@@ -69,26 +70,41 @@ func TestTraversalStartingNodesErrorDoesNotLeak(t *testing.T) {
 // Cancelling a bootstrap must stop its outstanding queries before returning, rather than leaving
 // them to run until they time out.
 func TestBootstrapContextCancelWaitsForTraversal(t *testing.T) {
-	silent := mustListen("localhost:0")
-	defer silent.Close()
+	silent := mustListen("127.0.0.1:0")
+	t.Cleanup(func() { _ = silent.Close() })
 	cfg := NewDefaultServerConfig()
-	cfg.Conn = mustListen("localhost:0")
+	cfg.Conn = mustListen("127.0.0.1:0")
 	cfg.Logger = log.Default.WithNames(t.Name())
-	cfg.QueryResendDelay = func() time.Duration { return time.Minute }
+	cfg.SendLimiter = rate.NewLimiter(rate.Inf, 0)
+	cfg.QueryResendDelay = func() time.Duration { return time.Hour }
 	cfg.StartingNodes = addrResolver(silent.LocalAddr().String())
 	s, err := NewServer(cfg)
 	qt.Assert(t, qt.IsNil(err))
-	defer s.Close()
-	before := numTraversalGoroutines()
-
-	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
-	defer cancel()
-	started := time.Now()
-	stats, err := s.BootstrapContext(ctx)
-	qt.Assert(t, qt.ErrorIs(err, context.DeadlineExceeded))
-	qt.Check(t, qt.IsTrue(time.Since(started) < 10*time.Second))
-	qt.Check(t, qt.Equals(stats.NumAddrsTried, uint32(1)))
-	assertTraversalGoroutines(t, before)
+	t.Cleanup(s.Close)
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	type result struct {
+		tried uint32
+		err   error
+	}
+	done := make(chan result, 1)
+	go func() {
+		stats, err := s.BootstrapContext(ctx)
+		done <- result{stats.NumAddrsTried, err}
+	}()
+	qt.Assert(t, qt.IsNil(silent.SetReadDeadline(time.Now().Add(2*time.Second))))
+	var packet [1500]byte
+	_, _, err = silent.ReadFrom(packet[:])
+	qt.Assert(t, qt.IsNil(err))
+	cancel()
+	select {
+	case got := <-done:
+		qt.Assert(t, qt.ErrorIs(got.err, context.Canceled))
+		qt.Assert(t, qt.Equals(got.tried, uint32(1)))
+	case <-time.After(2 * time.Second):
+		t.Fatal("bootstrap did not stop its active query after cancellation")
+	}
+	qt.Assert(t, qt.Equals(s.Stats().OutstandingTransactions, 0))
 }
 
 // The traversal goroutine must be gone when refreshBucket returns. This does not observe the

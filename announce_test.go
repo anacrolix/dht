@@ -70,6 +70,7 @@ func TestTraversalStatsDuringQuery(t *testing.T) {
 	s, err := NewServer(&ServerConfig{
 		Conn:             mustListen("localhost:0"),
 		NoSecurity:       true,
+		SendLimiter:      rate.NewLimiter(rate.Inf, 0),
 		QueryResendDelay: func() time.Duration { return time.Hour },
 		StartingNodes:    addrResolver(silent.LocalAddr().String()),
 	})

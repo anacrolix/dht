@@ -246,8 +246,19 @@ func TestBadGetPeersResponse(t *testing.T) {
 	})
 	qt.Assert(t, qt.IsNil(err))
 	defer s.Close()
+	qt.Assert(t, qt.IsNil(pc.SetReadDeadline(time.Now().Add(2*time.Second))))
+	responderDone := make(chan struct{})
+	t.Cleanup(func() {
+		// Deferred pc.Close has already unblocked ReadFrom on an early test failure.
+		select {
+		case <-responderDone:
+		case <-time.After(2 * time.Second):
+			t.Error("responder goroutine did not exit")
+		}
+	})
 	replied := make(chan error, 1)
 	go func() {
+		defer close(responderDone)
 		replied <- func() error {
 			b := make([]byte, 1024)
 			n, addr, err := pc.ReadFrom(b)

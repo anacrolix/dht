@@ -1,7 +1,9 @@
 package dht
 
 import (
+	"bytes"
 	"net"
+	"slices"
 	"testing"
 
 	"github.com/go-quicktest/qt"
@@ -62,14 +64,13 @@ func TestRandomIdInBucket(t *testing.T) {
 	}
 }
 
-// BEP 5 replies must contain the k nodes closest to the target. closestNodes walks buckets and
-// then cuts the list at k, so a partially included bucket keeps whichever nodes the map yields
-// first rather than the nearest ones.
+// Check exact nearest-K membership against a full-table oracle, independently of result order.
 func TestClosestNodesKeepsNearestInBucket(t *testing.T) {
 	var root int160.T
 	tbl := table{rootID: root, k: 8}
 	var target int160.T
 	target.SetBit(10, true)
+	var candidates []*node
 
 	add := func(bucket, extra, port int) {
 		t.Helper()
@@ -88,6 +89,7 @@ func TestClosestNodesKeepsNearestInBucket(t *testing.T) {
 		if err := tbl.addNode(n); err != nil {
 			t.Fatal(err)
 		}
+		candidates = append(candidates, n)
 	}
 	// Three nodes in the target's bucket. Every one of them is closer than every node in the next
 	// bucket, so all three must be kept.
@@ -98,31 +100,71 @@ func TestClosestNodesKeepsNearestInBucket(t *testing.T) {
 	for _, bit := range []int{20, 30, 40, 50, 60, 70, 80, 90} {
 		add(9, bit, 2000+bit)
 	}
-	want := map[int]bool{1000: true, 1001: true, 1002: true, 2090: true, 2080: true, 2070: true, 2060: true, 2050: true}
-
-	for try := range 30 {
-		got := tbl.closestNodes(8, target, func(*node) bool { return true })
-		if len(got) != 8 {
-			t.Fatalf("try %d: got %d nodes", try, len(got))
-		}
-		var prev int160.T
-		seen := map[int]bool{}
-		for i, n := range got {
-			d := n.Id.Distance(target)
-			if i > 0 && prev.Cmp(d) > 0 {
-				t.Fatalf("try %d: result is not ordered by XOR distance", try)
+	// Include buckets above the target bucket too: those were skipped by the old walk.
+	add(11, 120, 3011)
+	add(159, -1, 3159)
+	for _, tc := range []struct {
+		name   string
+		target int160.T
+		k      int
+		filter func(*node) bool
+	}{
+		{"partial bucket", target, 8, func(*node) bool { return true }},
+		{"filtered candidates", target, 8, func(n *node) bool { return n.Addr.Port()%2 != 0 }},
+		{"local target", root, 8, func(*node) bool { return true }},
+		{"all eligible", target, len(candidates) + 1, func(*node) bool { return true }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			// Bytewise XOR is independent of the production int160 distance calculation.
+			distance := func(n *node) [20]byte {
+				d := n.Id.AsByteArray()
+				targetBytes := tc.target.AsByteArray()
+				for i := range d {
+					d[i] ^= targetBytes[i]
+				}
+				return d
 			}
-			prev = d
-			seen[n.Addr.Port()] = true
-		}
-		if len(seen) != len(want) {
-			t.Fatalf("try %d: ports %v, want %v", try, seen, want)
-		}
-		for port := range want {
-			if !seen[port] {
-				t.Fatalf("try %d: dropped closer node on port %d; got %v", try, port, seen)
+			var want []*node
+			for _, n := range candidates {
+				if tc.filter(n) {
+					want = append(want, n)
+				}
 			}
-		}
+			slices.SortFunc(want, func(a, b *node) int {
+				ad, bd := distance(a), distance(b)
+				return bytes.Compare(ad[:], bd[:])
+			})
+			if len(want) > tc.k {
+				want = want[:tc.k]
+			}
+			got := tbl.closestNodes(tc.k, tc.target, tc.filter)
+			qt.Assert(t, qt.Equals(len(got), len(want)))
+			type identity struct {
+				id   [20]byte
+				addr string
+			}
+			remaining := make(map[identity]bool, len(want))
+			for _, n := range want {
+				remaining[identity{n.Id.AsByteArray(), n.Addr.String()}] = true
+			}
+			for _, n := range got {
+				key := identity{n.Id.AsByteArray(), n.Addr.String()}
+				if !remaining[key] {
+					t.Errorf("unexpected or duplicate nearest node: id=%x addr=%s", key.id, key.addr)
+				}
+				delete(remaining, key)
+			}
+			for key := range remaining {
+				t.Errorf("missing nearest node: id=%x addr=%s", key.id, key.addr)
+			}
+			// Keep ordering independent: a sorted but incorrect subset must still fail above.
+			for i := 1; i < len(got); i++ {
+				prev, next := distance(got[i-1]), distance(got[i])
+				if bytes.Compare(prev[:], next[:]) > 0 {
+					t.Errorf("XOR distance decreased at index %d: %x > %x", i, prev, next)
+				}
+			}
+		})
 	}
 }
 

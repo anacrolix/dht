@@ -61,9 +61,9 @@ func TestNodeAddrIndex6(t *testing.T) {
 }
 
 var marshalIPv4SliceTests = []struct {
-	in     CompactIPv4NodeAddrs
-	out    []byte
-	panics bool
+	in      CompactIPv4NodeAddrs
+	out     []byte
+	wantErr bool
 }{
 	{[]NodeAddr{{net.IP{172, 16, 1, 1}, 3}}, []byte{172, 16, 1, 1, 0, 3}, false},
 	{[]NodeAddr{{net.IPv4(172, 16, 1, 1), 4}}, []byte{172, 16, 1, 1, 0, 4}, false},
@@ -77,15 +77,13 @@ var marshalIPv4SliceTests = []struct {
 
 func TestMarshalCompactIPv4NodeAddrs(t *testing.T) {
 	for _, tc := range marshalIPv4SliceTests {
-		marshal := func() {
-			out, err := tc.in.MarshalBinary()
-			qt.Assert(t, qt.IsNil(err))
-			qt.Check(t, qt.DeepEquals(out, tc.out), qt.Commentf("for input %v", tc.in))
-		}
-		if tc.panics {
-			qt.Check(t, qt.PanicMatches(marshal, ".*"))
+		out, err := tc.in.MarshalBinary()
+		if tc.wantErr {
+			qt.Check(t, qt.IsNotNil(err), qt.Commentf("for input %v", tc.in))
+			qt.Check(t, qt.HasLen(out, 0))
 		} else {
-			qt.Check(t, qt.Not(qt.PanicMatches(marshal, ".*")))
+			qt.Check(t, qt.IsNil(err), qt.Commentf("for input %v", tc.in))
+			qt.Check(t, qt.DeepEquals(out, tc.out), qt.Commentf("for input %v", tc.in))
 		}
 	}
 }

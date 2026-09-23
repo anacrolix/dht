@@ -176,7 +176,7 @@ func runMain() int {
 			}{}
 			sub.Parse(args.FromStruct(&subArgs)...)
 			sub.Defer(func() error {
-				addr, err := net.ResolveUDPAddr(serverArgs.Network, subArgs.Addr)
+				addr, err := resolveUDPAddr(ctx, serverArgs.Network, subArgs.Addr)
 				if err != nil {
 					return err
 				}
@@ -197,7 +197,7 @@ func runMain() int {
 			}{}
 			sub.Parse(args.FromStruct(&subArgs)...)
 			sub.Defer(func() error {
-				addr, err := net.ResolveUDPAddr(serverArgs.Network, subArgs.Addr)
+				addr, err := resolveUDPAddr(ctx, serverArgs.Network, subArgs.Addr)
 				if err != nil {
 					return err
 				}

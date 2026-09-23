@@ -293,7 +293,8 @@ func TestContextResolverPreservesLiteralAddressSemantics(t *testing.T) {
 		{"udp6", "[fe80::1%en0]:6881"},
 		{"udp", ":6881"},
 		{"udp4", "[::1]:6881"},
-		{"invalid", "127.0.0.1:6881"},
+		{"tcp", "127.0.0.1:6881"},
+		{"tcp", "blocked-command.invalid:6881"},
 	} {
 		t.Run(tc.network+"/"+tc.address, func(t *testing.T) {
 			want, wantErr := net.ResolveUDPAddr(tc.network, tc.address)

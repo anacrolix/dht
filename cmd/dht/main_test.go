@@ -1,9 +1,14 @@
 package main
 
 import (
+	"context"
+	"errors"
+	"net"
 	"os"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/anacrolix/dht/v2"
 	"github.com/anacrolix/dht/v2/krpc"
@@ -45,6 +50,67 @@ func TestReturnedNodeAddressesRejectsMalformedAndErrorReplies(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			if nodes, err := returnedNodeAddresses(dht.QueryResult{Reply: tc.reply}); err == nil {
 				t.Fatalf("returned nodes %v from malformed reply", nodes)
+			}
+		})
+	}
+}
+
+func TestQueryCommandsCancelDNS(t *testing.T) {
+	for _, command := range []string{"query", "ping-nodes"} {
+		t.Run(command, func(t *testing.T) {
+			oldArgs, oldResolver := os.Args, net.DefaultResolver
+			t.Cleanup(func() { os.Args, net.DefaultResolver = oldArgs, oldResolver })
+			os.Args = []string{"dht", command, "blocked-command.invalid:6881", "find_node"}
+			started := make(chan struct{})
+			release := make(chan struct{})
+			var once sync.Once
+			net.DefaultResolver = &net.Resolver{
+				PreferGo: true,
+				Dial: func(ctx context.Context, _, _ string) (net.Conn, error) {
+					once.Do(func() { close(started) })
+					select {
+					case <-ctx.Done():
+						return nil, ctx.Err()
+					case <-release:
+						return nil, errors.New("DNS released by test cleanup")
+					}
+				},
+			}
+			done := make(chan int, 1)
+			finished := make(chan struct{})
+			t.Cleanup(func() {
+				close(release)
+				select {
+				case <-finished:
+				case <-time.After(2 * time.Second):
+					t.Error("command did not stop during cleanup")
+				}
+			})
+			go func() {
+				defer close(finished)
+				done <- runMain()
+			}()
+			select {
+			case <-started:
+			case code := <-done:
+				t.Fatalf("command exited with %d before DNS started", code)
+			case <-time.After(5 * time.Second):
+				t.Fatal("command did not reach DNS")
+			}
+			process, err := os.FindProcess(os.Getpid())
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := process.Signal(os.Interrupt); err != nil {
+				t.Fatal(err)
+			}
+			select {
+			case code := <-done:
+				if code != 2 {
+					t.Fatalf("command exit = %d, want cancellation error exit 2", code)
+				}
+			case <-time.After(time.Second):
+				t.Fatal("command ignored cancellation during DNS resolution")
 			}
 		})
 	}

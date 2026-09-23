@@ -39,6 +39,28 @@ func TestNodeAddrBinaryRoundTrip(t *testing.T) {
 	}
 }
 
+func TestNodeAddrMarshalRejectsInvalidIPLengths(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		ip   net.IP
+	}{
+		{"nil", nil},
+		{"short IPv4", make(net.IP, 3)},
+		{"extra IPv4 byte", make(net.IP, 5)},
+		{"short IPv6", make(net.IP, 15)},
+		{"extra IPv6 byte", make(net.IP, 17)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			addr := NodeAddr{IP: tc.ip, Port: 6881}
+			wire, err := addr.MarshalBinary()
+			qt.Assert(t, qt.IsNotNil(err))
+			qt.Check(t, qt.HasLen(wire, 0))
+			_, err = addr.MarshalBencode()
+			qt.Assert(t, qt.IsNotNil(err))
+		})
+	}
+}
+
 func TestNodeAddrUnmarshalBinaryRejectsInvalidLengths(t *testing.T) {
 	tests := []struct {
 		name string

@@ -1,16 +1,22 @@
 package krpc
 
+import "fmt"
+
 type CompactIPv4NodeAddrs []NodeAddr
 
 func (CompactIPv4NodeAddrs) ElemSize() int { return 6 }
 
 func (me CompactIPv4NodeAddrs) MarshalBinary() ([]byte, error) {
-	return marshalBinarySlice(mapSlice(me, func(addr NodeAddr) NodeAddr {
-		if a := addr.IP.To4(); a != nil {
-			addr.IP = a
+	converted := make(CompactIPv4NodeAddrs, len(me))
+	for i, addr := range me {
+		ip := addr.IP.To4()
+		if ip == nil {
+			return nil, fmt.Errorf("marshal compact IPv4 address from %v", addr.IP)
 		}
-		return addr
-	}))
+		addr.IP = ip
+		converted[i] = addr
+	}
+	return marshalBinarySlice(converted)
 }
 
 func (me CompactIPv4NodeAddrs) MarshalBencode() ([]byte, error) {

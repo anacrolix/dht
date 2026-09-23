@@ -24,6 +24,7 @@ func TestAnnouncePeerPortValidation(t *testing.T) {
 	}{
 		{name: "missing"},
 		{name: "zero", present: true},
+		{name: "negative", port: -1, present: true},
 		{name: "too large", port: 65536, present: true},
 		{name: "maximum", port: 65535, present: true, valid: true},
 		{name: "implied overrides explicit", port: 65536, present: true, implied: true, valid: true},

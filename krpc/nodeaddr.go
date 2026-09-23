@@ -53,6 +53,11 @@ func (me *NodeAddr) UnmarshalBencode(b []byte) (err error) {
 }
 
 func (me NodeAddr) MarshalBinary() ([]byte, error) {
+	switch len(me.IP) {
+	case net.IPv4len, net.IPv6len:
+	default:
+		return nil, fmt.Errorf("marshal NodeAddr with %d IP bytes: need 4 or 16", len(me.IP))
+	}
 	b := make([]byte, 0, len(me.IP)+2)
 	b = append(b, me.IP...)
 	return binary.BigEndian.AppendUint16(b, uint16(me.Port)), nil

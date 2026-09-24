@@ -1,7 +1,5 @@
 package dht
 
-// get_peers and announce_peers.
-
 import (
 	"context"
 	"fmt"
@@ -45,7 +43,7 @@ func (a *Announce) NumContacted() uint32 {
 }
 
 func (a *Announce) TraversalStats() TraversalStats {
-	return *a.traversal.Stats()
+	return a.traversal.LoadStats()
 }
 
 // Server.Announce option
@@ -73,10 +71,11 @@ func AnnouncePeer(opts AnnouncePeerOpts) AnnounceOpt {
 	}
 }
 
-// Deprecated: Use Server.AnnounceTraversal.
 // Traverses the DHT graph toward nodes that store peers for the infohash, streaming them to the
 // caller, and announcing the local node to each responding node if port is non-zero or impliedPort
 // is true.
+//
+// Deprecated: Use Server.AnnounceTraversal with AnnouncePeer.
 func (s *Server) Announce(infoHash [20]byte, port int, impliedPort bool, opts ...AnnounceOpt) (_ *Announce, err error) {
 	if port != 0 || impliedPort {
 		opts = append([]AnnounceOpt{AnnouncePeer(AnnouncePeerOpts{
@@ -99,6 +98,10 @@ func (s *Server) AnnounceTraversal(infoHash [20]byte, opts ...AnnounceOpt) (_ *A
 	for _, opt := range opts {
 		opt(a)
 	}
+	nodes, err := s.TraversalStartingNodes()
+	if err != nil {
+		return
+	}
 	a.traversal = traversal.Start(traversal.OperationInput{
 		Target:     infoHash,
 		DoQuery:    a.getPeers,
@@ -108,11 +111,6 @@ func (s *Server) AnnounceTraversal(infoHash [20]byte, opts ...AnnounceOpt) (_ *A
 			return ok
 		},
 	})
-	nodes, err := s.TraversalStartingNodes()
-	if err != nil {
-		a.traversal.Stop()
-		return
-	}
 	a.traversal.AddNodes(nodes)
 	go func() {
 		<-a.traversal.Stalled()
@@ -130,14 +128,12 @@ func (s *Server) AnnounceTraversal(infoHash [20]byte, opts ...AnnounceOpt) (_ *A
 func (a *Announce) announceClosest() {
 	var wg sync.WaitGroup
 	a.traversal.Closest().Range(func(elem dhtutil.Elem) {
-		wg.Add(1)
-		go func() {
+		wg.Go(func() {
 			a.logger().Levelf(log.Debug,
 				"announce_peer to %v: %v",
 				elem, a.announcePeer(elem),
 			)
-			wg.Done()
-		}()
+		})
 	})
 	wg.Wait()
 }
@@ -174,9 +170,12 @@ func (a *Announce) getPeers(ctx context.Context, addr krpc.NodeAddr) traversal.Q
 			},
 			Return: *r,
 		}
+		// Stop waits for this query to return before Stopped fires, so waiting on
+		// Stopped here deadlocks when nobody is receiving from Peers. The query
+		// context is cancelled when the traversal stops.
 		select {
 		case a.Peers <- peersValues:
-		case <-a.traversal.Stopped():
+		case <-ctx.Done():
 		}
 	}
 	return res.TraversalQueryResult(addr)

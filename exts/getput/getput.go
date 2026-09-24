@@ -24,11 +24,32 @@ type GetResult struct {
 	Mutable bool
 }
 
+// Returns the item carried by r if it is the immutable item for target, or a correctly signed
+// mutable item for target and salt.
+func verifiedResult(r *krpc.Return, target bep44.Target, salt []byte) (GetResult, bool) {
+	if r.V == nil {
+		return GetResult{}, false
+	}
+	if sha1.Sum(r.V) == target {
+		return GetResult{V: r.V, Sig: r.Sig}, true
+	}
+	if r.Seq != nil &&
+		bep44.MakeMutableTarget(r.K, salt) == target &&
+		bep44.Verify(r.K[:], salt, *r.Seq, r.V, r.Sig[:]) {
+		return GetResult{Seq: *r.Seq, V: r.V, Sig: r.Sig, Mutable: true}, true
+	}
+	return GetResult{}, false
+}
+
 func startGetTraversal(
 	target bep44.Target, s *dht.Server, seq *int64, salt []byte,
 ) (
 	vChan chan GetResult, op *traversal.Operation, err error,
 ) {
+	nodes, err := s.TraversalStartingNodes()
+	if err != nil {
+		return nil, nil, err
+	}
 	vChan = make(chan GetResult)
 	op = traversal.Start(traversal.OperationInput{
 		Alpha:  15,
@@ -41,43 +62,24 @@ func startGetTraversal(
 				logger.Levelf(log.Debug, "error querying %v: %v", addr, err)
 			}
 			if r := res.Reply.R; r != nil {
-				rv := r.V
-				bv := rv
-				if sha1.Sum(bv) == target {
+				if v, ok := verifiedResult(r, target, salt); ok {
 					select {
-					case vChan <- GetResult{
-						V:       rv,
-						Sig:     r.Sig,
-						Mutable: false,
-					}:
+					case vChan <- v:
 					case <-ctx.Done():
 					}
-				} else if sha1.Sum(append(r.K[:], salt...)) == target && bep44.Verify(r.K[:], salt, *r.Seq, bv, r.Sig[:]) {
-					select {
-					case vChan <- GetResult{
-						Seq:     *r.Seq,
-						V:       rv,
-						Sig:     r.Sig,
-						Mutable: true,
-					}:
-					case <-ctx.Done():
-					}
-				} else if rv != nil {
-					logger.Levelf(log.Debug, "get response item hash didn't match target: %q", rv)
+				} else if r.V != nil {
+					logger.Levelf(log.Debug, "get response item hash didn't match target: %q", r.V)
 				}
 			}
-			tqr := res.TraversalQueryResult(addr)
-			// Filter replies from nodes that don't have a string token. This doesn't look prettier
-			// with generics. "The token value should be a short binary string." ¯\_(ツ)_/¯ (BEP 5).
-			tqr.ClosestData, _ = tqr.ClosestData.(string)
-			if tqr.ClosestData == nil {
-				tqr.ResponseFrom = nil
-			}
-			return tqr
+			return res.TraversalQueryResult(addr)
 		},
 		NodeFilter: s.TraversalNodeFilter,
+		// Only nodes that gave us a token can be put to.
+		DataFilter: func(data any) bool {
+			_, ok := data.(string)
+			return ok
+		},
 	})
-	nodes, err := s.TraversalStartingNodes()
 	op.AddNodes(nodes)
 	return
 }
@@ -93,70 +95,87 @@ func Get(
 	}
 	ret.Seq = math.MinInt64
 	gotValue := false
-receiveResults:
-	select {
-	case <-op.Stalled():
-		if !gotValue {
-			err = errors.New("value not found")
+receive:
+	for {
+		select {
+		case <-op.Stalled():
+			if !gotValue {
+				err = errors.New("value not found")
+			}
+			break receive
+		case v := <-vChan:
+			log.ContextLogger(ctx).Levelf(log.Debug, "received %#v", v)
+			gotValue = true
+			if !v.Mutable {
+				ret = v
+				break receive
+			}
+			if v.Seq >= ret.Seq {
+				ret = v
+			}
+		case <-ctx.Done():
+			err = ctx.Err()
+			break receive
 		}
-	case v := <-vChan:
-		log.ContextLogger(ctx).Levelf(log.Debug, "received %#v", v)
-		gotValue = true
-		if !v.Mutable {
-			ret = v
-			break
-		}
-		if v.Seq >= ret.Seq {
-			ret = v
-		}
-		goto receiveResults
-	case <-ctx.Done():
-		err = ctx.Err()
 	}
 	op.Stop()
-	stats = op.Stats()
+	<-op.Stopped()
+	loaded := op.LoadStats()
+	stats = &loaded
 	return
 }
 
 type SeqToPut func(seq int64) bep44.Put
 
+// Put attempts to store the item at the closest token-eligible nodes and waits for all attempts.
+// It succeeds when at least one node accepts the item. With no accepting nodes it returns an
+// error, preserving remote protocol errors for errors.Is/As.
 func Put(
 	ctx context.Context, target krpc.ID, s *dht.Server, salt []byte, seqToPut SeqToPut,
 ) (
 	stats *traversal.Stats, err error,
 ) {
 	logger := log.ContextLogger(ctx)
-	vChan, op, err := startGetTraversal(target, s,
-		// When we do a get traversal for a put, we don't care what seq the peers have?
-		nil,
-		// This is duplicated with the put, but we need it to filter responses for autoSeq.
-		salt)
+	// The seq filter is irrelevant for a put, but the salt is needed to verify responses for the
+	// automatic sequence number.
+	vChan, op, err := startGetTraversal(target, s, nil, salt)
 	if err != nil {
 		return
 	}
 	var autoSeq int64
-notDone:
-	select {
-	case v := <-vChan:
-		if v.Mutable && v.Seq > autoSeq {
-			autoSeq = v.Seq
+receive:
+	for {
+		select {
+		case v := <-vChan:
+			// TODO: Set CAS automatically, and republish the existing seq if the content already
+			// matches.
+			if v.Mutable && v.Seq > autoSeq {
+				autoSeq = v.Seq
+			}
+		case <-op.Stalled():
+			break receive
+		case <-ctx.Done():
+			err = ctx.Err()
+			break receive
 		}
-		// There are more optimizations that can be done here. We can set CAS automatically, and we
-		// can skip updating the sequence number if the existing content already matches (and
-		// presumably republish the existing seq).
-		goto notDone
-	case <-op.Stalled():
-	case <-ctx.Done():
-		err = ctx.Err()
 	}
 	op.Stop()
+	<-op.Stopped()
+	loaded := op.LoadStats()
+	stats = &loaded
+	if err != nil {
+		return
+	}
+	closest := op.Closest()
+	if closest.Len() == 0 {
+		return stats, errors.New("no token-eligible nodes found")
+	}
+	results := make(chan error, closest.Len())
 	var wg sync.WaitGroup
 	put := seqToPut(autoSeq)
-	op.Closest().Range(func(elem k_nearest_nodes.Elem) {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			// This is enforced by startGetTraversal.
+	closest.Range(func(elem k_nearest_nodes.Elem) {
+		wg.Go(func() {
+			// This is enforced by the DataFilter in startGetTraversal.
 			token := elem.Data.(string)
 			res := s.Put(ctx, dht.NewAddr(elem.Addr.UDP()), put, token, dht.QueryRateLimiting{})
 			err := res.ToError()
@@ -165,9 +184,17 @@ notDone:
 			} else {
 				logger.Levelf(log.Debug, "put to %v [token=%q]", elem.Addr, token)
 			}
-		}()
+			results <- err
+		})
 	})
 	wg.Wait()
-	stats = op.Stats()
-	return
+	var putErrors []error
+	for range closest.Len() {
+		if putErr := <-results; putErr == nil {
+			return stats, nil
+		} else {
+			putErrors = append(putErrors, putErr)
+		}
+	}
+	return stats, errors.Join(putErrors...)
 }

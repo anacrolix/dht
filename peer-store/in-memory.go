@@ -2,13 +2,13 @@ package peer_store
 
 import (
 	"bytes"
+	"cmp"
 	"fmt"
 	"io"
-	"sort"
+	"maps"
+	"slices"
 	"sync"
 	"time"
-
-	"github.com/anacrolix/multiless"
 
 	"github.com/anacrolix/dht/v2/int160"
 	"github.com/anacrolix/dht/v2/krpc"
@@ -25,12 +25,9 @@ type InMemory struct {
 // authoritative for endpoint and timestamp data.
 type indexValue = map[string]NodeAndTime
 
-type debugWriterInterface interface {
-	WriteDebug(w io.Writer)
-}
-
 var _ interface {
-	debugWriterInterface
+	Interface
+	WriteDebug(w io.Writer)
 } = (*InMemory)(nil)
 
 func (me *InMemory) GetPeers(ih InfoHash) (ret []krpc.NodeAddr) {
@@ -40,11 +37,9 @@ func (me *InMemory) GetPeers(ih InfoHash) (ret []krpc.NodeAddr) {
 	if len(nodes) == 0 {
 		return
 	}
-	ret = make([]krpc.NodeAddr, len(nodes))
-	i := 0
+	ret = make([]krpc.NodeAddr, 0, len(nodes))
 	for _, v := range nodes {
-		ret[i] = v.NodeAddr
-		i++
+		ret = append(ret, v.NodeAddr)
 	}
 	return
 }
@@ -74,9 +69,7 @@ func (me *InMemory) GetAll() (ret map[InfoHash][]NodeAndTime) {
 	defer me.mu.RUnlock()
 	ret = make(map[InfoHash][]NodeAndTime, len(me.index))
 	for ih, nodes := range me.index {
-		for _, v := range nodes {
-			ret[ih] = append(ret[ih], v)
-		}
+		ret[ih] = slices.Collect(maps.Values(nodes))
 	}
 	return
 }
@@ -84,29 +77,24 @@ func (me *InMemory) GetAll() (ret map[InfoHash][]NodeAndTime) {
 func (me *InMemory) WriteDebug(w io.Writer) {
 	all := me.GetAll()
 	var totalCount int
-	type sliceElem struct {
-		InfoHash
-		addrs []NodeAndTime
-	}
-	var allSlice []sliceElem
-	for ih, addrs := range all {
+	for _, addrs := range all {
 		totalCount += len(addrs)
-		allSlice = append(allSlice, sliceElem{ih, addrs})
 	}
 	fmt.Fprintf(w, "total count: %v\n\n", totalCount)
-	sort.Slice(allSlice, func(i, j int) bool {
-		return int160.Distance(int160.FromByteArray(allSlice[i].InfoHash), me.RootId).Cmp(
-			int160.Distance(int160.FromByteArray(allSlice[j].InfoHash), me.RootId)) < 0
+	infoHashes := slices.SortedFunc(maps.Keys(all), func(l, r InfoHash) int {
+		return int160.Distance(int160.FromByteArray(l), me.RootId).Cmp(
+			int160.Distance(int160.FromByteArray(r), me.RootId))
 	})
-	for _, elem := range allSlice {
-		addrs := elem.addrs
-		fmt.Fprintf(w, "%v (count %v):\n", elem.InfoHash, len(addrs))
-		sort.Slice(addrs, func(i, j int) bool {
-			return multiless.New().Cmp(
-				bytes.Compare(addrs[i].IP, addrs[j].IP)).Int64(
-				addrs[j].Time.UnixNano(), addrs[i].Time.UnixNano()).Int(
-				addrs[i].Port, addrs[j].Port,
-			).MustLess()
+	for _, ih := range infoHashes {
+		addrs := all[ih]
+		fmt.Fprintf(w, "%v (count %v):\n", ih, len(addrs))
+		// By IP, then most recent first, then port.
+		slices.SortFunc(addrs, func(l, r NodeAndTime) int {
+			return cmp.Or(
+				bytes.Compare(l.IP, r.IP),
+				r.Time.Compare(l.Time),
+				cmp.Compare(l.Port, r.Port),
+			)
 		})
 		for _, na := range addrs {
 			fmt.Fprintf(w, "\t%v (age: %v)\n", na.NodeAddr, time.Since(na.Time))

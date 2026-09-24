@@ -37,35 +37,36 @@ var (
 	_ error               = Error{}
 )
 
-func (e *Error) UnmarshalBencode(_b []byte) (err error) {
-	var _v interface{}
-	err = bencode.Unmarshal(_b, &_v)
-	if err != nil {
-		return
+func (e *Error) UnmarshalBencode(b []byte) error {
+	var v any
+	if err := bencode.Unmarshal(b, &v); err != nil {
+		return err
 	}
-	switch v := _v.(type) {
-	case []interface{}:
-		func() {
-			defer func() {
-				r := recover()
-				if r == nil {
-					return
-				}
-				err = fmt.Errorf("unpacking %#v: %s", v, r)
-			}()
-			e.Code = int(v[0].(int64))
-			e.Msg = v[1].(string)
-		}()
+	switch v := v.(type) {
+	case []any:
+		if len(v) < 2 {
+			return fmt.Errorf("unpacking %#v: expected code and message", v)
+		}
+		code, ok := v[0].(int64)
+		if !ok {
+			return fmt.Errorf("unpacking %#v: code has type %T", v, v[0])
+		}
+		msg, ok := v[1].(string)
+		if !ok {
+			return fmt.Errorf("unpacking %#v: message has type %T", v, v[1])
+		}
+		e.Code = int(code)
+		e.Msg = msg
 	case string:
 		e.Msg = v
 	default:
-		err = fmt.Errorf(`KRPC error bencode value has unexpected type: %T`, _v)
+		return fmt.Errorf("KRPC error bencode value has unexpected type: %T", v)
 	}
-	return
+	return nil
 }
 
-func (e Error) MarshalBencode() (ret []byte, err error) {
-	return bencode.Marshal([]interface{}{e.Code, e.Msg})
+func (e Error) MarshalBencode() ([]byte, error) {
+	return bencode.Marshal([]any{e.Code, e.Msg})
 }
 
 func (e Error) Error() string {

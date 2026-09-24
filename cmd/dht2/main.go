@@ -54,7 +54,7 @@ func mainErr(ctx context.Context) (err error) {
 		res := s.Query(ctx, dht.NewAddr(udpAddr), q.Unwrap(), input)
 		spew.Dump(res)
 	default:
-		parser.Fail()
+		_ = parser.Fail()
 	}
 	parser.DoHelpIfHelping()
 	return parser.Err()

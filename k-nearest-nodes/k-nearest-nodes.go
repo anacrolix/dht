@@ -1,9 +1,9 @@
 package k_nearest_nodes
 
 import (
+	"cmp"
 	"hash/maphash"
 
-	"github.com/anacrolix/multiless"
 	"github.com/benbjohnson/immutable"
 
 	"github.com/anacrolix/dht/v2/int160"
@@ -14,7 +14,7 @@ type Key = krpc.NodeInfoAddrPort
 
 type Elem struct {
 	Key
-	Data interface{}
+	Data any
 }
 
 type Type struct {
@@ -23,31 +23,30 @@ type Type struct {
 }
 
 func New(target int160.T, k int) Type {
-	seed := maphash.MakeSeed()
 	return Type{
-		k: k,
-		inner: immutable.NewSortedMap[Key, any](lessComparer[Key]{less: func(l, r Key) bool {
-			return multiless.New().Cmp(
-				l.ID.Int160().Distance(target).Cmp(r.ID.Int160().Distance(target)),
-			).Lazy(func() multiless.Computation {
-				var lh, rh maphash.Hash
-				lh.SetSeed(seed)
-				rh.SetSeed(seed)
-				lh.WriteString(l.Addr.String())
-				rh.WriteString(r.Addr.String())
-				return multiless.New().Int64(int64(lh.Sum64()), int64(rh.Sum64()))
-			}).Less()
-		}}),
+		k:     k,
+		inner: immutable.NewSortedMap[Key, any](comparer{target: target, seed: maphash.MakeSeed()}),
 	}
+}
+
+// Orders keys by distance to target, breaking ties with a seeded hash of the address so that
+// distinct addresses sharing an ID are retained.
+type comparer struct {
+	target int160.T
+	seed   maphash.Seed
+}
+
+func (c comparer) Compare(l, r Key) int {
+	if d := l.ID.Int160().Distance(c.target).Cmp(r.ID.Int160().Distance(c.target)); d != 0 {
+		return d
+	}
+	return cmp.Compare(maphash.String(c.seed, l.Addr.String()), maphash.String(c.seed, r.Addr.String()))
 }
 
 func (me *Type) Range(f func(Elem)) {
 	iter := me.inner.Iterator()
-	for {
-		key, value, ok := iter.Next()
-		if !ok {
-			break
-		}
+	for !iter.Done() {
+		key, value, _ := iter.Next()
 		f(Elem{
 			Key:  key,
 			Data: value,
@@ -85,20 +84,4 @@ func (me Type) Farthest() (elem Elem) {
 
 func (me Type) Full() bool {
 	return me.Len() >= me.k
-}
-
-type lessFunc[K any] func(l, r K) bool
-
-type lessComparer[K any] struct {
-	less lessFunc[K]
-}
-
-func (me lessComparer[K]) Compare(i, j K) int {
-	if me.less(i, j) {
-		return -1
-	} else if me.less(j, i) {
-		return 1
-	} else {
-		return 0
-	}
 }

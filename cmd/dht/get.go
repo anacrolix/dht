@@ -21,7 +21,7 @@ type GetCmd struct {
 	ExtractInfohash bool `help:"extract and print the mutable torrent infohash in hex"`
 }
 
-func get(cmd *GetCmd) (err error) {
+func get(ctx context.Context, cmd *GetCmd) (err error) {
 	s, err := dht.NewServer(nil)
 	if err != nil {
 		return
@@ -32,9 +32,12 @@ func get(cmd *GetCmd) (err error) {
 	}
 	for _, t := range cmd.Target {
 		log.Printf("getting %v", t)
-		v, _, err := getput.Get(context.Background(), t, s, cmd.Seq, []byte(cmd.Salt))
+		v, _, err := getput.Get(ctx, t, s, cmd.Seq, []byte(cmd.Salt))
 		if err != nil {
 			log.Printf("error getting %v: %v", t, err)
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
 			continue
 		}
 		log.Printf("got result [seq=%v, mutable=%v]", v.Seq, v.Mutable)

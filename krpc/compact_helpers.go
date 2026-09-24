@@ -4,6 +4,7 @@ import (
 	"encoding"
 	"fmt"
 	"reflect"
+	"slices"
 
 	"github.com/anacrolix/torrent/bencode"
 )
@@ -41,7 +42,7 @@ func unmarshalBinarySlice(slice elemSizer, b []byte) (err error) {
 			err = fmt.Errorf("%d trailing bytes < %d required for element", len(b), bytesPerElem)
 			break
 		}
-		if bu, ok := elem.Interface().(encoding.BinaryUnmarshaler); ok {
+		if bu, ok := reflect.TypeAssert[encoding.BinaryUnmarshaler](elem); ok {
 			err = bu.UnmarshalBinary(b[:bytesPerElem])
 		} else if elem.Elem().Len() == bytesPerElem {
 			reflect.Copy(elem.Elem(), reflect.ValueOf(b[:bytesPerElem]))
@@ -83,12 +84,7 @@ func bencodeBytesResult(b []byte, err error) ([]byte, error) {
 	return bencode.Marshal(b)
 }
 
-// returns position of x in v, or -1 if not found
+// Returns the position of x in v, or -1 if not found.
 func addrIndex(v []NodeAddr, x NodeAddr) int {
-	for i := 0; i < len(v); i += 1 {
-		if v[i].Equal(x) {
-			return i
-		}
-	}
-	return -1
+	return slices.IndexFunc(v, x.Equal)
 }

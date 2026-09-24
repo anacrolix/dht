@@ -1,6 +1,7 @@
 package main
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"net/netip"
@@ -8,14 +9,12 @@ import (
 	"slices"
 
 	"github.com/anacrolix/log"
-	"golang.org/x/exp/constraints"
 
 	"github.com/anacrolix/dht/v2"
 )
 
 func GetPeers(ctx context.Context, s *dht.Server, ih [20]byte, opts ...dht.AnnounceOpt) error {
 	addrs := make(map[string]int)
-	// PSA: Go sucks.
 	a, err := s.AnnounceTraversal(ih, opts...)
 	if err != nil {
 		return err
@@ -62,10 +61,7 @@ getPeers:
 		})
 	}
 	slices.SortFunc(addrCountSlice, func(a, b addrFreq) int {
-		// Looks like I got sick of anacrolix/multiless.
-		return ordered(a.Frequency, b.Frequency).Then(
-			lesser(a.Addr.Addr(), b.Addr.Addr())).Then(
-			ordered(a.Addr.Port(), b.Addr.Port())).ToInt()
+		return cmp.Or(cmp.Compare(a.Frequency, b.Frequency), a.Addr.Compare(b.Addr))
 	})
 	je := json.NewEncoder(os.Stdout)
 	je.SetIndent("", "  ")
@@ -88,48 +84,4 @@ type GetPeersOutput struct {
 type addrFreq struct {
 	Addr      netip.AddrPort
 	Frequency int
-}
-
-func lesser[T interface{ Less(T) bool }](a, b T) Ordering {
-	if a.Less(b) {
-		return less(true)
-	}
-	if b.Less(a) {
-		return less(false)
-	}
-	return equal
-}
-
-func ordered[T constraints.Ordered](a T, b T) Ordering {
-	if a == b {
-		return equal
-	}
-	return less(a < b)
-}
-
-var equal = Ordering{equal: true}
-
-func less(a bool) Ordering { return Ordering{less: a} }
-
-type Ordering struct {
-	less  bool
-	equal bool
-}
-
-func (me Ordering) Then(other Ordering) Ordering {
-	if me.equal {
-		return other
-	} else {
-		return me
-	}
-}
-
-func (me Ordering) ToInt() int {
-	if me.equal {
-		return 0
-	} else if me.less {
-		return -1
-	} else {
-		return 1
-	}
 }

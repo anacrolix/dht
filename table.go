@@ -3,6 +3,7 @@ package dht
 import (
 	"errors"
 	"fmt"
+	"slices"
 
 	"github.com/anacrolix/dht/v2/int160"
 )
@@ -25,15 +26,6 @@ func (tbl *table) randomIdForBucket(bucketIndex int) int160.T {
 		panic(fmt.Sprintf("bucket index for random id %v == %v not %v", randomId, randomIdBucketIndex, bucketIndex))
 	}
 	return randomId
-}
-
-func (tbl *table) addrNodes(addr Addr) []*node {
-	a := tbl.addrs[addr.String()]
-	ret := make([]*node, 0, len(a))
-	for id := range a {
-		ret = append(ret, tbl.getNode(addr, id))
-	}
-	return ret
 }
 
 func (tbl *table) dropNode(n *node) {
@@ -90,20 +82,23 @@ func (tbl *table) getNode(addr Addr, id int160.T) *node {
 }
 
 func (tbl *table) closestNodes(k int, target int160.T, filter func(*node) bool) (ret []*node) {
-	for bi := func() int {
-		if target == tbl.rootID {
-			return len(tbl.buckets) - 1
-		} else {
-			return tbl.bucketIndex(target)
-		}
-	}(); bi >= 0 && len(ret) < k; bi-- {
-		for n := range tbl.buckets[bi].nodes {
-			if filter(n) {
-				ret = append(ret, n)
-			}
-		}
+	if k <= 0 {
+		return nil
 	}
-	// TODO: Keep only the closest.
+	// Buckets are relative to rootID, not target. Even a higher-index bucket can contain
+	// a closer eligible node, so rank candidates from the entire table.
+	tbl.forNodes(func(n *node) bool {
+		if filter(n) {
+			ret = append(ret, n)
+		}
+		return true
+	})
+	slices.SortFunc(ret, func(a, b *node) int {
+		if d := a.Id.Distance(target).Cmp(b.Id.Distance(target)); d != 0 {
+			return d
+		}
+		return a.Addr.KRPC().ToNodeAddrPort().Compare(b.Addr.KRPC().ToNodeAddrPort())
+	})
 	if len(ret) > k {
 		ret = ret[:k]
 	}

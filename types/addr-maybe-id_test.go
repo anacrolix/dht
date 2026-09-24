@@ -1,11 +1,11 @@
 package types
 
 import (
-	"math/rand"
+	"math"
+	"math/rand/v2"
 	"net"
 	"testing"
 
-	"github.com/bradfitz/iter"
 	"github.com/go-quicktest/qt"
 
 	"github.com/anacrolix/dht/v2/krpc"
@@ -25,7 +25,7 @@ func TestNoIdFarther(tb *testing.T) {
 	b.Id = a.Id
 	qt.Assert(tb, qt.IsFalse(a.CloserThan(b, target)))
 	id := a.Id.UnwrapPtr()
-	for i := range iter.N(160) {
+	for i := range 160 {
 		if target.GetBit(i) != id.GetBit(i) {
 			id.SetBit(i, target.GetBit(i))
 			break
@@ -46,7 +46,7 @@ func TestCloserThanId(tb *testing.T) {
 	b.Id.SetSomeZeroValue()
 	b.Id = a.Id
 	qt.Assert(tb, qt.IsFalse(a.CloserThan(b, target)))
-	for i := range iter.N(160) {
+	for i := range 160 {
 		if target.GetBit(i) != a.Id.UnwrapPtr().GetBit(i) {
 			a.Id.UnwrapPtr().SetBit(i, target.GetBit(i))
 			break
@@ -61,20 +61,20 @@ func TestCloserThanId(tb *testing.T) {
 func BenchmarkDeterministicAddr(tb *testing.B) {
 	ip := net.ParseIP("1.2.3.4")
 	target := krpc.RandomNodeID().Int160()
-	for range iter.N(tb.N) {
+	for tb.Loop() {
 		a := AddrMaybeId{
 			Addr: krpc.NodeAddr{
 				IP:   ip,
-				Port: rand.Int(),
+				Port: rand.IntN(math.MaxUint16 + 1),
 			}.ToNodeAddrPort(),
 		}
 		b := AddrMaybeId{
 			Addr: krpc.NodeAddr{
 				IP:   ip,
-				Port: rand.Int(),
+				Port: rand.IntN(math.MaxUint16 + 1),
 			}.ToNodeAddrPort(),
 		}
-		if a.CloserThan(b, target) != a.CloserThan(b, target) {
+		if first := a.CloserThan(b, target); a.CloserThan(b, target) != first {
 			tb.Fatal("not deterministic")
 		}
 	}

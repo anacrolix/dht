@@ -1,5 +1,4 @@
 //go:build go1.18
-// +build go1.18
 
 package dht
 
@@ -19,7 +18,7 @@ func FuzzHashTuple(f *testing.F) {
 		if HashTuple(b) == HashTuple() {
 			t.FailNow()
 		}
-		if bytes.Compare(a, b) != 0 {
+		if !bytes.Equal(a, b) {
 			if HashTuple(a) == HashTuple(b) {
 				t.FailNow()
 			}

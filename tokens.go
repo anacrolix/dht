@@ -4,8 +4,6 @@ import (
 	"crypto/sha1"
 	"encoding/binary"
 	"time"
-
-	"github.com/bradfitz/iter"
 )
 
 // Manages creation and validation of tokens issued to querying nodes.
@@ -19,39 +17,36 @@ type tokenServer struct {
 	timeNow          func() time.Time
 }
 
-func (me tokenServer) CreateToken(addr Addr) string {
-	return me.createToken(addr, me.getTimeNow())
+func (ts *tokenServer) CreateToken(addr Addr) string {
+	return ts.createToken(addr, ts.getTimeNow())
 }
 
-func (me tokenServer) createToken(addr Addr, t time.Time) string {
+func (ts *tokenServer) createToken(addr Addr, t time.Time) string {
 	h := sha1.New()
 	ip := addr.IP().To16()
 	if len(ip) != 16 {
 		panic(ip)
 	}
 	h.Write(ip)
-	ti := t.UnixNano() / int64(me.interval)
-	var b [8]byte
-	binary.BigEndian.PutUint64(b[:], uint64(ti))
-	h.Write(b[:])
-	h.Write(me.secret)
+	h.Write(binary.BigEndian.AppendUint64(nil, uint64(t.UnixNano()/int64(ts.interval))))
+	h.Write(ts.secret)
 	return string(h.Sum(nil))
 }
 
-func (me *tokenServer) ValidToken(token string, addr Addr) bool {
-	t := me.getTimeNow()
-	for range iter.N(me.maxIntervalDelta + 1) {
-		if me.createToken(addr, t) == token {
+func (ts *tokenServer) ValidToken(token string, addr Addr) bool {
+	t := ts.getTimeNow()
+	for range ts.maxIntervalDelta + 1 {
+		if ts.createToken(addr, t) == token {
 			return true
 		}
-		t = t.Add(-me.interval)
+		t = t.Add(-ts.interval)
 	}
 	return false
 }
 
-func (me *tokenServer) getTimeNow() time.Time {
-	if me.timeNow == nil {
+func (ts *tokenServer) getTimeNow() time.Time {
+	if ts.timeNow == nil {
 		return time.Now()
 	}
-	return me.timeNow()
+	return ts.timeNow()
 }

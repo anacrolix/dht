@@ -6,6 +6,8 @@ import (
 	"io"
 	"math/big"
 	"net"
+	"runtime"
+	"strings"
 	"testing"
 	"time"
 
@@ -169,7 +171,7 @@ func TestEqualPointers(t *testing.T) {
 
 func TestHook(t *testing.T) {
 	pinger, err := NewServer(&ServerConfig{
-		Conn:     mustListen("127.0.0.1:5678"),
+		Conn:     mustListen("127.0.0.1:0"),
 		PublicIP: net.IPv4(127, 0, 0, 1),
 	})
 	qt.Assert(t, qt.IsNil(err))
@@ -177,9 +179,9 @@ func TestHook(t *testing.T) {
 	// Establish server with a hook attached to "ping"
 	hookCalled := make(chan struct{}, 1)
 	receiver, err := NewServer(&ServerConfig{
-		Conn:          mustListen("127.0.0.1:5679"),
+		Conn:          mustListen("127.0.0.1:0"),
 		PublicIP:      net.IPv4(127, 0, 0, 1),
-		StartingNodes: addrResolver("127.0.0.1:5678"),
+		StartingNodes: addrResolver(pinger.Addr().String()),
 		OnQuery: func(m *krpc.Msg, addr net.Addr) bool {
 			t.Logf("receiver got msg: %v", m)
 			if m.Q == "ping" {
@@ -244,24 +246,57 @@ func TestBadGetPeersResponse(t *testing.T) {
 	})
 	qt.Assert(t, qt.IsNil(err))
 	defer s.Close()
-	go func() {
-		b := make([]byte, 1024)
-		n, addr, err := pc.ReadFrom(b)
-		qt.Assert(t, qt.IsNil(err))
-		var rm krpc.Msg
-		bencode.Unmarshal(b[:n], &rm)
-		m := krpc.Msg{
-			R: &krpc.Return{},
-			T: rm.T,
+	qt.Assert(t, qt.IsNil(pc.SetReadDeadline(time.Now().Add(2*time.Second))))
+	responderDone := make(chan struct{})
+	t.Cleanup(func() {
+		// Deferred pc.Close has already unblocked ReadFrom on an early test failure.
+		select {
+		case <-responderDone:
+		case <-time.After(2 * time.Second):
+			t.Error("responder goroutine did not exit")
 		}
-		b, err = bencode.Marshal(m)
-		qt.Assert(t, qt.IsNil(err))
-		pc.WriteTo(b, addr)
+	})
+	replied := make(chan error, 1)
+	go func() {
+		defer close(responderDone)
+		replied <- func() error {
+			b := make([]byte, 1024)
+			n, addr, err := pc.ReadFrom(b)
+			if err != nil {
+				return err
+			}
+			var rm krpc.Msg
+			if err := bencode.Unmarshal(b[:n], &rm); err != nil {
+				return err
+			}
+			// Intentionally omit Y: PR #19 covers a reply whose SenderID is nil.
+			b, err = bencode.Marshal(krpc.Msg{R: &krpc.Return{}, T: rm.T})
+			if err != nil {
+				return err
+			}
+			_, err = pc.WriteTo(b, addr)
+			return err
+		}()
 	}()
 	a, err := s.Announce([20]byte{}, 0, true)
 	qt.Assert(t, qt.IsNil(err))
-	// Drain the Announce until it closes.
-	for range a.Peers {
+	t.Cleanup(a.Close)
+	select {
+	case err := <-replied:
+		qt.Assert(t, qt.IsNil(err))
+	case <-time.After(2 * time.Second):
+		t.Fatal("responder did not complete")
+	}
+	select {
+	case _, ok := <-a.Peers:
+		qt.Assert(t, qt.IsTrue(ok))
+	case <-time.After(2 * time.Second):
+		t.Fatal("malformed reply did not produce a peer result")
+	}
+	select {
+	case <-a.Finished():
+	case <-time.After(2 * time.Second):
+		t.Fatal("announce did not finish after malformed reply")
 	}
 }
 
@@ -282,19 +317,27 @@ func TestBootstrapRace(t *testing.T) {
 	qt.Assert(t, qt.IsNil(err))
 	defer s.Close()
 	go func() {
-		for i := 0; i < defaultMaxQuerySends-1; i++ {
-			remotePc.ReadFrom(nil)
+		for range defaultMaxQuerySends - 1 {
+			_, _, _ = remotePc.ReadFrom(nil)
 		}
 		var b [1024]byte
-		_, addr, _ := remotePc.ReadFrom(b[:])
+		n, addr, err := remotePc.ReadFrom(b[:])
+		if err != nil {
+			// The remote is closed when the test ends.
+			return
+		}
 		var m krpc.Msg
-		bencode.Unmarshal(b[:], &m)
+		if err := bencode.Unmarshal(b[:n], &m); err != nil {
+			panic(err)
+		}
 		m.Y = "r"
 		rb, err := bencode.Marshal(m)
 		if err != nil {
 			panic(err)
 		}
-		remotePc.WriteTo(rb, addr)
+		if _, err := remotePc.WriteTo(rb, addr); err != nil {
+			panic(err)
+		}
 	}()
 	ts, err := s.Bootstrap()
 	t.Logf("%#v", ts)
@@ -342,7 +385,9 @@ func (me *bootstrapRacePacketConn) WriteTo(b []byte, addr net.Addr) (int, error)
 	log.Printf("wrote %d times", me.writes)
 	if me.writes == defaultMaxQuerySends {
 		var m krpc.Msg
-		bencode.Unmarshal(b[:], &m)
+		if err := bencode.Unmarshal(b, &m); err != nil {
+			panic(err)
+		}
 		m.Y = "r"
 		rb, err := bencode.Marshal(m)
 		if err != nil {
@@ -352,4 +397,82 @@ func (me *bootstrapRacePacketConn) WriteTo(b []byte, addr net.Addr) (int, error)
 		return 0, errors.New("write error")
 	}
 	return len(b), nil
+}
+
+// getPeers is inside its send select, not still inside the query that produced the reply.
+func getPeersBlockedSending() bool {
+	buf := make([]byte, 1<<20)
+	for {
+		n := runtime.Stack(buf, true)
+		if n < len(buf) {
+			buf = buf[:n]
+			break
+		}
+		buf = make([]byte, 2*len(buf))
+	}
+	for g := range strings.SplitSeq(string(buf), "\n\n") {
+		if strings.Contains(g, "(*Announce).getPeers") && !strings.Contains(g, "(*Server).Query") {
+			return true
+		}
+	}
+	return false
+}
+
+// Closing an announce must finish even when the caller never reads Peers. A reply has to be in
+// hand first: getPeers only blocks on the send after the query returns.
+func TestAnnounceCloseWithoutReadingPeers(t *testing.T) {
+	pc, err := net.ListenPacket("udp", "localhost:0")
+	qt.Assert(t, qt.IsNil(err))
+	defer pc.Close()
+	s, err := NewServer(&ServerConfig{
+		StartingNodes: func() ([]Addr, error) {
+			return []Addr{NewAddr(pc.LocalAddr().(*net.UDPAddr))}, nil
+		},
+		Conn:             mustListen("localhost:0"),
+		NoSecurity:       true,
+		QueryResendDelay: func() time.Duration { return time.Hour },
+	})
+	qt.Assert(t, qt.IsNil(err))
+	defer s.Close()
+	replied := make(chan struct{})
+	go func() {
+		b := make([]byte, 1024)
+		n, addr, err := pc.ReadFrom(b)
+		if err != nil {
+			return
+		}
+		var rm krpc.Msg
+		if err := bencode.Unmarshal(b[:n], &rm); err != nil {
+			return
+		}
+		rb, err := bencode.Marshal(krpc.Msg{R: &krpc.Return{}, T: rm.T})
+		if err != nil {
+			return
+		}
+		if _, err := pc.WriteTo(rb, addr); err != nil {
+			return
+		}
+		close(replied)
+	}()
+	a, err := s.AnnounceTraversal([20]byte{1})
+	qt.Assert(t, qt.IsNil(err))
+	t.Cleanup(a.Close)
+	select {
+	case <-replied:
+	case <-time.After(2 * time.Second):
+		t.Fatal("remote never answered get_peers")
+	}
+	deadline := time.Now().Add(2 * time.Second)
+	for !getPeersBlockedSending() && time.Now().Before(deadline) {
+		time.Sleep(time.Millisecond)
+	}
+	if !getPeersBlockedSending() {
+		t.Fatal("getPeers did not block sending the peer result")
+	}
+	a.Close()
+	select {
+	case <-a.Finished():
+	case <-time.After(2 * time.Second):
+		t.Fatal("Finished did not fire after Close with an unread Peers channel")
+	}
 }

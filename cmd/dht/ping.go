@@ -2,10 +2,10 @@
 package main
 
 import (
-	"errors"
+	"context"
 	"fmt"
-	"log"
 	"net"
+	"net/netip"
 	"sync"
 	"time"
 
@@ -19,55 +19,110 @@ type pingArgs struct {
 	Nodes    []string      `arg:"positional" arity:"*" help:"nodes to ping e.g. router.bittorrent.com:6881"`
 }
 
-func ping(args pingArgs, s *dht.Server) error {
-	var wg sync.WaitGroup
-	defaults := dht.DefaultGlobalBootstrapHostPorts
-	if !args.Defaults {
-		defaults = nil
+func resolveUDPAddr(ctx context.Context, network, address string) (*net.UDPAddr, error) {
+	host, port, err := net.SplitHostPort(address)
+	if err != nil {
+		return nil, err
 	}
-	for _, a := range append(args.Nodes, defaults...) {
-		func(a string) {
-			ua, err := net.ResolveUDPAddr(args.Network, a)
-			if err != nil {
-				log.Fatal(err)
+	if _, err := netip.ParseAddr(host); err == nil || host == "" {
+		// The standard resolver does not perform DNS for literals. Keep its zone,
+		// family, service-port and wildcard-address handling intact.
+		return net.ResolveUDPAddr(network, address)
+	}
+	ipNetwork := "ip"
+	switch network {
+	case "", "udp":
+	case "udp4":
+		ipNetwork = "ip4"
+	case "udp6":
+		ipNetwork = "ip6"
+	default:
+		return nil, net.UnknownNetworkError(network)
+	}
+	ips, err := net.DefaultResolver.LookupNetIP(ctx, ipNetwork, host)
+	if err != nil {
+		return nil, err
+	}
+	if len(ips) == 0 {
+		return nil, fmt.Errorf("no addresses for %q", host)
+	}
+	ip := ips[0]
+	if ipNetwork == "ip" {
+		for _, candidate := range ips {
+			if candidate.Is4() {
+				ip = candidate
+				break
 			}
-			started := time.Now()
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				res := s.Ping(ua)
-				err := res.Err
-				if err != nil {
-					fmt.Printf("%s: %s: %s\n", a, time.Since(started), err)
-					return
-				}
-				id := *res.Reply.SenderID()
-				fmt.Printf("%s: %x %c: %s\n", a, id, func() rune {
-					if dht.NodeIdSecure(id, ua.IP) {
-						return '✔'
-					} else {
-						return '✘'
-					}
-				}(), time.Since(started))
-			}()
-		}(a)
+		}
+	}
+	return net.ResolveUDPAddr(network, net.JoinHostPort(ip.String(), port))
+}
+
+func ping(ctx context.Context, args pingArgs, s *dht.Server) error {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	if args.Timeout != 0 {
+		var cancelTimeout context.CancelFunc
+		ctx, cancelTimeout = context.WithTimeout(ctx, args.Timeout)
+		defer cancelTimeout()
+	}
+	nodes := args.Nodes
+	if args.Defaults {
+		nodes = append(nodes, dht.DefaultGlobalBootstrapHostPorts...)
+	}
+	var wg sync.WaitGroup
+	for _, a := range nodes {
+		if err := ctx.Err(); err != nil {
+			cancel()
+			wg.Wait()
+			return err
+		}
+		ua, err := resolveUDPAddr(ctx, args.Network, a)
+		if err != nil {
+			cancel()
+			wg.Wait()
+			return err
+		}
+		if err := ctx.Err(); err != nil {
+			cancel()
+			wg.Wait()
+			return err
+		}
+		started := time.Now()
+		wg.Go(func() {
+			addr := dht.NewAddr(ua)
+			res := s.Query(ctx, addr, "ping", dht.QueryInput{})
+			if err := res.ToError(); err != nil {
+				fmt.Printf("%s: %s: %s\n", a, time.Since(started), err)
+				return
+			}
+			id := res.Reply.SenderID()
+			if id == nil {
+				fmt.Printf("%s: response has no id: %s\n", a, time.Since(started))
+				return
+			}
+			s.NodeRespondedToPing(addr, id.Int160())
+			secure := '✘'
+			if dht.NodeIdSecure(*id, ua.IP) {
+				secure = '✔'
+			}
+			fmt.Printf("%s: %x %c: %s\n", a, *id, secure, time.Since(started))
+		})
 	}
 	done := make(chan struct{})
 	go func() {
 		wg.Wait()
 		close(done)
 	}()
-	timeout := make(chan struct{})
-	if args.Timeout != 0 {
-		go func() {
-			time.Sleep(args.Timeout)
-			close(timeout)
-		}()
-	}
 	select {
 	case <-done:
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		return nil
-	case <-timeout:
-		return errors.New("timed out")
+	case <-ctx.Done():
+		cancel()
+		<-done
+		return ctx.Err()
 	}
 }

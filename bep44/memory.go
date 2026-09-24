@@ -19,17 +19,19 @@ func NewMemory() *Memory {
 }
 
 func (m *Memory) Put(i *Item) error {
+	target := i.Target()
+
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	m.m[i.Target()] = i
+	m.m[target] = i
 
 	return nil
 }
 
 func (m *Memory) Get(t Target) (*Item, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 
 	i, ok := m.m[t]
 	if !ok {

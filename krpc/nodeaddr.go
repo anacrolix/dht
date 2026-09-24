@@ -1,7 +1,6 @@
 package krpc
 
 import (
-	"bytes"
 	"encoding/binary"
 	"fmt"
 	"net"
@@ -33,8 +32,10 @@ func (me NodeAddr) String() string {
 }
 
 func (me *NodeAddr) UnmarshalBinary(b []byte) error {
-	if len(b) < 2 {
-		return fmt.Errorf("unmarshal NodeAddr from %d bytes: need at least 2", len(b))
+	switch len(b) {
+	case net.IPv4len + 2, net.IPv6len + 2:
+	default:
+		return fmt.Errorf("unmarshal NodeAddr from %d bytes: need 6-byte IPv4 or 18-byte IPv6 compact address", len(b))
 	}
 	me.IP = make(net.IP, len(b)-2)
 	copy(me.IP, b[:len(b)-2])
@@ -52,10 +53,14 @@ func (me *NodeAddr) UnmarshalBencode(b []byte) (err error) {
 }
 
 func (me NodeAddr) MarshalBinary() ([]byte, error) {
-	var b bytes.Buffer
-	b.Write(me.IP)
-	binary.Write(&b, binary.BigEndian, uint16(me.Port))
-	return b.Bytes(), nil
+	switch len(me.IP) {
+	case net.IPv4len, net.IPv6len:
+	default:
+		return nil, fmt.Errorf("marshal NodeAddr with %d IP bytes: need 4 or 16", len(me.IP))
+	}
+	b := make([]byte, 0, len(me.IP)+2)
+	b = append(b, me.IP...)
+	return binary.BigEndian.AppendUint16(b, uint16(me.Port)), nil
 }
 
 func (me NodeAddr) MarshalBencode() ([]byte, error) {

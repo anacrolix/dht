@@ -1,9 +1,10 @@
 package int160
 
 import (
+	"bytes"
 	"encoding/hex"
 	"math"
-	"math/big"
+	"math/bits"
 )
 
 type T struct {
@@ -23,9 +24,12 @@ func (me *T) ByteString() string {
 }
 
 func (me *T) BitLen() int {
-	var a big.Int
-	a.SetBytes(me.bits[:])
-	return a.BitLen()
+	for i, b := range me.bits {
+		if b != 0 {
+			return (len(me.bits)-i)*8 - bits.LeadingZeros8(b)
+		}
+	}
+	return 0
 }
 
 func (me *T) SetBytes(b []byte) {
@@ -53,14 +57,7 @@ func (me T) Bytes() []byte {
 }
 
 func (l T) Cmp(r T) int {
-	for i := range l.bits {
-		if l.bits[i] < r.bits[i] {
-			return -1
-		} else if l.bits[i] > r.bits[i] {
-			return 1
-		}
-	}
-	return 0
+	return bytes.Compare(l.bits[:], r.bits[:])
 }
 
 func (me *T) SetMax() {
@@ -76,12 +73,7 @@ func (me *T) Xor(a, b *T) {
 }
 
 func (me *T) IsZero() bool {
-	for _, b := range me.bits {
-		if b != 0 {
-			return false
-		}
-	}
-	return true
+	return me.bits == [20]uint8{}
 }
 
 func FromBytes(b []byte) (ret T) {
@@ -89,9 +81,8 @@ func FromBytes(b []byte) (ret T) {
 	return
 }
 
-func FromByteArray(b [20]byte) (ret T) {
-	ret.SetBytes(b[:])
-	return
+func FromByteArray(b [20]byte) T {
+	return T{bits: b}
 }
 
 func FromByteString(s string) (ret T) {

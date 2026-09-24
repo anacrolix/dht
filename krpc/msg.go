@@ -51,7 +51,7 @@ type MsgArgs struct {
 
 	// I don't know if we should use bencode.Bytes for this. If we unmarshalled bytes that didn't
 	// marshal back the same, our hashes will not match. But this might also serve to prevent abuse.
-	V interface{} `bencode:"v,omitempty"`
+	V any `bencode:"v,omitempty"`
 	// Why is this optional? Because I think we need to know if it wasn't set rather than use a
 	// default value.
 	Seq  *int64   `bencode:"seq,omitempty"`
@@ -135,8 +135,8 @@ func (m Msg) SenderID() *ID {
 	return nil
 }
 
-// This does not return an error, but (*Error)(nil) is still a non-nil error. You have been warned!
-// This language is evil.
+// Returns the error for an error-type message, or nil. The result is deliberately not of type
+// error: a nil *Error stored in an error interface would compare non-nil.
 func (m Msg) Error() *Error {
 	if m.Y != "e" {
 		return nil

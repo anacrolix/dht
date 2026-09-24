@@ -9,8 +9,7 @@ import (
 
 // See https://github.com/anacrolix/dht/issues/16.
 func ignoreReadFromError(err error) bool {
-	var errno syscall.Errno
-	if errors.As(err, &errno) {
+	if errno, ok := errors.AsType[syscall.Errno](err); ok {
 		switch errno {
 		case
 			windows.WSAENETRESET,
@@ -18,7 +17,7 @@ func ignoreReadFromError(err error) bool {
 			windows.WSAECONNABORTED,
 			windows.WSAECONNREFUSED,
 			windows.WSAENETUNREACH,
-			windows.WSAETIMEDOUT: // Why does Go have braindead syntax?
+			windows.WSAETIMEDOUT:
 			return true
 		}
 	}

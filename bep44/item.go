@@ -17,7 +17,7 @@ type Item struct {
 	created time.Time
 
 	// Value to be stored
-	V interface{}
+	V any
 
 	// 32 byte ed25519 public key
 	K    [32]byte
@@ -54,7 +54,7 @@ func (i *Item) ToPut() Put {
 //
 // The optional seq field specifies that an item's value should only be sent if its
 // sequence number is greater than the given value.
-func NewItem(value interface{}, salt []byte, seq, cas int64, k ed25519.PrivateKey) (*Item, error) {
+func NewItem(value any, salt []byte, seq, cas int64, k ed25519.PrivateKey) (*Item, error) {
 	v, err := bencode.Marshal(value)
 	if err != nil {
 		return nil, err
@@ -82,13 +82,13 @@ func NewItem(value interface{}, salt []byte, seq, cas int64, k ed25519.PrivateKe
 
 func (i *Item) Target() Target {
 	if i.IsMutable() {
-		return sha1.Sum(append(i.K[:], i.Salt...))
+		return MakeMutableTarget(i.K, i.Salt)
 	}
 
 	return sha1.Sum(bencode.MustMarshal(i.V))
 }
 
-func (i *Item) Modify(value interface{}, k ed25519.PrivateKey) bool {
+func (i *Item) Modify(value any, k ed25519.PrivateKey) bool {
 	if !i.IsMutable() {
 		return false
 	}
@@ -107,20 +107,18 @@ func (i *Item) Modify(value interface{}, k ed25519.PrivateKey) bool {
 	return true
 }
 
-func (s *Item) IsMutable() bool {
-	return s.K != Empty32ByteArray
+func (i *Item) IsMutable() bool {
+	return i.K != Empty32ByteArray
 }
 
 func bufferToSign(salt, bv []byte, seq int64) []byte {
 	var bts []byte
 	if len(salt) != 0 {
-		bts = append(bts, []byte("4:salt")...)
-		x := bencode.MustMarshal(salt)
-		bts = append(bts, x...)
+		bts = append(bts, "4:salt"...)
+		bts = append(bts, bencode.MustMarshal(salt)...)
 	}
-	bts = append(bts, []byte(fmt.Sprintf("3:seqi%de1:v", seq))...)
-	bts = append(bts, bv...)
-	return bts
+	bts = fmt.Appendf(bts, "3:seqi%de1:v", seq)
+	return append(bts, bv...)
 }
 
 func Check(i *Item) error {
@@ -149,8 +147,19 @@ func Check(i *Item) error {
 }
 
 func CheckIncoming(stored, incoming *Item) error {
-	// If the sequence number is equal, and the value is also the same,
-	// the node SHOULD reset its timeout counter.
+	// BEP 44 requires a CAS mismatch to fail even when the sequence number is also stale or the
+	// value is unchanged, so check CAS before sequence-number rules. CAS only applies to mutable
+	// puts.
+	//
+	// Cas is an int64 in the public API and KRPC arguments; KRPC also omits zero values. A present
+	// cas=0 is therefore indistinguishable from an absent cas and cannot be checked here. Supporting
+	// present zero requires presence-aware CAS fields across the API and wire representation.
+	if incoming.IsMutable() && incoming.Cas != 0 && incoming.Cas != stored.Seq {
+		return ErrCasHashMismatched
+	}
+
+	// If the sequence number is equal, and the value is also the same, the node SHOULD reset its
+	// timeout counter.
 	if stored.Seq == incoming.Seq {
 		if bytes.Equal(
 			bencode.MustMarshal(stored.V),
@@ -162,15 +171,6 @@ func CheckIncoming(stored, incoming *Item) error {
 
 	if stored.Seq >= incoming.Seq {
 		return ErrSequenceNumberLessThanCurrent
-	}
-
-	// Cas should be ignored if not present
-	if stored.Cas == 0 {
-		return nil
-	}
-
-	if stored.Cas != incoming.Cas {
-		return ErrCasHashMismatched
 	}
 
 	return nil

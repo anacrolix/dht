@@ -2,6 +2,7 @@ package bep44
 
 import (
 	"errors"
+	"sync"
 	"time"
 )
 
@@ -17,6 +18,7 @@ type Store interface {
 // decide when to store, or ignore them depending of the BEP 44 definition.
 // It is also in charge of removing expired items.
 type Wrapper struct {
+	mu  sync.Mutex
 	s   Store
 	exp time.Duration
 }
@@ -26,6 +28,10 @@ func NewWrapper(s Store, exp time.Duration) *Wrapper {
 }
 
 func (w *Wrapper) Put(i *Item) error {
+	// Hold the lock from the read through the write. Two puts that both observe the same
+	// sequence can otherwise store the lower one last.
+	w.mu.Lock()
+	defer w.mu.Unlock()
 	if err := Check(i); err != nil {
 		return err
 	}
@@ -48,6 +54,8 @@ func (w *Wrapper) Put(i *Item) error {
 }
 
 func (w *Wrapper) Get(t Target) (*Item, error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
 	i, err := w.s.Get(t)
 	if err != nil {
 		return nil, err

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"math"
 
 	"github.com/anacrolix/args/targets"
 	g "github.com/anacrolix/generics"
@@ -28,11 +29,21 @@ type PutCmd struct {
 	AutoSeq bool
 }
 
+func validateMutableKey(mutable bool, key []byte) error {
+	if mutable && len(key) != ed25519.SeedSize {
+		return fmt.Errorf("mutable key must be %d bytes, got %d", ed25519.SeedSize, len(key))
+	}
+	return nil
+}
+
 func makeSeqToPut(autoSeq, mutable bool, put bep44.Put, privKey ed25519.PrivateKey) getput.SeqToPut {
 	return func(seq int64) bep44.Put {
-		// Increment best seen seq by one.
-		if autoSeq {
+		if autoSeq && seq != math.MaxInt64 {
 			put.Seq = seq + 1
+		} else if autoSeq {
+			// BEP 44 sequence numbers must not exceed MaxInt64. Reusing the maximum lets
+			// identical content refresh its timeout; a changed value is rejected remotely.
+			put.Seq = seq
 		}
 		if mutable {
 			put.Sign(privKey)
@@ -41,7 +52,7 @@ func makeSeqToPut(autoSeq, mutable bool, put bep44.Put, privKey ed25519.PrivateK
 	}
 }
 
-func put(cmd *PutCmd) (err error) {
+func put(ctx context.Context, cmd *PutCmd) (err error) {
 	s, err := dht.NewServer(nil)
 	if err != nil {
 		return
@@ -51,21 +62,15 @@ func put(cmd *PutCmd) (err error) {
 		return errors.New("no payloads given")
 	}
 	mutable := cmd.Mutable || len(cmd.Key.Bytes) != 0 || cmd.Cas != 0 || len(cmd.Salt) != 0
+	if err := validateMutableKey(mutable, cmd.Key.Bytes); err != nil {
+		return err
+	}
 	for _, data := range cmd.Data {
-		putBytes := []byte(data)
-		var v interface{}
+		var v any
 		if cmd.Strings {
-			var s interface{} = string(putBytes)
-			v = s
-			putBytes, err = bencode.Marshal(v)
-			if err != nil {
-				return fmt.Errorf("marshalling string arg to bytes: %w", err)
-			}
-		} else {
-			err = bencode.Unmarshal(putBytes, &v)
-			if err != nil {
-				return
-			}
+			v = data
+		} else if err = bencode.Unmarshal([]byte(data), &v); err != nil {
+			return fmt.Errorf("parsing value bencode: %w", err)
 		}
 		put := bep44.Put{
 			V:    v,
@@ -82,7 +87,7 @@ func put(cmd *PutCmd) (err error) {
 		log.Printf("putting %q to %x", v, target)
 		var stats *traversal.Stats
 		stats, err = getput.Put(
-			context.Background(),
+			ctx,
 			target,
 			s,
 			put.Salt,

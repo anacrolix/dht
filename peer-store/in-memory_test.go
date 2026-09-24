@@ -196,20 +196,15 @@ func TestInMemoryPeerStoreConcurrentAccess(t *testing.T) {
 	var readers sync.WaitGroup
 
 	for _, endpoint := range endpoints {
-		endpoint := endpoint
-		writers.Add(1)
-		go func() {
-			defer writers.Done()
+		writers.Go(func() {
 			<-start
 			for range 100 {
 				store.AddPeer(ih, endpoint)
 			}
-		}()
+		})
 	}
 	for range 4 {
-		readers.Add(1)
-		go func() {
-			defer readers.Done()
+		readers.Go(func() {
 			<-start
 			for {
 				select {
@@ -229,7 +224,7 @@ func TestInMemoryPeerStoreConcurrentAccess(t *testing.T) {
 					}
 				}
 			}
-		}()
+		})
 	}
 
 	close(start)

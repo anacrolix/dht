@@ -20,10 +20,9 @@ type QueryResult struct {
 	// This is set non-nil if a query reply is a response-type as defined by the DHT BEP 5 (contains
 	// "r")
 	ResponseFrom *krpc.NodeInfo
-	// Data associated with a closest node. Is this ever not a string? I think using generics for
-	// this leaks throughout the entire Operation. Hardly worth it. It's still possible to handle
-	// invalid token types at runtime.
-	ClosestData interface{}
+	// Data associated with a closest node, typically the token from the reply. Filtered by
+	// OperationInput.DataFilter.
+	ClosestData any
 	Nodes       []krpc.NodeInfo
 	Nodes6      []krpc.NodeInfo
 }
@@ -44,29 +43,25 @@ type OperationInput struct {
 type defaultsAppliedOperationInput OperationInput
 
 func Start(input OperationInput) *Operation {
-	herp := defaultsAppliedOperationInput(input)
-	if herp.Alpha == 0 {
-		herp.Alpha = 3
+	in := defaultsAppliedOperationInput(input)
+	if in.Alpha == 0 {
+		in.Alpha = 3
 	}
-	if herp.K == 0 {
-		herp.K = 8
+	if in.K == 0 {
+		in.K = 8
 	}
-	if herp.NodeFilter == nil {
-		herp.NodeFilter = func(types.AddrMaybeId) bool {
-			return true
-		}
+	if in.NodeFilter == nil {
+		in.NodeFilter = func(types.AddrMaybeId) bool { return true }
 	}
-	if herp.DataFilter == nil {
-		herp.DataFilter = func(_ any) bool {
-			return true
-		}
+	if in.DataFilter == nil {
+		in.DataFilter = func(any) bool { return true }
 	}
-	targetInt160 := herp.Target.Int160()
+	targetInt160 := in.Target.Int160()
 	op := &Operation{
 		targetInt160: targetInt160,
-		input:        herp,
+		input:        in,
 		queried:      make(map[addrString]struct{}),
-		closest:      k_nearest_nodes.New(targetInt160, herp.K),
+		closest:      k_nearest_nodes.New(targetInt160, in.K),
 		unqueried:    containers.NewImmutableAddrMaybeIdsByDistance(targetInt160),
 	}
 	go op.run()
@@ -90,9 +85,19 @@ type Operation struct {
 	stopped      chansync.SetOnce
 }
 
-// I don't think you should access this until the Stopped event.
+// Stats returns the operation counters. While the operation is running, the fields are updated
+// with atomic adds. Read them with sync/atomic, or take a copy with LoadStats. A plain field read
+// is safe only after Stopped.
 func (op *Operation) Stats() *Stats {
 	return &op.stats
+}
+
+// LoadStats copies the counters with atomic loads. Safe to call while the operation is running.
+func (op *Operation) LoadStats() Stats {
+	return Stats{
+		NumAddrsTried: atomic.LoadUint32(&op.stats.NumAddrsTried),
+		NumResponses:  atomic.LoadUint32(&op.stats.NumResponses),
+	}
 }
 
 func (op *Operation) Stop() {
@@ -101,10 +106,7 @@ func (op *Operation) Stop() {
 			defer op.stopped.Set()
 			op.mu.Lock()
 			defer op.mu.Unlock()
-			for {
-				if op.outstanding == 0 {
-					break
-				}
+			for op.outstanding != 0 {
 				cond := op.cond.Signaled()
 				op.mu.Unlock()
 				<-cond
@@ -169,6 +171,15 @@ func (op *Operation) popClosestUnqueried() types.AddrMaybeId {
 }
 
 func (op *Operation) haveQuery() bool {
+	// IDs can change or become known after an address is queued. Those candidates
+	// remain distinct in the distance-ordered set, but must not cause another query.
+	for op.unqueried.Len() != 0 {
+		next := op.closestUnqueried()
+		if _, queried := op.queried[addrString(next.Addr.String())]; !queried {
+			break
+		}
+		op.unqueried = op.unqueried.Delete(next)
+	}
 	if op.unqueried.Len() == 0 {
 		return false
 	}
@@ -210,7 +221,7 @@ func (op *Operation) run() {
 	}
 }
 
-func (op *Operation) addClosest(node krpc.NodeInfo, data interface{}) {
+func (op *Operation) addClosest(node krpc.NodeInfo, data any) {
 	var ami types.AddrMaybeId
 	ami.FromNodeInfo(node)
 	if !op.input.NodeFilter(ami) {
@@ -225,8 +236,13 @@ func (op *Operation) addClosest(node krpc.NodeInfo, data interface{}) {
 	})
 }
 
+// Closest returns a snapshot of the closest responding nodes. The snapshot stays valid while
+// later responses update the operation. It is not itself updated.
 func (op *Operation) Closest() *k_nearest_nodes.Type {
-	return &op.closest
+	op.mu.Lock()
+	defer op.mu.Unlock()
+	c := op.closest
+	return &c
 }
 
 func (op *Operation) startQuery() {
@@ -240,7 +256,6 @@ func (op *Operation) startQuery() {
 			op.outstanding--
 			op.cond.Broadcast()
 		}()
-		// log.Printf("traversal querying %v", a)
 		atomic.AddUint32(&op.stats.NumAddrsTried, 1)
 		ctx, cancel := context.WithCancel(context.Background())
 		go func() {

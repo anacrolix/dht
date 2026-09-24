@@ -1,12 +1,12 @@
 package krpc
 
 import (
-	"bytes"
+	"crypto/rand"
 	"encoding"
 	"encoding/binary"
 	"fmt"
 	"math"
-	"math/rand"
+	mathrand "math/rand/v2"
 	"net"
 )
 
@@ -27,7 +27,7 @@ func RandomNodeInfo(ipLen int) (ni NodeInfo) {
 	rand.Read(ni.ID[:])
 	ni.Addr.IP = make(net.IP, ipLen)
 	rand.Read(ni.Addr.IP)
-	ni.Addr.Port = rand.Intn(math.MaxUint16 + 1)
+	ni.Addr.Port = mathrand.IntN(math.MaxUint16 + 1)
 	return
 }
 
@@ -36,15 +36,17 @@ var _ interface {
 	encoding.BinaryUnmarshaler
 } = (*NodeInfo)(nil)
 
-func (ni NodeInfo) MarshalBinary() ([]byte, error) {
-	var w bytes.Buffer
-	w.Write(ni.ID[:])
-	w.Write(ni.Addr.IP)
-	binary.Write(&w, binary.BigEndian, uint16(ni.Addr.Port))
-	return w.Bytes(), nil
+func (me NodeInfo) MarshalBinary() ([]byte, error) {
+	b := make([]byte, 0, len(me.ID)+len(me.Addr.IP)+2)
+	b = append(b, me.ID[:]...)
+	b = append(b, me.Addr.IP...)
+	return binary.BigEndian.AppendUint16(b, uint16(me.Addr.Port)), nil
 }
 
-func (ni *NodeInfo) UnmarshalBinary(b []byte) error {
-	copy(ni.ID[:], b)
-	return ni.Addr.UnmarshalBinary(b[20:])
+func (me *NodeInfo) UnmarshalBinary(b []byte) error {
+	if len(b) < len(me.ID) {
+		return fmt.Errorf("unmarshal NodeInfo from %d bytes: need at least %d", len(b), len(me.ID))
+	}
+	copy(me.ID[:], b)
+	return me.Addr.UnmarshalBinary(b[len(me.ID):])
 }

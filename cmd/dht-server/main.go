@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	stdLog "log"
 	"net"
 	"net/http"
@@ -32,6 +33,28 @@ func loadTable() (err error) {
 	return
 }
 
+// initServer starts the node on conn and loads flags.TableFile when set. A load error closes the
+// server before returning, so the caller's deferred conn.Close cannot race an open serve loop.
+func initServer(conn net.PacketConn) error {
+	cfg := dht.NewDefaultServerConfig()
+	cfg.Conn = conn
+	cfg.Logger = log.Default.FilterLevel(log.Info)
+	cfg.NoSecurity = false
+	var err error
+	s, err = dht.NewServer(cfg)
+	if err != nil {
+		return err
+	}
+	if flags.TableFile == "" {
+		return nil
+	}
+	if err = loadTable(); err != nil {
+		s.Close()
+		return err
+	}
+	return nil
+}
+
 func saveTable() error {
 	return dht.WriteNodesToFile(s.Nodes(), flags.TableFile)
 }
@@ -52,36 +75,28 @@ func mainErr() error {
 		return err
 	}
 	defer conn.Close()
-	cfg := dht.NewDefaultServerConfig()
-	cfg.Conn = conn
-	cfg.Logger = log.Default.FilterLevel(log.Info)
-	cfg.NoSecurity = false
-	s, err = dht.NewServer(cfg)
-	if err != nil {
+	if err = initServer(conn); err != nil {
 		return err
 	}
+	defer s.Close()
 	http.HandleFunc("/debug/dht", func(w http.ResponseWriter, r *http.Request) {
 		s.WriteStatus(w)
 	})
-	if flags.TableFile != "" {
-		err = loadTable()
-		if err != nil {
-			return err
-		}
-	}
 	log.Printf("dht server on %s, ID is %x", s.Addr(), s.ID())
 
-	ctx, cancel := context.WithCancel(context.Background())
-	go func() {
-		ch := make(chan os.Signal, 1)
-		signal.Notify(ch, os.Interrupt)
-		log.Printf("got signal: %v", <-ch)
-		cancel()
-	}()
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer stop()
+	var bootstrapDone <-chan struct{}
 	if !flags.NoBootstrap {
+		done := make(chan struct{})
+		bootstrapDone = done
 		go func() {
-			if tried, err := s.Bootstrap(); err != nil {
-				log.Printf("error bootstrapping: %s", err)
+			defer close(done)
+			tried, err := s.BootstrapContext(ctx)
+			if err != nil {
+				if !errors.Is(err, context.Canceled) {
+					log.Printf("error bootstrapping: %s", err)
+				}
 			} else {
 				log.Printf("finished bootstrapping: %#v", tried)
 			}
@@ -89,6 +104,9 @@ func mainErr() error {
 	}
 	<-ctx.Done()
 	s.Close()
+	if bootstrapDone != nil {
+		<-bootstrapDone
+	}
 
 	if flags.TableFile != "" {
 		if err := saveTable(); err != nil {
